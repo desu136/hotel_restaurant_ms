@@ -1,13 +1,704 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum BusinessType {
+  HOTEL
+  RESTAURANT
+  HOTEL_RESTAURANT
+}
+
+enum TenantStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum RoomStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  MAINTENANCE
+}
+
+enum CustomerSource {
+  WEB
+  MINI_APP
+}
+
+enum ReservationType {
+  ROOM
+  TABLE
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum OrderType {
+  DINE_IN
+  ROOM_SERVICE
+  TAKEAWAY
+  DELIVERY
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+  OUT_FOR_DELIVERY
+  DELIVERED
+}
+
+enum KitchenTicketStatus {
+  PENDING
+  PREPARING
+  READY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum SyncStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+}
+
+// -----------------------------------------------------------------------------
+// SAAS MODULE
+// -----------------------------------------------------------------------------
+
+model Tenant {
+  id            String       @id @default(uuid()) @db.Uuid
+  business_name String
+  owner_name    String
+  phone         String
+  email         String
+  business_type BusinessType
+  status        TenantStatus @default(PENDING)
+  
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+  deleted_at    DateTime?
+
+  // Relations
+  subscriptions     TenantSubscription[]
+  modules           TenantModule[]
+  branches          Branch[]
+  users             User[]
+  audit_logs        AuditLog[]
+  activity_logs     ActivityLog[]
+  room_types        RoomType[]
+  rooms             Room[]
+  reservations      Reservation[]
+  restaurants       Restaurant[]
+  categories        Category[]
+  menu_items        MenuItem[]
+  restaurant_tables RestaurantTable[]
+  orders            Order[]
+  dexel_sync_logs   DexelSyncLog[]
+
+  @@map("tenants")
+}
+
+model SubscriptionPlan {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String
+  monthly_price Decimal  @db.Decimal(10, 2)
+  annual_price  Decimal  @db.Decimal(10, 2)
+  trial_days    Int      @default(14)
+  
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  deleted_at    DateTime?
+
+  // Relations
+  subscriptions TenantSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model TenantSubscription {
+  id         String             @id @default(uuid()) @db.Uuid
+  tenant_id  String             @db.Uuid
+  plan_id    String             @db.Uuid
+  start_date DateTime
+  end_date   DateTime
+  status     SubscriptionStatus @default(TRIAL)
+  
+  created_at DateTime           @default(now())
+  updated_at DateTime           @updatedAt
+  deleted_at DateTime?
+
+  // Relations
+  tenant Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan @relation(fields: [plan_id], references: [id], onDelete: Restrict)
+
+  @@index([tenant_id])
+  @@map("tenant_subscriptions")
+}
+
+model TenantModule {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenant_id   String   @db.Uuid
+  module_code String
+  enabled     Boolean  @default(true)
+  
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, module_code])
+  @@map("tenant_modules")
+}
+
+// -----------------------------------------------------------------------------
+// ORGANIZATION STRUCTURE
+// -----------------------------------------------------------------------------
+
+model Branch {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenant_id  String   @db.Uuid
+  name       String
+  address    String?
+  phone      String?
+  
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted_at DateTime?
+
+  // Relations
+  tenant       Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  users        User[]
+  rooms        Room[]
+  reservations Reservation[]
+  restaurants  Restaurant[]
+  orders       Order[]
+
+  @@index([tenant_id])
+  @@map("branches")
+}
+
+// -----------------------------------------------------------------------------
+// USER & RBAC
+// -----------------------------------------------------------------------------
+
+model User {
+  id            String     @id @default(uuid()) @db.Uuid
+  tenant_id     String     @db.Uuid
+  branch_id     String?    @db.Uuid
+  full_name     String
+  email         String     @unique
+  phone         String?
+  password_hash String
+  status        UserStatus @default(ACTIVE)
+  
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+  deleted_at    DateTime?
+
+  // Relations
+  tenant      Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  branch      Branch?    @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  roles       UserRole[]
+  audit_logs  AuditLog[]
+
+  @@index([tenant_id])
+  @@index([branch_id])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  user_id String @db.Uuid
+  role_id String @db.Uuid
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  role_id       String @db.Uuid
+  permission_id String @db.Uuid
+
+  // Relations
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+// -----------------------------------------------------------------------------
+// AUDIT LOGGING
+// -----------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  tenant_id  String   @db.Uuid
+  action     String
+  resource   String
+  timestamp  DateTime @default(now())
+
+  // Relations
+  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([user_id])
+  @@map("audit_logs")
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenant_id  String   @db.Uuid
+  action     String
+  details    Json?
+  timestamp  DateTime @default(now())
+
+  // Relations
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("activity_logs")
+}
+
+// -----------------------------------------------------------------------------
+// HOTEL MODULE
+// -----------------------------------------------------------------------------
+
+model RoomType {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenant_id  String   @db.Uuid
+  name       String
+  
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted_at DateTime?
+
+  // Relations
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  rooms  Room[]
+
+  @@map("room_types")
+}
+
+model Room {
+  id              String     @id @default(uuid()) @db.Uuid
+  tenant_id       String     @db.Uuid
+  branch_id       String     @db.Uuid
+  room_type_id    String     @db.Uuid
+  room_number     String
+  price_per_night Decimal    @db.Decimal(10, 2)
+  status          RoomStatus @default(AVAILABLE)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted_at DateTime?
+
+  // Relations
+  tenant    Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  branch    Branch   @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  room_type RoomType @relation(fields: [room_type_id], references: [id], onDelete: Restrict)
+  orders    Order[]
+
+  @@map("rooms")
+}
+
+// -----------------------------------------------------------------------------
+// CUSTOMER IDENTITY MODEL
+// -----------------------------------------------------------------------------
+
+model Customer {
+  id         String         @id @default(uuid()) @db.Uuid
+  full_name  String
+  phone      String?
+  email      String?
+  source     CustomerSource @default(WEB)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  identities   CustomerIdentity[]
+  reservations Reservation[]
+  orders       Order[]
+  feedback     Feedback[]
+
+  @@map("customers")
+}
+
+model CustomerIdentity {
+  id               String   @id @default(uuid()) @db.Uuid
+  customer_id      String   @db.Uuid
+  external_user_id String
+  provider         String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@unique([external_user_id, provider])
+  @@map("customer_identities")
+}
+
+// -----------------------------------------------------------------------------
+// RESERVATION MODULE
+// -----------------------------------------------------------------------------
+
+model Reservation {
+  id               String            @id @default(uuid()) @db.Uuid
+  tenant_id        String            @db.Uuid
+  branch_id        String            @db.Uuid
+  customer_id      String            @db.Uuid
+  reservation_type ReservationType
+  status           ReservationStatus @default(PENDING)
+  reservation_date DateTime
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@map("reservations")
+}
+
+// -----------------------------------------------------------------------------
+// RESTAURANT MODULE
+// -----------------------------------------------------------------------------
+
+model Restaurant {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenant_id  String   @db.Uuid
+  branch_id  String   @db.Uuid
+  name       String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted_at DateTime?
+
+  // Relations
+  tenant     Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  branch     Branch            @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  categories Category[]
+  menu_items MenuItem[]
+  tables     RestaurantTable[]
+
+  @@map("restaurants")
+}
+
+model Category {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenant_id     String   @db.Uuid
+  restaurant_id String   @db.Uuid
+  name          String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted_at DateTime?
+
+  // Relations
+  tenant     Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+
+  @@map("categories")
+}
+
+model MenuItem {
+  id               String  @id @default(uuid()) @db.Uuid
+  tenant_id        String  @db.Uuid
+  restaurant_id    String  @db.Uuid
+  dexel_product_id String
+  display_name     String
+  availability     Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  tenant     Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  restaurant Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  order_items OrderItem[]
+
+  @@map("menu_items")
+}
+
+model RestaurantTable {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenant_id     String   @db.Uuid
+  restaurant_id String   @db.Uuid
+  table_number  String
+  capacity      Int
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  tenant     Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  qr_codes   QRCode[]
+  orders     Order[]
+
+  @@map("restaurant_tables")
+}
+
+model QRCode {
+  id         String @id @default(uuid()) @db.Uuid
+  table_id   String @db.Uuid
+  token      String @unique
+  status     String // Can use enum if needed
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  table RestaurantTable @relation(fields: [table_id], references: [id], onDelete: Cascade)
+
+  @@map("qr_codes")
+}
+
+// -----------------------------------------------------------------------------
+// ORDER MANAGEMENT
+// -----------------------------------------------------------------------------
+
+model Order {
+  id           String      @id @default(uuid()) @db.Uuid
+  tenant_id    String      @db.Uuid
+  branch_id    String      @db.Uuid
+  customer_id  String      @db.Uuid
+  table_id     String?     @db.Uuid
+  room_id      String?     @db.Uuid
+  waiter_id    String?     @db.Uuid
+  order_type   OrderType
+  status       OrderStatus @default(PENDING)
+  total_amount Decimal     @db.Decimal(10, 2)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  tenant      Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  branch      Branch           @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  customer    Customer         @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  table       RestaurantTable? @relation(fields: [table_id], references: [id], onDelete: SetNull)
+  room        Room?            @relation(fields: [room_id], references: [id], onDelete: SetNull)
+  // We can loosely link Waiter to User or have a separate role link, skipping direct relation for now
+  // to avoid complex conditional foreign keys. WaiterID matches a User UUID.
+  
+  items       OrderItem[]
+  bills       Bill[]
+  deliveries  Delivery[]
+  kitchen_tickets KitchenTicket[]
+  feedbacks   Feedback[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String  @id @default(uuid()) @db.Uuid
+  order_id     String  @db.Uuid
+  menu_item_id String  @db.Uuid
+  quantity     Int
+  unit_price   Decimal @db.Decimal(10, 2)
+
+  // Relations
+  order     Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  menu_item MenuItem @relation(fields: [menu_item_id], references: [id], onDelete: Restrict)
+
+  @@map("order_items")
+}
+
+// -----------------------------------------------------------------------------
+// KITCHEN MODULE
+// -----------------------------------------------------------------------------
+
+model KitchenTicket {
+  id       String              @id @default(uuid()) @db.Uuid
+  order_id String              @db.Uuid
+  chef_id  String?             @db.Uuid
+  status   KitchenTicketStatus @default(PENDING)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("kitchen_tickets")
+}
+
+// -----------------------------------------------------------------------------
+// BILLING MODULE
+// -----------------------------------------------------------------------------
+
+model Bill {
+  id             String        @id @default(uuid()) @db.Uuid
+  order_id       String        @db.Uuid
+  amount         Decimal       @db.Decimal(10, 2)
+  payment_status PaymentStatus @default(PENDING)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  order        Order              @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  transactions DexelTransaction[]
+
+  @@map("bills")
+}
+
+model DexelTransaction {
+  id                   String     @id @default(uuid()) @db.Uuid
+  bill_id              String     @db.Uuid
+  dexel_transaction_id String
+  sync_status          SyncStatus @default(PENDING)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  bill Bill @relation(fields: [bill_id], references: [id], onDelete: Cascade)
+
+  @@map("dexel_transactions")
+}
+
+// -----------------------------------------------------------------------------
+// DELIVERY MODULE
+// -----------------------------------------------------------------------------
+
+model Delivery {
+  id               String         @id @default(uuid()) @db.Uuid
+  order_id         String         @db.Uuid
+  driver_id        String?        @db.Uuid
+  delivery_address String
+  status           DeliveryStatus @default(ASSIGNED)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("deliveries")
+}
+
+// -----------------------------------------------------------------------------
+// FEEDBACK MODULE
+// -----------------------------------------------------------------------------
+
+model Feedback {
+  id          String @id @default(uuid()) @db.Uuid
+  customer_id String @db.Uuid
+  order_id    String @db.Uuid
+  rating      Int
+  comment     String?
+
+  created_at DateTime @default(now())
+
+  // Relations
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  order    Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("feedbacks")
+}
+
+// -----------------------------------------------------------------------------
+// INTEGRATION MODULE
+// -----------------------------------------------------------------------------
+
+model DexelSyncLog {
+  id               String     @id @default(uuid()) @db.Uuid
+  tenant_id        String     @db.Uuid
+  operation        String
+  request_payload  Json?
+  response_payload Json?
+  status           SyncStatus @default(PENDING)
+
+  created_at DateTime @default(now())
+
+  // Relations
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@map("dexel_sync_logs")
 }
