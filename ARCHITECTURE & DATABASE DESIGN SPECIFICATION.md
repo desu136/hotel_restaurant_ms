@@ -158,11 +158,13 @@ HOTEL\_RESTAURANT
 | Field | Type |
 | ----- | ----- |
 | id | UUID |
-| tenant\_id | UUID |
-| plan\_id | UUID |
-| start\_date | Date |
-| end\_date | Date |
+| tenant_id | UUID |
+| plan_id | UUID |
+| start_date | Date |
+| end_date | Date |
 | status | Enum |
+
+> **Subscription History Note**: Old subscription records must never be overwritten. Every plan change or renewal should create a new subscription history record in this table to maintain an accurate audit trail of billing history.
 
 ---
 
@@ -251,6 +253,17 @@ UserRole
 
 | user\_id |  
  | role\_id |
+
+---
+
+## UserBranch (Future Architecture)
+
+Added for future multi-branch managers to map a single user to multiple branches.
+
+UserBranch
+
+| user_id |  
+ | branch_id |
 
 ---
 
