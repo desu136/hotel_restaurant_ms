@@ -31,14 +31,52 @@ export default async function proxy(request: NextRequest) {
 
     // Prevent authenticated users from accessing login/register page again
     if (path === '/login' || path === '/register') {
-      const redirectPath = payload.roles.includes('SUPER_ADMIN') ? '/tenants' : '/dashboard';
+      let redirectPath = '/dashboard';
+      if (payload.roles.includes('SUPER_ADMIN')) {
+        redirectPath = '/tenants';
+      } else if (payload.roles.includes('CHEF')) {
+        redirectPath = '/dashboard/kitchen';
+      } else if (payload.roles.includes('WAITER')) {
+        redirectPath = '/dashboard/waiter';
+      } else if (payload.roles.includes('CASHIER')) {
+        redirectPath = '/dashboard/cashier';
+      }
       return NextResponse.redirect(new URL(redirectPath, request.url));
     }
 
     // Role-based access control for Super Admin routes
     if (isSuperAdminPath && !payload.roles.includes('SUPER_ADMIN')) {
-      // Redirect unauthorized users to their dashboard
       return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
+    // Role-based access control for Tenant routes
+    const isChef = payload.roles.includes('CHEF');
+    const isWaiter = payload.roles.includes('WAITER');
+    const isCashier = payload.roles.includes('CASHIER');
+    const isManagerOrOwner = payload.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+
+    if (path === '/dashboard') {
+      if (isChef && !isManagerOrOwner) {
+        return NextResponse.redirect(new URL('/dashboard/kitchen', request.url));
+      }
+      if (isWaiter && !isManagerOrOwner) {
+        return NextResponse.redirect(new URL('/dashboard/waiter', request.url));
+      }
+      if (isCashier && !isManagerOrOwner) {
+        return NextResponse.redirect(new URL('/dashboard/cashier', request.url));
+      }
+    }
+
+    const isManagementPath = path.startsWith('/dashboard/branches') || 
+                             path.startsWith('/dashboard/employees') || 
+                             path.startsWith('/dashboard/roles');
+                             
+    if (isManagementPath && !isManagerOrOwner) {
+      let redirectPath = '/dashboard';
+      if (isChef) redirectPath = '/dashboard/kitchen';
+      else if (isWaiter) redirectPath = '/dashboard/waiter';
+      else if (isCashier) redirectPath = '/dashboard/cashier';
+      return NextResponse.redirect(new URL(redirectPath, request.url));
     }
 
     // Add useful headers for downstream requests

@@ -11,22 +11,46 @@ import {
   LogOut,
   Hotel,
   Menu,
-  X,
+  ChefHat,
+  Utensils,
+  Receipt,
+  User,
 } from "lucide-react"
 
-const navItems = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/branches", label: "Branches", icon: GitBranch, exact: false },
-  { href: "/dashboard/employees", label: "Employees", icon: Users2, exact: false },
-  { href: "/dashboard/roles", label: "Roles & Permissions", icon: ShieldCheck, exact: false },
-]
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  exact?: boolean;
+}
 
 export default function TenantDashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const [user, setUser] = React.useState<{ name: string; email: string; roles: string[] } | null>(null)
+  const [loading, setLoading] = React.useState(true)
 
-  const isActive = (item: typeof navItems[0]) =>
+  React.useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => {
+        if (!res.ok) throw new Error("Unauthorized")
+        return res.json()
+      })
+      .then((data) => {
+        if (data.success && data.user) {
+          setUser(data.user)
+        } else {
+          router.push("/login")
+        }
+      })
+      .catch(() => {
+        router.push("/login")
+      })
+      .finally(() => setLoading(false))
+  }, [router])
+
+  const isActive = (item: NavItem) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)
 
   const handleLogout = async () => {
@@ -35,10 +59,39 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
     router.refresh()
   }
 
+  // Define navigation sections based on user role
+  const isManagerOrOwner = user?.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+  const isChef = user?.roles.includes('CHEF');
+  const isWaiter = user?.roles.includes('WAITER');
+  const isCashier = user?.roles.includes('CASHIER');
+
+  const managementNav: NavItem[] = []
+  if (isManagerOrOwner) {
+    managementNav.push(
+      { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+      { href: "/dashboard/branches", label: "Branches", icon: GitBranch, exact: false },
+      { href: "/dashboard/employees", label: "Employees", icon: Users2, exact: false },
+      { href: "/dashboard/roles", label: "Roles & Permissions", icon: ShieldCheck, exact: false }
+    )
+  }
+
+  const operationsNav: NavItem[] = []
+  if (isManagerOrOwner || isWaiter) {
+    operationsNav.push({ href: "/dashboard/waiter", label: "Waiter Station", icon: Utensils })
+  }
+  if (isManagerOrOwner || isChef) {
+    operationsNav.push({ href: "/dashboard/kitchen", label: "Kitchen KDS", icon: ChefHat })
+  }
+  if (isManagerOrOwner || isCashier) {
+    operationsNav.push({ href: "/dashboard/cashier", label: "Cashier Counter", icon: Receipt })
+  }
+
+  const allNavItems = [...managementNav, ...operationsNav]
+
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
-      className={`${mobile ? "flex" : "hidden md:flex"} w-64 flex-col border-r border-[var(--surface-border)]`}
-      style={{ background: "color-mix(in srgb, var(--surface) 80%, transparent)", backdropFilter: "blur(12px)" }}
+      className={`${mobile ? "flex" : "hidden md:flex"} w-64 flex-col border-r border-[var(--surface-border)] h-full`}
+      style={{ background: "color-mix(in srgb, var(--surface) 90%, transparent)", backdropFilter: "blur(12px)" }}
     >
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[var(--surface-border)] shrink-0">
@@ -51,36 +104,94 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
-        <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-widest px-4 mb-3">
-          Management
-        </p>
-        {navItems.map((item) => {
-          const active = isActive(item)
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
-                active
-                  ? "bg-[var(--color-primary-600)] text-white shadow-sm"
-                  : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
-              }`}
-            >
-              <item.icon
-                className={`w-4 h-4 mr-3 shrink-0 transition-colors ${
-                  active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
-                }`}
-              />
-              {item.label}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 py-6 px-4 space-y-6 overflow-y-auto">
+        {loading ? (
+          <div className="space-y-4 px-4">
+            <div className="h-4 bg-[var(--surface-hover)] rounded w-2/3 animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-8 bg-[var(--surface-hover)] rounded animate-pulse" />
+              <div className="h-8 bg-[var(--surface-hover)] rounded animate-pulse" />
+              <div className="h-8 bg-[var(--surface-hover)] rounded animate-pulse" />
+            </div>
+          </div>
+        ) : (
+          <>
+            {managementNav.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-widest px-4 mb-3">
+                  Management
+                </p>
+                {managementNav.map((item) => {
+                  const active = isActive(item)
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
+                        active
+                          ? "bg-[var(--color-primary-600)] text-white shadow-sm"
+                          : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
+                      }`}
+                    >
+                      <item.icon
+                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${
+                          active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
+                        }`}
+                      />
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+
+            {operationsNav.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-widest px-4 mb-3">
+                  Operations
+                </p>
+                {operationsNav.map((item) => {
+                  const active = isActive(item)
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
+                        active
+                          ? "bg-[var(--color-primary-600)] text-white shadow-sm"
+                          : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
+                      }`}
+                    >
+                      <item.icon
+                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${
+                          active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
+                        }`}
+                      />
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-[var(--surface-border)] shrink-0">
+      <div className="p-4 border-t border-[var(--surface-border)] shrink-0 flex flex-col gap-3">
+        {user && (
+          <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-[var(--surface-hover)]">
+            <div className="w-8 h-8 rounded-full bg-[var(--color-primary-500)]/20 flex items-center justify-center text-[var(--color-primary-600)] font-bold text-sm shrink-0">
+              {user.name.charAt(0)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold truncate">{user.name}</p>
+              <p className="text-[10px] text-[var(--muted)] truncate">{user.roles.join(", ")}</p>
+            </div>
+          </div>
+        )}
         <button
           onClick={handleLogout}
           className="flex items-center w-full px-4 py-2.5 rounded-lg text-sm font-medium text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-all"
@@ -91,6 +202,8 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
       </div>
     </aside>
   )
+
+  const currentNavTitle = allNavItems.find((n) => isActive(n))?.label ?? "Dashboard"
 
   return (
     <div className="min-h-screen bg-[var(--background)] flex">
@@ -104,7 +217,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
 
       {/* Mobile sidebar */}
       {sidebarOpen && (
-        <div className="fixed inset-y-0 left-0 z-30 md:hidden">
+        <div className="fixed inset-y-0 left-0 z-30 md:hidden h-full">
           <Sidebar mobile />
         </div>
       )}
@@ -117,7 +230,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
         {/* Topbar */}
         <header
           className="h-16 border-b border-[var(--surface-border)] flex items-center justify-between px-6 sticky top-0 z-10 shrink-0"
-          style={{ background: "color-mix(in srgb, var(--surface) 80%, transparent)", backdropFilter: "blur(12px)" }}
+          style={{ background: "color-mix(in srgb, var(--surface) 90%, transparent)", backdropFilter: "blur(12px)" }}
         >
           <div className="flex items-center gap-3">
             <button
@@ -127,12 +240,14 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
               <Menu className="w-5 h-5" />
             </button>
             <h2 className="text-lg font-semibold tracking-tight hidden sm:block">
-              {navItems.find((n) => isActive(n))?.label ?? "Dashboard"}
+              {currentNavTitle}
             </h2>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[var(--color-primary-500)] to-purple-500 border-2 border-[var(--surface)] shadow-sm" />
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[var(--color-primary-500)] to-purple-500 border-2 border-[var(--surface)] shadow-sm flex items-center justify-center text-white text-xs font-bold">
+              {user ? user.name.charAt(0) : <User className="w-4 h-4" />}
+            </div>
           </div>
         </header>
 
