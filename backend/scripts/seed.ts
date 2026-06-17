@@ -6,133 +6,306 @@ const prisma = new PrismaClient({
   log: ['info', 'query', 'error', 'warn']
 })
 
+const DEFAULT_ROLES = [
+  { code: 'SUPER_ADMIN', name: 'Super Administrator' },
+  { code: 'HOTEL_OWNER', name: 'Hotel/Restaurant Owner' },
+  { code: 'HOTEL_MANAGER', name: 'Hotel Manager' },
+  { code: 'RECEPTIONIST', name: 'Receptionist' },
+  { code: 'RESTAURANT_MANAGER', name: 'Restaurant Manager' },
+  { code: 'WAITER', name: 'Waiter' },
+  { code: 'CHEF', name: 'Chef' },
+  { code: 'CASHIER', name: 'Cashier' },
+  { code: 'DELIVERY_DRIVER', name: 'Delivery Driver' }
+]
+
+const PERMISSIONS = [
+  // Tenant management
+  'tenant.create', 'tenant.view', 'tenant.update', 'tenant.approve', 'tenant.reject', 'tenant.suspend', 'tenant.activate',
+  // Subscriptions & Plans
+  'subscription.create', 'subscription.update', 'subscription.delete', 'subscription.extend', 'subscription.grant_trial', 'subscription.suspend', 'subscription.view',
+  'plan.create', 'plan.update', 'plan.delete', 'plan.view',
+  // Module management
+  'module.enable', 'module.disable', 'module.assign',
+  // Platform settings
+  'platform.settings.view', 'platform.settings.update', 'platform.analytics.view',
+  
+  // Organization Management
+  'hotel.view', 'hotel.update',
+  'branch.create', 'branch.view', 'branch.update', 'branch.delete',
+  // Staff Management
+  'employee.create', 'employee.view', 'employee.update', 'employee.activate', 'employee.deactivate',
+  // Role Management
+  'role.create', 'role.view', 'role.update', 'role.assign',
+  // Reporting & Analytics
+  'report.view', 'analytics.view', 'restaurant.report.view',
+  // Billing
+  'billing.view',
+  
+  // Hotel Modules (Room & Guest)
+  'room.create', 'room.view', 'room.update', 'room.delete', 'room.assign', 'room.transfer',
+  'reservation.create', 'reservation.view', 'reservation.update', 'reservation.confirm', 'reservation.cancel',
+  'guest.create', 'guest.view', 'guest.update', 'guest.checkin', 'guest.checkout',
+  
+  // Restaurant Modules
+  'category.create', 'category.view', 'category.update', 'category.delete',
+  'menu.create', 'menu.view', 'menu.update', 'menu.delete',
+  'table.create', 'table.view', 'table.update', 'table.delete', 'table.update_status',
+  'qr.create', 'qr.view', 'qr.regenerate',
+  'order.create', 'order.view', 'order.update', 'order.cancel', 'order.accept', 'order.prepare', 'order.ready',
+  'assigned.order.view', 'service.request.view', 'service.request.resolve',
+  'kitchen.view',
+  
+  // Cashier Billing
+  'bill.create', 'bill.view', 'bill.update',
+  'payment.view', 'payment.record',
+  'transaction.view', 'finance.daily.view',
+  
+  // Delivery
+  'delivery.view_assigned', 'delivery.accept', 'delivery.pickup', 'delivery.complete', 'delivery.status.update'
+]
+
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  SUPER_ADMIN: [
+    'tenant.create', 'tenant.view', 'tenant.update', 'tenant.approve', 'tenant.reject', 'tenant.suspend', 'tenant.activate',
+    'subscription.create', 'subscription.update', 'subscription.delete', 'subscription.extend', 'subscription.grant_trial', 'subscription.suspend', 'subscription.view',
+    'plan.create', 'plan.update', 'plan.delete', 'plan.view',
+    'module.enable', 'module.disable', 'module.assign',
+    'platform.settings.view', 'platform.settings.update', 'platform.analytics.view'
+  ],
+  HOTEL_OWNER: [
+    'hotel.view', 'hotel.update',
+    'branch.create', 'branch.view', 'branch.update', 'branch.delete',
+    'employee.create', 'employee.view', 'employee.update', 'employee.activate', 'employee.deactivate',
+    'role.create', 'role.view', 'role.update', 'role.assign',
+    'report.view', 'analytics.view',
+    'billing.view', 'subscription.view'
+  ],
+  HOTEL_MANAGER: [
+    'hotel.view', 'branch.view',
+    'room.create', 'room.view', 'room.update', 'room.delete',
+    'reservation.create', 'reservation.view', 'reservation.update', 'reservation.confirm', 'reservation.cancel',
+    'guest.create', 'guest.view', 'guest.update',
+    'report.view'
+  ],
+  RECEPTIONIST: [
+    'guest.create', 'guest.view', 'guest.update', 'guest.checkin', 'guest.checkout',
+    'reservation.create', 'reservation.view', 'reservation.update', 'reservation.confirm', 'reservation.cancel',
+    'room.assign', 'room.transfer'
+  ],
+  RESTAURANT_MANAGER: [
+    'category.create', 'category.view', 'category.update', 'category.delete',
+    'menu.create', 'menu.view', 'menu.update', 'menu.delete',
+    'table.create', 'table.view', 'table.update', 'table.delete',
+    'qr.create', 'qr.view', 'qr.regenerate',
+    'order.view', 'order.update', 'order.cancel',
+    'kitchen.view',
+    'restaurant.report.view'
+  ],
+  WAITER: [
+    'table.view', 'table.update_status',
+    'order.create', 'order.view', 'order.update',
+    'service.request.view', 'service.request.resolve',
+    'reservation.view'
+  ],
+  CHEF: [
+    'kitchen.view',
+    'order.accept', 'order.prepare', 'order.ready',
+    'assigned.order.view'
+  ],
+  CASHIER: [
+    'bill.create', 'bill.view', 'bill.update',
+    'payment.view', 'payment.record',
+    'transaction.view', 'finance.daily.view'
+  ],
+  DELIVERY_DRIVER: [
+    'delivery.view_assigned', 'delivery.accept', 'delivery.pickup', 'delivery.complete', 'delivery.status.update'
+  ]
+}
+
 async function main() {
   console.log("Starting database seeding...")
 
-  // 1. Create Default Roles
-  console.log("Seeding roles...")
-  const superAdminRole = await prisma.role.upsert({
-    where: { code: 'SUPER_ADMIN' },
-    update: {},
-    create: {
-      code: 'SUPER_ADMIN',
-      name: 'Super Administrator',
-    },
-  })
-
-  await prisma.role.upsert({
-    where: { code: 'TENANT_ADMIN' },
-    update: {},
-    create: {
-      code: 'TENANT_ADMIN',
-      name: 'Tenant Administrator',
-    },
-  })
-
-  await prisma.role.upsert({
-    where: { code: 'HOTEL_OWNER' },
-    update: {},
-    create: {
-      code: 'HOTEL_OWNER',
-      name: 'Hotel Owner',
-    },
-  })
-
-  // 1.5 Create Default Platform Settings
-  console.log("Seeding platform settings...")
-  const defaultSettings = [
-    { key: 'TRIAL_DURATION_DAYS', value: '14', description: 'Default trial duration in days' },
-    { key: 'GRACE_PERIOD_DAYS', value: '3', description: 'Days before suspension after failed payment' },
-    { key: 'SUSPENSION_PERIOD_DAYS', value: '7', description: 'Days before tenant data is locked or scheduled for deletion' },
-    { key: 'RENEWAL_REMINDER_DAYS', value: '5', description: 'Days before subscription ends to send reminder' }
-  ]
-
-  for (const setting of defaultSettings) {
-    await prisma.platformSetting.upsert({
-      where: { key: setting.key },
+  // 1. Seed Roles
+  console.log("Seeding default roles...")
+  const roleMap: Record<string, string> = {}
+  for (const role of DEFAULT_ROLES) {
+    const dbRole = await prisma.role.upsert({
+      where: { code: role.code },
       update: {},
-      create: setting
+      create: {
+        code: role.code,
+        name: role.name
+      }
+    })
+    roleMap[role.code] = dbRole.id
+  }
+
+  // 2. Seed Permissions
+  console.log("Seeding default permissions...")
+  const permissionMap: Record<string, string> = {}
+  for (const permCode of PERMISSIONS) {
+    const dbPerm = await prisma.permission.upsert({
+      where: { code: permCode },
+      update: {},
+      create: { code: permCode }
+    })
+    permissionMap[permCode] = dbPerm.id
+  }
+
+  // 3. Link Roles to Permissions
+  console.log("Linking roles to permissions...")
+  for (const [roleCode, permCodes] of Object.entries(ROLE_PERMISSIONS)) {
+    const roleId = roleMap[roleCode]
+    if (!roleId) continue
+
+    // Clear existing permissions for this role to avoid duplicates or outdated sets
+    await prisma.rolePermission.deleteMany({
+      where: { role_id: roleId }
+    })
+
+    // Create new relations
+    await prisma.rolePermission.createMany({
+      data: permCodes.map(code => ({
+        role_id: roleId,
+        permission_id: permissionMap[code]
+      })).filter(item => item.permission_id !== undefined)
     })
   }
 
-  // 2. Create Default Modules
-  console.log("Seeding modules...")
-  const defaultModules = [
-    { code: 'HOTEL', name: 'Hotel Operations', description: 'Core hotel management' },
-    { code: 'ROOMS', name: 'Room Reservations', description: 'Room booking system' },
-    { code: 'RESTAURANT', name: 'Restaurant POS', description: 'Point of sale for restaurants' },
-    { code: 'MENU', name: 'Digital Menu', description: 'QR Code digital menus' },
-    { code: 'KITCHEN', name: 'Kitchen Display', description: 'KDS and ticket management' },
-    { code: 'DELIVERY', name: 'Delivery Tracking', description: 'Room service and external delivery' }
-  ]
+  // 4. Create the SYSTEM Tenant
+  console.log("Seeding SYSTEM tenant...")
+  let systemTenant = await prisma.tenant.findFirst({
+    where: { business_name: 'System Admin' }
+  })
 
-  for (const mod of defaultModules) {
-    await prisma.module.upsert({
-      where: { code: mod.code },
-      update: {},
-      create: mod
+  if (!systemTenant) {
+    systemTenant = await prisma.tenant.create({
+      data: {
+        business_name: 'System Admin',
+        owner_name: 'System',
+        phone: '0000000000',
+        email: 'system@hospitalityhub.com',
+        business_type: 'HOTEL_RESTAURANT',
+        status: 'ACTIVE',
+      }
     })
   }
 
-  // 3. Create Default Super Admin User (tenant_id = null)
+  // 5. Create Default Super Admin User
   console.log("Seeding SUPER_ADMIN user...")
   const adminEmail = 'admin@hospitalityhub.com'
   const adminPassword = await hash('admin123', 10)
 
   const adminUser = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: {}, // Don't overwrite password if already set
+    update: {}, 
     create: {
       email: adminEmail,
       full_name: 'Super Admin',
       password_hash: adminPassword,
+      tenant_id: systemTenant.id,
       status: 'ACTIVE',
-      // tenant_id is omitted (defaults to null) for super admins
       roles: {
         create: {
-          role_id: superAdminRole.id
+          role_id: roleMap['SUPER_ADMIN']
         }
       }
     },
   })
 
-  // 4. Create Default Subscription Plans (if not exist)
+  // 6. Create Default Subscription Plans (if not exist)
   console.log("Seeding default subscription plans...")
+  let trialPlan = await prisma.subscriptionPlan.findFirst({
+    where: { name: 'Trial Plan' }
+  })
+  if (!trialPlan) {
+    trialPlan = await prisma.subscriptionPlan.create({
+      data: { name: 'Trial Plan', monthly_price: 0, annual_price: 0, trial_days: 14 }
+    })
+  }
+
   const plansCount = await prisma.subscriptionPlan.count()
-  if (plansCount === 0) {
-    // We need to fetch modules to link them
-    const hotelMod = await prisma.module.findUnique({ where: { code: 'HOTEL' } })
-    const roomsMod = await prisma.module.findUnique({ where: { code: 'ROOMS' } })
-    
-    await prisma.subscriptionPlan.create({
-      data: { 
-        name: 'Trial Plan', 
-        description: '14-day free trial with core features.',
-        monthly_price: 0, 
-        annual_price: 0, 
-        trial_days: 14 
+  if (plansCount <= 1) {
+    await prisma.subscriptionPlan.createMany({
+      data: [
+        { name: 'Basic', monthly_price: 49.99, annual_price: 499.99, trial_days: 0 },
+        { name: 'Pro', monthly_price: 99.99, annual_price: 999.99, trial_days: 0 }
+      ]
+    })
+  }
+
+  // 7. Create Demo Hotel Owner Tenant (Release 2 testing)
+  console.log("Seeding Hotel Owner demo tenant & user...")
+  let hotelTenant = await prisma.tenant.findFirst({
+    where: { email: 'owner@grandhorizon.com' }
+  })
+
+  if (!hotelTenant) {
+    hotelTenant = await prisma.tenant.create({
+      data: {
+        business_name: 'Grand Horizon Hotel',
+        owner_name: 'John Doe',
+        phone: '1234567890',
+        email: 'owner@grandhorizon.com',
+        business_type: 'HOTEL',
+        status: 'ACTIVE',
       }
     })
-    
-    await prisma.subscriptionPlan.create({
-      data: { 
-        name: 'Hotel Basic', 
-        description: 'Basic hotel management.',
-        monthly_price: 49.99, 
-        annual_price: 499.99, 
-        trial_days: 0,
-        modules: {
-          create: [
-            ...(hotelMod ? [{ module_id: hotelMod.id }] : []),
-            ...(roomsMod ? [{ module_id: roomsMod.id }] : [])
-          ]
+
+    // Create a Trial Subscription for the hotel owner
+    const startDate = new Date()
+    const endDate = new Date()
+    endDate.setDate(startDate.getDate() + trialPlan.trial_days)
+
+    await prisma.tenantSubscription.create({
+      data: {
+        tenant_id: hotelTenant.id,
+        plan_id: trialPlan.id,
+        start_date: startDate,
+        end_date: endDate,
+        status: 'TRIAL'
+      }
+    })
+  }
+
+  const ownerEmail = 'owner@grandhorizon.com'
+  const ownerPassword = await hash('owner123', 10)
+
+  await prisma.user.upsert({
+    where: { email: ownerEmail },
+    update: {},
+    create: {
+      email: ownerEmail,
+      full_name: 'John Doe (Owner)',
+      password_hash: ownerPassword,
+      tenant_id: hotelTenant.id,
+      status: 'ACTIVE',
+      roles: {
+        create: {
+          role_id: roleMap['HOTEL_OWNER']
         }
+      }
+    }
+  })
+
+  // Create a default branch for this tenant
+  const branchCount = await prisma.branch.count({
+    where: { tenant_id: hotelTenant.id }
+  })
+  if (branchCount === 0) {
+    await prisma.branch.create({
+      data: {
+        tenant_id: hotelTenant.id,
+        name: 'Main Branch',
+        address: 'Addis Ababa, Ethiopia',
+        phone: '1234567890'
       }
     })
   }
 
   console.log("✅ Seeding complete!")
   console.log(`\nSuper Admin Login:\nEmail: ${adminEmail}\nPassword: admin123\n`)
+  console.log(`Hotel Owner Login:\nEmail: ${ownerEmail}\nPassword: owner123\n`)
 }
 
 main()

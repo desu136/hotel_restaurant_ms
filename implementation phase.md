@@ -1,272 +1,578 @@
-# **Release 0 – Foundation**
+# IMPLEMENTATION_ROADMAP.md
 
-### **Goal**
+# Release 0 — Foundation
 
-Establish platform infrastructure.
+## Core Infrastructure
 
-### **Modules**
+### Authentication
 
-* Project Setup  
-* Monorepo Structure  
-* PostgreSQL  
-* Prisma  
-* Authentication  
-* RBAC  
-* Audit Logging  
-* Multi-Tenant Middleware
+* Login
+* Logout
+* JWT
+* Refresh Tokens
+* Password Reset
 
-### **Deliverables**
+### Authorization
 
-Login  
-JWT  
-Permissions  
-Tenant Isolation  
-Branch Isolation
+* RBAC
+* Roles
+* Permissions
+* Permission Groups
 
-This release is mandatory before everything else.
+### Multi-Tenancy
 
----
+* Tenant Isolation
+* Branch Isolation
+* Tenant Middleware
+* Branch Middleware
 
-# **Release 1 – SaaS Core**
+### Audit System
 
-### **Goal**
+* Audit Logs
+* Activity Logs
+* Login Logs
 
-Make the platform commercially usable.
+### Shared UI System
 
-### **Modules**
-
-* Tenant Registration  
-* Tenant Approval  
-* Subscription Plans  
-* Subscription Policies  
-* Module Assignment  
-* Trial Management
-
-### **Roles**
-
-SUPER\_ADMIN  
-HOTEL\_OWNER
-
-### **Deliverables**
-
-Tenant Onboarding  
-Plan Management  
-Subscription Management  
----
-
-# **Release 2 – Organization & Staff**
-
-### **Goal**
-
-Build tenant structure.
-
-### **Modules**
-
-* Branch Management  
-* Employee Management  
-* Role Assignment  
-* Permission Assignment
-
-### **Deliverables**
-
-Branches  
-Employees  
-Roles  
----
-
-# **Release 3 – Hotel Operations**
-
-### **Goal**
-
-Hotel management foundation.
-
-### **Modules**
-
-* Room Types  
-* Rooms  
-* Room Status  
-* Guest Profiles
-
-### **Deliverables**
-
-Room Inventory  
-Guest Records  
----
-
-# **Release 4 – Reservations**
-
-### **Goal**
-
-Reservation workflow.
-
-### **Modules**
-
-* Room Reservations  
-* Table Reservations  
-* Reservation Status Workflow
-
-### **Deliverables**
-
-Reservation Engine  
-Availability Checks  
----
-
-# **Release 5 – Restaurant Operations**
-
-### **Goal**
-
-Restaurant administration.
-
-### **Modules**
-
-* Restaurants  
-* Categories  
-* Menu Items  
-* Tables  
-* QR Codes
-
-### **Deliverables**
-
-Menu Management  
-QR Menu Access  
----
-
-# **Release 6 – Customer Ordering**
-
-### **Goal**
-
-Customer self-service.
-
-### **Modules**
-
-* QR Ordering  
-* Web Ordering  
-* Cart  
-* Checkout  
-* Order Tracking
-
-### **Order Types**
-
-DINE\_IN  
-ROOM\_SERVICE  
-TAKEAWAY  
-DELIVERY
-
-### **Deliverables**
-
-Customer Ordering Platform  
----
-
-# **Release 7 – Kitchen Operations**
-
-### **Goal**
-
-Kitchen workflow.
-
-### **Modules**
-
-* Kitchen Queue  
-* Kitchen Display System  
-* Chef Assignment  
-* Preparation Tracking
-
-### **Deliverables**
-
-Real-Time Kitchen Management  
----
-
-# **Release 8 – Billing & Dexel Integration**
-
-### **Goal**
-
-Connect business operations with Dexel.
-
-### **Modules**
-
-* Product Sync  
-* Inventory Validation  
-* POS Integration  
-* Sales Sync  
-* Billing Workflow
-
-### **Deliverables**
-
-HospitalityHub ↔ Dexel Stock
-
-This is where owner feedback is fully implemented.
-
----
-
-# **Release 9 – Delivery & Customer Experience**
-
-### **Goal**
-
-Complete customer journey.
-
-### **Modules**
-
-* Delivery Management  
-* Driver Assignment  
-* Customer Feedback  
-* Ratings  
+* Dashboard Layout
+* Sidebar
+* Top Navigation
+* Tables
+* Forms
+* Modals
 * Notifications
 
-### **Deliverables**
+### Dexel Foundation
 
-End-to-End Order Lifecycle  
+* Dexel API Client
+* Sync Framework
+* Webhook Framework
+
+### Mini-App Foundation
+
+* Customer Identity
+* External Identity Support
+* API-First Design
+
+### Deliverables
+
+* Authentication
+* RBAC
+* Multi-Tenancy
+* Audit Logging
+
 ---
 
-# **Release 10 – Reporting & Analytics**
+# Release 1 — Super Admin Portal
 
-### **Goal**
+## Account
 
-Business intelligence.
+### SUPER_ADMIN
 
-### **Modules**
+### Dashboard
 
-* Occupancy Reports  
-* Reservation Reports  
-* Order Reports  
-* Kitchen Performance  
-* Waiter Performance  
+* Tenant Statistics
+* Revenue Statistics
+* Subscription Statistics
+
+### Tenant Management
+
+* Approve Tenant
+* Reject Tenant
+* Suspend Tenant
+* Activate Tenant
+
+### Subscription Management
+
+* Create Plan
+* Update Plan
+* Delete Plan
+* Assign Plan
+* Extend Subscription
+
+### Module Management
+
+* Enable Module
+* Disable Module
+* Assign Module
+
+### Platform Settings
+
+* Localization
+* Notifications
+* Payments
+
+### Deliverables
+
+* SaaS Administration Portal
+
+---
+
+# Release 2 — Business Owner Portal
+
+## Accounts
+
+### HOTEL_OWNER
+
+### RESTAURANT_OWNER
+
+### Dashboard
+
+* Business Overview
+* Revenue Overview
+* Branch Overview
+
+### Business Profile
+
+* Business Information
+* Branding
+* Contacts
+
+### Branch Management
+
+* Create Branch
+* Update Branch
+* Disable Branch
+
+### Employee Management
+
+* Create Employee
+* Update Employee
+* Activate Employee
+* Deactivate Employee
+
+### Role Management
+
+* Create Role
+* Update Role
+* Assign Role
+
+### Permission Management
+
+* Assign Permissions
+* Revoke Permissions
+
+### Subscription
+
+* View Subscription
+* View Modules
+
+### Reports
+
+* Revenue Reports
+* Operational Reports
+
+### Deliverables
+
+* Business Management
+* Employee Management
+* Branch Management
+
+---
+
+# Release 3 — Hotel Operations Portal
+
+## Accounts
+
+### HOTEL_MANAGER
+
+### RECEPTIONIST
+
+## HOTEL_MANAGER
+
+### Dashboard
+
+* Occupancy Overview
+* Reservation Overview
+* Guest Overview
+
+### Room Types
+
+* Create Room Type
+* Update Room Type
+* Delete Room Type
+
+### Rooms
+
+* Create Room
+* Update Room
+* Delete Room
+* Room Pricing
+* Room Status
+
+### Guest Profiles
+
+* Create Guest
+* Update Guest
+* Guest History
+
+### Reservations
+
+* Create Reservation
+* Update Reservation
+* Confirm Reservation
+* Cancel Reservation
+
+### Reports
+
+* Occupancy Reports
+* Reservation Reports
+* Guest Reports
+
+## RECEPTIONIST
+
+### Dashboard
+
+* Arrivals
+* Departures
+* Active Guests
+
+### Check-In
+
+* Guest Check-In
+
+### Check-Out
+
+* Guest Check-Out
+
+### Room Assignment
+
+* Assign Room
+* Transfer Room
+
+### Guest Services
+
+* Guest Requests
+* Reservation Desk
+
+### Deliverables
+
+* Hotel Operations
+* Front Desk Operations
+
+---
+
+# Release 4 — Restaurant Administration Portal
+
+## Account
+
+### RESTAURANT_MANAGER
+
+### Dashboard
+
+* Orders Today
+* Revenue Today
+* Active Tables
+
+### Restaurant Setup
+
+* Restaurants
+* Sections
+* Dining Areas
+
+### Categories
+
+* Create Category
+* Update Category
+* Delete Category
+
+### Menu Management
+
+* Sync Dexel Products
+* Configure Menu Items
+* Availability Management
+* Images
+* Descriptions
+
+### Tables
+
+* Create Table
+* Update Table
+* Capacity Management
+
+### QR Codes
+
+* Generate QR
+* Regenerate QR
+* Download QR
+
+### Reservations
+
+* Table Reservations
+
+### Reports
+
+* Restaurant Reports
+* Sales Reports
+
+### Deliverables
+
+* Restaurant Administration
+* QR Infrastructure
+
+---
+
+# Release 5 — Customer Experience Portal
+
+## Account
+
+### CUSTOMER
+
+### Home
+
+* Restaurant Discovery
+* Hotel Discovery
+
+### Menu
+
+* Browse Menu
+* Search Menu
+* Filter Menu
+
+### Cart
+
+* Add Item
+* Remove Item
+* Update Quantity
+
+### Checkout
+
+* Submit Order
+
+### Orders
+
+* Track Orders
+* Order History
+
+### Reservations
+
+* Room Reservation
+* Table Reservation
+
+### Feedback
+
+* Ratings
+* Reviews
+
+### Profile
+
+* Profile Management
+
+### Access Channels
+
+#### Current
+
+* QR Access
+* Web Access
+
+#### Future
+
+* Mini-App Access
+* Mobile App Access
+
+### Deliverables
+
+* Customer Ordering Platform
+
+---
+
+# Release 6 — Waiter Portal
+
+## Account
+
+### WAITER
+
+### Dashboard
+
+* Assigned Tables
+* Active Orders
+
+### Tables
+
+* Table Status
+* Seat Assignment
+
+### Orders
+
+* Create Order
+* Update Order
+* View Order
+
+### Service Requests
+
+* View Requests
+* Resolve Requests
+
+### Bill Requests
+
+* Request Bill
+
+### Deliverables
+
+* Waiter Operations
+
+---
+
+# Release 7 — Kitchen Operations Portal
+
+## Account
+
+### CHEF
+
+### Dashboard
+
+* Kitchen Queue
+* Assigned Orders
+
+### Kitchen Queue
+
+* Accept Order
+* Start Preparation
+* Mark Ready
+
+### Preparation Tracking
+
+* Preparation Status
+* Preparation Time
+
+### Performance
+
+* Kitchen Metrics
+
+### Deliverables
+
+* Kitchen Display System
+
+---
+
+# Release 8 — Cashier & Dexel Operations Portal
+
+## Account
+
+### CASHIER
+
+### Dashboard
+
+* Pending Bills
+* Completed Bills
+
+### Billing
+
+* Create Bill
+* Update Bill
+* Close Bill
+
+### Payments
+
+* Record Payment
+* Payment Tracking
+
+### Transactions
+
+* Transaction Lookup
+
+### Dexel Integration
+
+#### Product Sync
+
+* Products
+* Categories
+* Prices
+* Images
+
+#### Inventory Validation
+
+* Stock Validation
+
+#### POS Integration
+
+* Sales Submission
+* Invoice Generation
+* Receipt Generation
+
+#### Sync Monitoring
+
+* Sync Logs
+* Failed Syncs
+* Retry Sync
+
+### Deliverables
+
+* Billing System
+* Dexel Integration
+
+---
+
+# Release 9 — Delivery Operations Portal
+
+## Account
+
+### DELIVERY_DRIVER
+
+### Dashboard
+
+* Assigned Deliveries
+* Active Deliveries
+
+### Deliveries
+
+* Accept Delivery
+* Pickup Order
+* Mark Out For Delivery
+* Mark Delivered
+
+### History
+
+* Delivery History
+
+### Deliverables
+
+* Delivery Operations
+
+---
+
+# Release 10 — Analytics & Executive Dashboards
+
+## Accounts
+
+### SUPER_ADMIN
+
+### HOTEL_OWNER
+
+### RESTAURANT_OWNER
+
+### HOTEL_MANAGER
+
+### RESTAURANT_MANAGER
+
+### Dashboards
+
+#### Hotel Analytics
+
+* Occupancy
+* Reservations
+* Revenue
+
+#### Restaurant Analytics
+
+* Orders
+* Revenue
+* Menu Performance
+
+#### Staff Analytics
+
+* Waiter Performance
+* Chef Performance
+* Reception Performance
 * Delivery Performance
 
-### **Deliverables**
+#### SaaS Analytics
 
-Operational Dashboards  
-Analytics  
----
+* Tenant Growth
+* Revenue Growth
+* Subscription Analytics
 
-# **Parallel Development Opportunities**
+### Deliverables
 
-If you have multiple developers:
-
-### **Team A**
-
-Backend Core  
-Auth  
-RBAC  
-Multi-Tenant
-
-### **Team B**
-
-Hotel Operations  
-Reservations
-
-### **Team C**
-
-Restaurant  
-Orders  
-Kitchen
-
-### **Team D**
-
-Frontend  
-UI  
-Admin Portal
-
-### **Team E**
-
-Dexel Integration  
-Payments  
-Notifications  
+* Executive Reporting
+* Analytics Platform

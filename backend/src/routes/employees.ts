@@ -1,0 +1,276 @@
+import { Router, Request, Response } from 'express';
+import { hash } from 'bcrypt';
+import { prisma } from '../lib/prisma';
+import { authenticate } from '../middleware/auth';
+
+const router = Router();
+router.use(authenticate);
+
+// GET /api/employees
+router.get('/', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) {
+      res.status(400).json({ error: 'Tenant ID is required' });
+      return;
+    }
+    const employees = await prisma.user.findMany({
+      where: { tenant_id: tenantId, deleted_at: null },
+      include: {
+        branch: true,
+        roles: { include: { role: true } },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+
+    res.json(employees.map(e => ({
+      id: e.id,
+      tenantId: e.tenant_id,
+      branchId: e.branch_id,
+      branchName: e.branch?.name || 'All Branches / HQ',
+      fullName: e.full_name,
+      email: e.email,
+      phone: e.phone,
+      status: e.status,
+      createdAt: e.created_at,
+      roles: e.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+    })));
+  } catch (error) {
+    console.error('GET /api/employees error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/employees
+router.post('/', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) {
+      res.status(400).json({ error: 'Tenant ID is required' });
+      return;
+    }
+    const { fullName, email, phone, password, branchId, roles } = req.body;
+
+    if (!fullName || !email || !password) {
+      res.status(400).json({ error: 'fullName, email, and password are required' });
+      return;
+    }
+
+    const passwordHash = await hash(password, 10);
+
+    // Validate branch belongs to tenant
+    if (branchId) {
+      const branch = await prisma.branch.findFirst({
+        where: { id: branchId, tenant_id: tenantId, deleted_at: null },
+      });
+      if (!branch) {
+        res.status(400).json({ error: 'Invalid branch ID or branch does not belong to this tenant' });
+        return;
+      }
+    }
+
+    // Resolve roles
+    let dbRoles: { id: string }[] = [];
+    if (roles && Array.isArray(roles) && roles.length > 0) {
+      dbRoles = await prisma.role.findMany({ where: { code: { in: roles } } });
+    }
+
+    const employee = await prisma.user.create({
+      data: {
+        tenant_id: tenantId,
+        branch_id: branchId || null,
+        full_name: fullName,
+        email,
+        phone: phone || null,
+        password_hash: passwordHash,
+        status: 'ACTIVE',
+        roles: dbRoles.length > 0 ? { create: dbRoles.map(r => ({ role_id: r.id })) } : undefined,
+      },
+      include: { branch: true, roles: { include: { role: true } } },
+    });
+
+    res.status(201).json({
+      id: employee.id,
+      tenantId: employee.tenant_id,
+      branchId: employee.branch_id,
+      branchName: employee.branch?.name || 'All Branches / HQ',
+      fullName: employee.full_name,
+      email: employee.email,
+      phone: employee.phone,
+      status: employee.status,
+      roles: employee.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+    });
+  } catch (error: any) {
+    console.error('POST /api/employees error:', error);
+    if (error.code === 'P2002') {
+      res.status(409).json({ error: 'Email already in use' });
+      return;
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+// GET /api/employees/:id
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isUuid(req.params.id as string)) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) {
+      res.status(400).json({ error: 'Tenant ID is required' });
+      return;
+    }
+    const employee = await prisma.user.findFirst({
+      where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
+      include: { branch: true, roles: { include: { role: true } } },
+    });
+    if (!employee) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+    res.json({
+      id: employee.id,
+      tenantId: employee.tenant_id,
+      branchId: employee.branch_id,
+      branchName: employee.branch?.name || 'All Branches / HQ',
+      fullName: employee.full_name,
+      email: employee.email,
+      phone: employee.phone,
+      status: employee.status,
+      createdAt: employee.created_at,
+      roles: employee.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+    });
+  } catch (error) {
+    console.error('GET /api/employees/:id error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/employees/:id
+router.put('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isUuid(req.params.id as string)) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) {
+      res.status(400).json({ error: 'Tenant ID is required' });
+      return;
+    }
+    const { fullName, email, phone, password, branchId, roles, status } = req.body;
+
+    const employee = await prisma.user.findFirst({
+      where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
+    });
+    if (!employee) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const updateData: any = {};
+    if (fullName !== undefined) updateData.full_name = fullName;
+    if (phone !== undefined) updateData.phone = phone;
+    if (status !== undefined) updateData.status = status;
+
+    if (email !== undefined && email !== employee.email) {
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        res.status(409).json({ error: 'Email already in use' });
+        return;
+      }
+      updateData.email = email;
+    }
+
+    if (password) {
+      updateData.password_hash = await hash(password, 10);
+    }
+
+    if (branchId !== undefined) {
+      if (branchId) {
+        const branch = await prisma.branch.findFirst({
+          where: { id: branchId, tenant_id: tenantId, deleted_at: null },
+        });
+        if (!branch) {
+          res.status(400).json({ error: 'Invalid branch ID or branch does not belong to this tenant' });
+          return;
+        }
+        updateData.branch_id = branchId;
+      } else {
+        updateData.branch_id = null;
+      }
+    }
+
+    if (roles !== undefined && Array.isArray(roles)) {
+      const dbRoles = await prisma.role.findMany({ where: { code: { in: roles } } });
+      if (dbRoles.length === 0) {
+        res.status(400).json({ error: 'No valid roles provided' });
+        return;
+      }
+      updateData.roles = {
+        deleteMany: {},
+        create: dbRoles.map(r => ({ role_id: r.id })),
+      };
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id as string },
+      data: updateData,
+      include: { branch: true, roles: { include: { role: true } } },
+    });
+
+    res.json({
+      id: updated.id,
+      tenantId: updated.tenant_id,
+      branchId: updated.branch_id,
+      branchName: updated.branch?.name || 'All Branches / HQ',
+      fullName: updated.full_name,
+      email: updated.email,
+      phone: updated.phone,
+      status: updated.status,
+      roles: updated.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+    });
+  } catch (error) {
+    console.error('PUT /api/employees/:id error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/employees/:id  (soft delete)
+router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isUuid(req.params.id as string)) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) {
+      res.status(400).json({ error: 'Tenant ID is required' });
+      return;
+    }
+    const employee = await prisma.user.findFirst({
+      where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
+    });
+    if (!employee) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+    await prisma.user.update({
+      where: { id: req.params.id as string },
+      data: { deleted_at: new Date(), status: 'INACTIVE' },
+    });
+    res.json({ success: true, message: 'Employee deactivated and soft-deleted successfully' });
+  } catch (error) {
+    console.error('DELETE /api/employees/:id error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export default router;

@@ -1,8 +1,8 @@
 import * as React from "react"
-import Link from "next/link"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { LayoutDashboard, Users, CreditCard, Settings, LogOut, Hotel } from "lucide-react"
 import { SignOutButton } from "@/components/sign-out-button"
+import { NavLink } from "@/components/ui/nav-link"
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,26 +15,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <nav className="flex-1 py-6 px-4 flex flex-col space-y-2">
-          <Link href="/tenants" className="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-[var(--surface-hover)] transition-colors text-[var(--foreground)]">
+          <NavLink href="/tenants">
             <Users className="w-5 h-5 mr-3 text-[var(--muted)]" />
             Tenants
-          </Link>
-          <Link href="/subscriptions" className="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-[var(--surface-hover)] transition-colors text-[var(--foreground)]">
+          </NavLink>
+          <NavLink href="/subscriptions">
             <CreditCard className="w-5 h-5 mr-3 text-[var(--muted)]" />
             Subscriptions
-          </Link>
-          <Link href="/modules" className="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-[var(--surface-hover)] transition-colors text-[var(--foreground)]">
+          </NavLink>
+          <NavLink href="/modules">
             <LayoutDashboard className="w-5 h-5 mr-3 text-[var(--muted)]" />
             Modules
-          </Link>
-          <Link href="/settings" className="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-[var(--surface-hover)] transition-colors text-[var(--foreground)]">
+          </NavLink>
+          <NavLink href="/settings">
             <Settings className="w-5 h-5 mr-3 text-[var(--muted)]" />
             Platform Settings
-          </Link>
-          <Link href="/audit-logs" className="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-[var(--surface-hover)] transition-colors text-[var(--foreground)]">
+          </NavLink>
+          <NavLink href="/audit-logs">
             <LayoutDashboard className="w-5 h-5 mr-3 text-[var(--muted)]" />
             Audit Logs
-          </Link>
+          </NavLink>
         </nav>
 
         <div className="p-4 border-t border-[var(--surface-border)]">

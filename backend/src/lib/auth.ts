@@ -33,23 +33,22 @@ export const verifyToken = async (token: string): Promise<TokenPayload | null> =
   }
 };
 
-export const getTokenFromRequest = (req: Request): string | null => {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    return authHeader.split(" ")[1];
-  }
-  
-  // Fallback to cookie
-  const cookieHeader = req.headers.get("cookie");
-  if (cookieHeader) {
-    const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => {
-      const [key, ...v] = c.split('=');
-      return [key, v.join('=')];
-    }));
-    if (cookies.token) {
-      return cookies.token;
+export const getTokenFromRequest = (req: any): string | null => {
+  if (typeof req.headers?.get === 'function') {
+    const authHeader = req.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      return authHeader.split(" ")[1];
+    }
+    const cookieHeader = req.headers.get("cookie");
+    if (cookieHeader) {
+      const cookies = Object.fromEntries(cookieHeader.split('; ').map((c: string) => {
+        const [key, ...v] = c.split('=');
+        return [key, v.join('=')];
+      }));
+      if (cookies.token) {
+        return cookies.token;
+      }
     }
   }
-  
   return null;
 };

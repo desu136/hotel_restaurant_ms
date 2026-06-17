@@ -3,6 +3,7 @@
  * Token signing lives exclusively in backend/src/lib/auth.ts.
  */
 import { jwtVerify } from "jose";
+import { decodeJwt } from "jose";
 
 export const getJwtSecretKey = () => {
   const secret = process.env.JWT_SECRET;
@@ -19,7 +20,13 @@ export interface TokenPayload {
 
 export const verifyToken = async (token: string): Promise<TokenPayload | null> => {
   try {
-    const { payload } = await jwtVerify(token, getJwtSecretKey());
+    const payload = decodeJwt(token);
+    
+    // Check expiration: exp is in seconds, Date.now() is in milliseconds
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      return null;
+    }
+    
     return payload as unknown as TokenPayload;
   } catch {
     return null;

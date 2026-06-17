@@ -1,0 +1,29 @@
+export const dynamic = "force-dynamic"
+import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
+
+const BACKEND = "http://localhost:4000"
+
+export async function GET(req: Request) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get("token")?.value ?? ""
+  const { searchParams } = new URL(req.url)
+  const qs = searchParams.toString()
+  const res = await fetch(`${BACKEND}/api/employees${qs ? `?${qs}` : ""}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json().catch(() => ({}))
+  return NextResponse.json(data, { status: res.status })
+}
+
+export async function POST(req: Request) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get("token")?.value ?? ""
+  const res = await fetch(`${BACKEND}/api/employees`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: await req.text(),
+  })
+  const data = await res.json().catch(() => ({}))
+  return NextResponse.json(data, { status: res.status })
+}
