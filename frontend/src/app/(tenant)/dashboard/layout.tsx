@@ -16,6 +16,8 @@ import {
   UtensilsCrossed,
   Receipt,
   User,
+  Tag,
+  Store,
 } from "lucide-react"
 
 interface NavItem {
@@ -62,7 +64,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
 
   // Define navigation sections based on user role
   const isOwner = user?.roles.includes('HOTEL_OWNER');
-  const isManager = user?.roles.includes('RESTAURANT_MANAGER');
+  const isManager = user?.roles.some(r => ['HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
   const isChef = user?.roles.includes('CHEF');
   const isWaiter = user?.roles.includes('WAITER');
   const isCashier = user?.roles.includes('CASHIER');
@@ -72,6 +74,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
     managementNav.push(
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
       { href: "/dashboard/branches", label: "Branches", icon: GitBranch, exact: false },
+      { href: "/dashboard/restaurants", label: "Restaurants", icon: Store, exact: false },
       { href: "/dashboard/employees", label: "Employees", icon: Users2, exact: false },
       { href: "/dashboard/roles", label: "Roles & Permissions", icon: ShieldCheck, exact: false }
     )
@@ -79,7 +82,11 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
 
   const operationsNav: NavItem[] = []
   if (isOwner || isManager) {
-    operationsNav.push({ href: "/dashboard/manager", label: "Manager Station", icon: UtensilsCrossed })
+    operationsNav.push(
+      { href: "/dashboard/manager/category", label: "Category", icon: Tag, exact: false },
+      { href: "/dashboard/manager/menu", label: "Menu", icon: UtensilsCrossed, exact: false },
+      { href: "/dashboard/manager/staff", label: "Staff", icon: Users2, exact: false }
+    )
   }
   if (isOwner || isWaiter) {
     operationsNav.push({ href: "/dashboard/waiter", label: "Waiter Station", icon: Utensils })

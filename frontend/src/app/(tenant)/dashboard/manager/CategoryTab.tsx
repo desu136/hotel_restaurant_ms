@@ -37,7 +37,7 @@ interface Employee {
   roles: EmployeeRole[]
 }
 
-export function CategoryTab() {
+export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "both" }) {
   // Common states
   const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<string>("")
@@ -46,6 +46,8 @@ export function CategoryTab() {
   // Categories states
   const [categories, setCategories] = React.useState<Category[]>([])
   const [newCatName, setNewCatName] = React.useState("")
+  const [catError, setCatError] = React.useState("")
+  const [catAdding, setCatAdding] = React.useState(false)
   const [editingCatId, setEditingCatId] = React.useState<string | null>(null)
   const [editingCatName, setEditingCatName] = React.useState("")
 
@@ -90,8 +92,13 @@ export function CategoryTab() {
       // Fetch categories for the selected restaurant
       if (rId) {
         const catRes = await fetch(`/api/restaurant/categories?restaurant_id=${rId}`)
-        const catData = catRes.ok ? await catRes.json() : []
-        setCategories(catData)
+        if (catRes.ok) {
+          const catData = await catRes.json()
+          console.log("[CategoryTab] Initial categories loaded:", catData.length, catData.map((c: any) => c.name))
+          setCategories(catData)
+        } else {
+          console.error("[CategoryTab] Failed to load categories:", catRes.status, await catRes.text())
+        }
       }
     } catch (err) {
       console.error("Failed to load category/staff data", err)
@@ -120,23 +127,44 @@ export function CategoryTab() {
     }
   }
 
+
+  // Fetch categories for the currently selected restaurant
+  const fetchCategories = React.useCallback(async (rId: string) => {
+    if (!rId) return
+    try {
+      const catRes = await fetch(`/api/restaurant/categories?restaurant_id=${rId}`)
+      const catData = catRes.ok ? await catRes.json() : []
+      setCategories(catData)
+    } catch (err) {
+      console.error("Failed to fetch categories", err)
+    }
+  }, [])
+
   // Categories CRUD
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newCatName.trim() || !selectedRestaurantId) return
+    setCatError("")
+    setCatAdding(true)
     try {
       const res = await fetch("/api/restaurant/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newCatName.trim(), restaurant_id: selectedRestaurantId })
       })
+      const data = await res.json()
       if (res.ok) {
-        const newCat = await res.json()
-        setCategories(prev => [...prev, newCat])
         setNewCatName("")
+        // Re-fetch from server to get consistent data (including _count etc.)
+        await fetchCategories(selectedRestaurantId)
+      } else {
+        setCatError(data.error ?? `Failed to add category (${res.status})`)
       }
     } catch (err) {
+      setCatError("Network error — please try again.")
       console.error("Failed to add category", err)
+    } finally {
+      setCatAdding(false)
     }
   }
 
@@ -256,171 +284,192 @@ export function CategoryTab() {
       )}
 
       {/* Grid: Category Left, Staff Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={mode === "both" ? "grid grid-cols-1 lg:grid-cols-2 gap-6" : "grid grid-cols-1 gap-6"}>
         
         {/* Categories Card */}
-        <Card className="glass">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                  <Tag className="w-5 h-5 text-[var(--color-primary-600)]" />
-                  Menu Categories
-                </CardTitle>
-                <CardDescription>Create and arrange categories for your restaurant meals.</CardDescription>
+        {(mode === "both" || mode === "category") && (
+          <Card className="glass">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl font-bold flex items-center gap-2">
+                    <Tag className="w-5 h-5 text-[var(--color-primary-600)]" />
+                    Menu Categories
+                  </CardTitle>
+                  <CardDescription>Create and arrange categories for your restaurant meals.</CardDescription>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Add Category Form */}
-            <form onSubmit={handleAddCategory} className="flex gap-2">
-              <Input
-                placeholder="New category name (e.g. Starter, Drink)"
-                value={newCatName}
-                onChange={e => setNewCatName(e.target.value)}
-                disabled={!selectedRestaurantId}
-                className="bg-[var(--surface)] text-sm"
-              />
-              <Button 
-                type="submit" 
-                disabled={!selectedRestaurantId || !newCatName.trim()}
-                className="bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white shrink-0"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Add
-              </Button>
-            </form>
-
-            {/* Categories List */}
-            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-              {categories.map(cat => (
-                <div 
-                  key={cat.id} 
-                  className="flex items-center justify-between p-3 rounded-lg border bg-[var(--surface)] hover:border-[var(--color-primary-500)]/40 transition-colors"
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Add Category Form */}
+              <form onSubmit={handleAddCategory} className="flex gap-2">
+                <Input
+                  placeholder="New category name (e.g. Starter, Drink)"
+                  value={newCatName}
+                  onChange={e => { setNewCatName(e.target.value); setCatError("") }}
+                  disabled={!selectedRestaurantId || catAdding}
+                  className="bg-[var(--surface)] text-sm"
+                />
+                <Button 
+                  type="submit" 
+                  disabled={!selectedRestaurantId || !newCatName.trim() || catAdding}
+                  className="bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white shrink-0"
                 >
-                  {editingCatId === cat.id ? (
-                    <div className="flex-1 flex gap-2 mr-2">
-                      <Input
-                        value={editingCatName}
-                        onChange={e => setEditingCatName(e.target.value)}
-                        className="h-8 text-sm"
-                        autoFocus
-                      />
-                      <Button 
-                        size="sm" 
-                        onClick={() => handleUpdateCategory(cat.id)}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white h-8"
-                      >
-                        Save
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => setEditingCatId(null)}
-                        className="h-8"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="font-medium text-sm">{cat.name}</span>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingCatId(cat.id)
-                            setEditingCatName(cat.name)
-                          }}
-                          className="w-8 h-8 p-0 text-[var(--muted)] hover:text-[var(--foreground)]"
+                  {catAdding
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <><Plus className="w-4 h-4 mr-1" /> Add</>
+                  }
+                </Button>
+              </form>
+
+              {/* Error display */}
+              {catError && (
+                <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 px-3 py-2 rounded-lg">
+                  ⚠️ {catError}
+                </div>
+              )}
+
+              {/* No restaurant warning */}
+              {restaurants.length === 0 && (
+                <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-3 py-2 rounded-lg">
+                  ⚠️ No restaurant found for your account. Ask the owner to create a restaurant first.
+                </div>
+              )}
+
+              {/* Categories List */}
+              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                {categories.map(cat => (
+                  <div 
+                    key={cat.id} 
+                    className="flex items-center justify-between p-3 rounded-lg border bg-[var(--surface)] hover:border-[var(--color-primary-500)]/40 transition-colors"
+                  >
+                    {editingCatId === cat.id ? (
+                      <div className="flex-1 flex gap-2 mr-2">
+                        <Input
+                          value={editingCatName}
+                          onChange={e => setEditingCatName(e.target.value)}
+                          className="h-8 text-sm"
+                          autoFocus
+                        />
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleUpdateCategory(cat.id)}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white h-8"
                         >
-                          <Pencil className="w-3.5 h-3.5" />
+                          Save
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteCategory(cat.id)}
-                          className="w-8 h-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => setEditingCatId(null)}
+                          className="h-8"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          Cancel
                         </Button>
                       </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                    ) : (
+                      <>
+                        <span className="font-medium text-sm">{cat.name}</span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingCatId(cat.id)
+                              setEditingCatName(cat.name)
+                            }}
+                            className="w-8 h-8 p-0 text-[var(--muted)] hover:text-[var(--foreground)]"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="w-8 h-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
 
-              {categories.length === 0 && (
-                <div className="py-12 text-center text-[var(--muted)] text-sm border-2 border-dashed rounded-xl">
-                  No categories found. Start by creating one above!
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                {categories.length === 0 && (
+                  <div className="py-12 text-center text-[var(--muted)] text-sm border-2 border-dashed rounded-xl">
+                    No categories found. Start by creating one above!
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Staff Card */}
-        <Card className="glass">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                  <Users2 className="w-5 h-5 text-purple-500" />
-                  Staff Members
-                </CardTitle>
-                <CardDescription>Manage chefs, waiters, and cashiers for your branch.</CardDescription>
-              </div>
-              <Button 
-                onClick={() => {
-                  setStaffError("")
-                  setShowStaffModal(true)
-                }} 
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Add Staff
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Staff List */}
-            <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
-              {staff.map(emp => (
-                <div 
-                  key={emp.id} 
-                  className="p-3 rounded-lg border bg-[var(--surface)] hover:border-purple-500/30 transition-colors flex items-center justify-between"
+        {(mode === "both" || mode === "staff") && (
+          <Card className="glass">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl font-bold flex items-center gap-2">
+                    <Users2 className="w-5 h-5 text-purple-500" />
+                    Staff Members
+                  </CardTitle>
+                  <CardDescription>Manage chefs, waiters, and cashiers for your branch.</CardDescription>
+                </div>
+                <Button 
+                  onClick={() => {
+                    setStaffError("")
+                    setShowStaffModal(true)
+                  }} 
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm">{emp.fullName}</span>
-                      <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full font-bold uppercase">
-                        {emp.roles.map(r => r.code).join(", ")}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
-                      <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {emp.email}</span>
-                      {emp.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {emp.phone}</span>}
-                    </div>
-                  </div>
-                  
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteStaff(emp.id)}
-                    className="w-8 h-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 shrink-0"
+                  <Plus className="w-4 h-4 mr-1" /> Add Staff
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Staff List */}
+              <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
+                {staff.map(emp => (
+                  <div 
+                    key={emp.id} 
+                    className="p-3 rounded-lg border bg-[var(--surface)] hover:border-purple-500/30 transition-colors flex items-center justify-between"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              ))}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm">{emp.fullName}</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full font-bold uppercase">
+                          {emp.roles.map(r => r.code).join(", ")}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
+                        <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {emp.email}</span>
+                        {emp.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {emp.phone}</span>}
+                      </div>
+                    </div>
+                    
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteStaff(emp.id)}
+                      className="w-8 h-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
 
-              {staff.length === 0 && (
-                <div className="py-12 text-center text-[var(--muted)] text-sm border-2 border-dashed rounded-xl">
-                  No staff members managed here. Add one above!
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                {staff.length === 0 && (
+                  <div className="py-12 text-center text-[var(--muted)] text-sm border-2 border-dashed rounded-xl">
+                    No staff members managed here. Add one above!
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       </div>
 

@@ -57,6 +57,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     let redirectUrl = '/dashboard';
     if (roleCodes.includes('SUPER_ADMIN')) {
       redirectUrl = '/tenants';
+    } else if (roleCodes.includes('HOTEL_MANAGER') || roleCodes.includes('RESTAURANT_MANAGER')) {
+      redirectUrl = '/dashboard/manager/category';
     } else if (roleCodes.includes('CHEF')) {
       redirectUrl = '/dashboard/kitchen';
     } else if (roleCodes.includes('WAITER')) {
