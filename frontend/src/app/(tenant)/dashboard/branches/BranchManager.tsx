@@ -1,7 +1,6 @@
 "use client"
 import * as React from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { GitBranch, MapPin, Phone, Plus, Pencil, Trash2, X, Check, Loader2 } from "lucide-react"
+import { GitBranch, MapPin, Phone, Plus, Pencil, Trash2, X, Check, Loader2, Calendar } from "lucide-react"
 
 interface Branch {
   id: string
@@ -84,70 +83,152 @@ export default function BranchManager({ initialBranches }: Props) {
     }
   }
 
+  const fmt = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+
   return (
     <>
-      {/* Add Branch Button */}
-      <button
-        onClick={openCreate}
-        className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-primary-600)] text-white text-sm font-semibold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors shadow-sm shrink-0"
-      >
-        <Plus className="w-4 h-4" />
-        Add Branch
-      </button>
-
-      {/* Branch Grid */}
-      {branches.length === 0 ? (
-        <Card className="p-12 text-center border-dashed border-2 bg-transparent shadow-none mt-6">
-          <GitBranch className="w-12 h-12 mx-auto text-[var(--muted)] mb-4 opacity-40" />
-          <h3 className="text-lg font-semibold">No branches yet</h3>
-          <p className="text-sm text-[var(--muted)] mt-1">Click "Add Branch" to create your first location.</p>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-6">
-          {branches.map(branch => (
-            <Card key={branch.id} className="hover:border-[var(--color-primary-500)]/40 transition-all hover:shadow-md group">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-[var(--color-primary-600)]/10 flex items-center justify-center">
-                    <GitBranch className="w-5 h-5 text-[var(--color-primary-600)]" />
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => openEdit(branch)}
-                      className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)] transition-colors"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(branch.id)}
-                      disabled={deletingId === branch.id}
-                      className="p-1.5 rounded-md text-[var(--muted)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                    >
-                      {deletingId === branch.id
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : <Trash2 className="w-4 h-4" />
-                      }
-                    </button>
-                  </div>
-                </div>
-                <h3 className="font-bold text-lg tracking-tight mb-2">{branch.name}</h3>
-                {branch.address && (
-                  <div className="flex items-center gap-2 text-sm text-[var(--muted)] mb-1">
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{branch.address}</span>
-                  </div>
-                )}
-                {branch.phone && (
-                  <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
-                    <Phone className="w-3.5 h-3.5 shrink-0" />
-                    <span>{branch.phone}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+      {/* Toolbar */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
+          <GitBranch className="w-4 h-4" />
+          <span>{branches.length} branch{branches.length !== 1 ? "es" : ""}</span>
         </div>
-      )}
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary-600)] text-white text-sm font-semibold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          Add Branch
+        </button>
+      </div>
+
+      {/* Excel-style Table */}
+      <div className="rounded-lg overflow-hidden border border-[var(--surface-border)] shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr style={{ background: "var(--surface-hover)" }}>
+                {["#", "Branch Name", "Address", "Phone", "Created", "Actions"].map((h, i) => (
+                  <th
+                    key={h}
+                    className={`border border-[var(--surface-border)] px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-[var(--muted)] whitespace-nowrap select-none ${i === 0 ? "w-10 text-center" : ""} ${h === "Actions" ? "text-center w-28 sticky right-0 z-10" : ""}`}
+                    style={h === "Actions" ? { background: "var(--surface-hover)" } : {}}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {branches.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="border border-[var(--surface-border)] px-6 py-12 text-center">
+                    <GitBranch className="w-10 h-10 mx-auto text-[var(--muted)] mb-3 opacity-30" />
+                    <p className="text-sm font-medium text-[var(--muted)]">No branches yet. Click <strong>Add Branch</strong> to create your first location.</p>
+                  </td>
+                </tr>
+              ) : branches.map((branch, idx) => (
+                <tr
+                  key={branch.id}
+                  className="group transition-colors"
+                  style={{
+                    background: idx % 2 === 0
+                      ? "var(--surface)"
+                      : "color-mix(in srgb, var(--surface-hover) 40%, transparent)"
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "color-mix(in srgb, var(--color-primary-500) 6%, var(--surface))")}
+                  onMouseLeave={e => (e.currentTarget.style.background = idx % 2 === 0 ? "var(--surface)" : "color-mix(in srgb, var(--surface-hover) 40%, transparent)")}
+                >
+                  {/* Row number */}
+                  <td className="border border-[var(--surface-border)] px-3 py-2 text-center text-xs text-[var(--muted)] font-mono select-none w-10">
+                    {idx + 1}
+                  </td>
+
+                  {/* Name */}
+                  <td className="border border-[var(--surface-border)] px-3 py-2 font-semibold text-[var(--foreground)] whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded bg-[var(--color-primary-600)]/10 flex items-center justify-center shrink-0">
+                        <GitBranch className="w-3.5 h-3.5 text-[var(--color-primary-600)]" />
+                      </div>
+                      {branch.name}
+                    </div>
+                  </td>
+
+                  {/* Address */}
+                  <td className="border border-[var(--surface-border)] px-3 py-2 text-[var(--muted)] max-w-[220px]">
+                    {branch.address ? (
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3 h-3 shrink-0 text-[var(--muted)]" />
+                        <span className="truncate">{branch.address}</span>
+                      </div>
+                    ) : (
+                      <span className="text-[var(--muted)] opacity-40 italic">—</span>
+                    )}
+                  </td>
+
+                  {/* Phone */}
+                  <td className="border border-[var(--surface-border)] px-3 py-2 text-[var(--muted)] whitespace-nowrap font-mono text-xs">
+                    {branch.phone ? (
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="w-3 h-3 shrink-0 text-[var(--muted)]" />
+                        {branch.phone}
+                      </div>
+                    ) : (
+                      <span className="opacity-40 italic">—</span>
+                    )}
+                  </td>
+
+                  {/* Created */}
+                  <td className="border border-[var(--surface-border)] px-3 py-2 text-[var(--muted)] whitespace-nowrap text-xs font-mono">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3 shrink-0" />
+                      {fmt(branch.created_at)}
+                    </div>
+                  </td>
+
+                  {/* Actions */}
+                  <td
+                    className="border border-[var(--surface-border)] px-3 py-2 text-center sticky right-0 z-10"
+                    style={{ background: "inherit" }}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => openEdit(branch)}
+                        title="Edit"
+                        className="p-1.5 rounded text-[var(--muted)] hover:text-[var(--color-primary-600)] hover:bg-[var(--color-primary-600)]/10 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(branch.id)}
+                        disabled={deletingId === branch.id}
+                        title="Delete"
+                        className="p-1.5 rounded text-[var(--muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                      >
+                        {deletingId === branch.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />
+                        }
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer row */}
+        {branches.length > 0 && (
+          <div
+            className="px-4 py-2 border-t border-[var(--surface-border)] flex items-center justify-between text-xs text-[var(--muted)]"
+            style={{ background: "var(--surface-hover)" }}
+          >
+            <span>Showing {branches.length} of {branches.length} records</span>
+            <span className="font-mono opacity-60">branches table</span>
+          </div>
+        )}
+      </div>
 
       {/* Modal */}
       {showModal && (

@@ -21,14 +21,12 @@ export default async function EmployeesPage() {
   const { employees, branches } = await getEmployeesAndBranches()
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1">Employees</h1>
-          <p className="text-[var(--muted)]">Manage staff accounts, branches, and role assignments.</p>
-        </div>
-        <EmployeeManager initialEmployees={employees} branches={branches} />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight mb-1">Employees</h1>
+        <p className="text-[var(--muted)]">Manage staff accounts, branches, and role assignments.</p>
       </div>
+      <EmployeeManager initialEmployees={employees} branches={branches} />
     </div>
   )
 }

@@ -95,7 +95,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
-      className={`${mobile ? "flex" : "hidden md:flex"} w-64 flex-col border-r border-[var(--surface-border)] h-full`}
+      className={`${mobile ? "flex" : "flex"} w-64 flex-col border-r border-[var(--surface-border)] h-full`}
       style={{ background: "color-mix(in srgb, var(--surface) 90%, transparent)", backdropFilter: "blur(12px)" }}
     >
       {/* Logo */}
@@ -211,7 +211,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   const currentNavTitle = allNavItems.find((n) => isActive(n))?.label ?? "Dashboard"
 
   return (
-    <div className="min-h-screen bg-[var(--background)] flex">
+    <div className="h-screen overflow-hidden bg-[var(--background)] flex">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -227,8 +227,10 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
         </div>
       )}
 
-      {/* Desktop sidebar */}
-      <Sidebar />
+      {/* Desktop sidebar — fixed, never scrolls */}
+      <div className="hidden md:flex w-64 shrink-0 h-screen sticky top-0">
+        <Sidebar />
+      </div>
 
       {/* Main area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
