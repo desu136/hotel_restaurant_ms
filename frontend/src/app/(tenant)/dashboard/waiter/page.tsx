@@ -488,7 +488,7 @@ export default function WaiterDashboard() {
                       <Button
                         key={cat}
                         type="button"
-                        variant={categoryFilter === cat ? "default" : "outline"}
+                        variant={categoryFilter === cat ? "primary" : "outline"}
                         size="sm"
                         onClick={() => setCategoryFilter(cat)}
                         className="h-10 text-xs px-3"

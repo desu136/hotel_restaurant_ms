@@ -6,13 +6,13 @@ const router = Router();
 router.use(authenticate);
 
 // GET /api/billing/unpaid  – Orders with no paid bill yet
-router.get('/unpaid', requireRole(['CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER']), async (req: Request, res: Response): Promise<void> => {
+router.get('/unpaid', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
 
     const orders = await prisma.order.findMany({
       where: {
-        tenant_id: tenantId,
+        tenant_id: tenantId as string,
         status: { in: ['READY', 'COMPLETED'] },
         bills: {
           none: { payment_status: 'PAID' },
@@ -33,7 +33,7 @@ router.get('/unpaid', requireRole(['CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER
 });
 
 // POST /api/billing/bill  – Create a bill for an order
-router.post('/bill', requireRole(['CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER']), async (req: Request, res: Response): Promise<void> => {
+router.post('/bill', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { order_id, amount, discount_percent = 0 } = req.body;
     if (!order_id || !amount) {
@@ -54,16 +54,16 @@ router.post('/bill', requireRole(['CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER'
 });
 
 // POST /api/billing/bill/:id/pay  – Record a payment
-router.post('/bill/:id/pay', requireRole(['CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER']), async (req: Request, res: Response): Promise<void> => {
+router.post('/bill/:id/pay', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const bill = await prisma.bill.update({
-      where: { id },
+      where: { id: id as string },
       data: { payment_status: 'PAID' },
     });
     // Mark the associated order as COMPLETED
     await prisma.order.update({
-      where: { id: bill.order_id },
+      where: { id: bill.order_id as string },
       data: { status: 'COMPLETED' },
     });
     res.json({ success: true, bill });
@@ -73,7 +73,7 @@ router.post('/bill/:id/pay', requireRole(['CASHIER', 'RESTAURANT_MANAGER', 'HOTE
 });
 
 // GET /api/billing/history  – Paid bills today
-router.get('/history', requireRole(['CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER']), async (req: Request, res: Response): Promise<void> => {
+router.get('/history', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     const startOfDay = new Date();
@@ -83,7 +83,7 @@ router.get('/history', requireRole(['CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNE
       where: {
         payment_status: 'PAID',
         created_at: { gte: startOfDay },
-        order: { tenant_id: tenantId },
+        order: { tenant_id: tenantId as string },
       },
       include: {
         order: { include: { table: true, items: { include: { menu_item: true } } } },

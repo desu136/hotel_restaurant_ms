@@ -13,6 +13,7 @@ import {
   Menu,
   ChefHat,
   Utensils,
+  UtensilsCrossed,
   Receipt,
   User,
 } from "lucide-react"
@@ -61,6 +62,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
 
   // Define navigation sections based on user role
   const isOwner = user?.roles.includes('HOTEL_OWNER');
+  const isManager = user?.roles.includes('RESTAURANT_MANAGER');
   const isChef = user?.roles.includes('CHEF');
   const isWaiter = user?.roles.includes('WAITER');
   const isCashier = user?.roles.includes('CASHIER');
@@ -76,6 +78,9 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   }
 
   const operationsNav: NavItem[] = []
+  if (isOwner || isManager) {
+    operationsNav.push({ href: "/dashboard/manager", label: "Manager Station", icon: UtensilsCrossed })
+  }
   if (isOwner || isWaiter) {
     operationsNav.push({ href: "/dashboard/waiter", label: "Waiter Station", icon: Utensils })
   }

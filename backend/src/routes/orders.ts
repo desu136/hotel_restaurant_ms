@@ -13,7 +13,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
     const orders = await prisma.order.findMany({
       where: {
-        tenant_id: tenantId,
+        tenant_id: tenantId as string,
         ...(status ? { status: status as any } : {}),
       },
       include: {
@@ -37,7 +37,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const tenantId = req.user!.tenantId;
     const order = await prisma.order.findFirst({
-      where: { id, tenant_id: tenantId },
+      where: { id: id as string, tenant_id: tenantId as string },
       include: {
         items: { include: { menu_item: true } },
         table: true,
@@ -56,7 +56,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 });
 
 // POST /api/orders  – Waiter creates a new order
-router.post('/', requireRole(['WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER']), async (req: Request, res: Response): Promise<void> => {
+router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     const branchId = req.user!.branchId;
@@ -141,7 +141,7 @@ router.patch('/:id/status', async (req: Request, res: Response): Promise<void> =
     }
 
     const order = await prisma.order.update({
-      where: { id },
+      where: { id: id as string },
       data: { status },
       include: { items: { include: { menu_item: true } }, table: true },
     });
@@ -150,7 +150,7 @@ router.patch('/:id/status', async (req: Request, res: Response): Promise<void> =
     if (['PREPARING', 'READY'].includes(status)) {
       const ktStatus = status === 'PREPARING' ? 'PREPARING' : 'READY';
       await prisma.kitchenTicket.updateMany({
-        where: { order_id: id },
+        where: { order_id: id as string },
         data: { status: ktStatus as any },
       });
     }
