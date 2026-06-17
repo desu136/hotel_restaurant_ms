@@ -2,10 +2,10 @@
 import * as React from "react"
 import { Users2, Plus, Pencil, UserX, X, Check, Loader2, Shield } from "lucide-react"
 
-const ALL_ROLES = [
-  "HOTEL_OWNER", "HOTEL_MANAGER", "RECEPTIONIST",
-  "RESTAURANT_MANAGER", "WAITER", "CHEF", "CASHIER", "DELIVERY_DRIVER",
-]
+// const ALL_ROLES = [
+//   "HOTEL_MANAGER", "RECEPTIONIST",
+//   "RESTAURANT_MANAGER", "WAITER", "CHEF", "CASHIER", "DELIVERY_DRIVER",
+// ]
 
 const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
   ACTIVE: { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", dot: "bg-emerald-500" },
@@ -19,17 +19,17 @@ interface Employee {
   id: string; fullName: string; email: string; phone?: string | null
   branchId?: string | null; branchName: string; status: string; roles: EmployeeRole[]
 }
-interface Props { initialEmployees: Employee[]; branches: Branch[] }
+interface Props { initialEmployees: Employee[]; branches: Branch[], roles: EmployeeRole[] }
 
 type FormData = {
   fullName: string; email: string; phone: string; password: string
-  branchId: string; roles: string[]; status: string
+  branchId: string; role: string; status: string
 }
 const emptyForm = (): FormData => ({
-  fullName: "", email: "", phone: "", password: "", branchId: "", roles: [], status: "ACTIVE",
+  fullName: "", email: "", phone: "", password: "", branchId: "", role: "", status: "ACTIVE",
 })
 
-export default function EmployeeManager({ initialEmployees, branches }: Props) {
+export default function EmployeeManager({ initialEmployees, branches, roles }: Props) {
   const [employees, setEmployees] = React.useState<Employee[]>(initialEmployees)
   const [showModal, setShowModal] = React.useState(false)
   const [editTarget, setEditTarget] = React.useState<Employee | null>(null)
@@ -48,29 +48,35 @@ export default function EmployeeManager({ initialEmployees, branches }: Props) {
     setEditTarget(emp)
     setForm({
       fullName: emp.fullName, email: emp.email, phone: emp.phone ?? "",
-      password: "", branchId: emp.branchId ?? "", roles: emp.roles.map(r => r.code), status: emp.status,
+      password: "", branchId: emp.branchId ?? "", role: emp.roles?.[0]?.code ?? "", status: emp.status,
     })
     setError(""); setShowModal(true)
   }
   const closeModal = () => { setShowModal(false); setError("") }
 
-  const toggleRole = (code: string) =>
-    setForm(f => ({
-      ...f,
-      roles: f.roles.includes(code) ? f.roles.filter(r => r !== code) : [...f.roles, code],
-    }))
+  // const toggleRole = (code: string) =>
+  //   setForm(f => ({
+  //     ...f,
+  //     roles: f.roles.includes(code) ? f.roles.filter(r => r !== code) : [...f.roles, code],
+  //   }))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.fullName.trim() || !form.email.trim()) { setError("Name and email are required."); return }
     if (!editTarget && !form.password) { setError("Password is required for new employees."); return }
-    if (form.roles.length === 0) { setError("Select at least one role."); return }
+    if (!form.role) { setError("Select at least one role."); return }
     setLoading(true); setError("")
     try {
       const isEdit = !!editTarget
-      const payload: any = { ...form }
-      if (!payload.password) delete payload.password
-      if (!payload.branchId) payload.branchId = null
+      const payload: any = {
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone || null,
+        branchId: form.branchId || null,
+        roles: form.role ? [form.role] : [],
+        status: form.status,
+      }
+      if (form.password) payload.password = form.password
 
       const res = await fetch(
         isEdit ? `/api/employees/${editTarget!.id}` : "/api/employees",
@@ -107,6 +113,14 @@ export default function EmployeeManager({ initialEmployees, branches }: Props) {
     }
     return true
   })
+
+
+
+
+
+
+
+
 
   const cols = ["#", "Employee", "Email", "Phone", "Branch", "Roles", "Status", "Actions"]
 
@@ -228,15 +242,11 @@ export default function EmployeeManager({ initialEmployees, branches }: Props) {
                     {/* Roles */}
                     <td className="border border-[var(--surface-border)] px-3 py-2">
                       <div className="flex flex-wrap gap-1">
-                        {emp.roles.length === 0
+                        {emp.roles?.length === 0 || !emp.roles
                           ? <span className="text-[var(--muted)] opacity-40 text-xs italic">—</span>
                           : emp.roles.map(r => (
-                            <span
-                              key={r.code}
-                              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-[var(--color-primary-600)]/10 text-[var(--color-primary-600)] rounded font-semibold uppercase tracking-wide whitespace-nowrap"
-                            >
-                              <Shield className="w-2.5 h-2.5" />
-                              {r.code.replace(/_/g, " ")}
+                            <span key={r.id} className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-semibold bg-[var(--color-primary-600)]/10 text-[var(--color-primary-600)]">
+                              {r.code}
                             </span>
                           ))
                         }
@@ -350,6 +360,42 @@ export default function EmployeeManager({ initialEmployees, branches }: Props) {
                     {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Roles <span className="text-red-500">*</span></label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]">
+                      <option value="">Select Role</option>
+                      {roles?.filter(r => r.code !== "SUPER_ADMIN" && r.code !== "HOTEL_OWNER").map(r => <option key={r.id} value={r.code}>{r.name}</option>)}
+                    </select>
+                    {/* {roles?.map(role => (
+                    role.code != "SUPER_ADMIN" && role.code != "HOTEL_OWNER" ?
+                      <button
+                        key={role.code}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, roles: role.code }))}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all text-left ${form.roles.includes(role.code)
+                          ? "bg-[var(--color-primary-600)] text-white border-[var(--color-primary-600)]"
+                          : "border-[var(--surface-border)] hover:bg-[var(--surface-hover)]"
+                          }`}
+                      >
+                        <Shield className="w-3.5 h-3.5 shrink-0" />
+
+                        {role.name.replace(/_/g, " ")}
+                      </button>
+                      :
+                      <select value={form.roles} onChange={e => setForm(f => ({ ...f, roles: e.target.value }))}
+                        className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]">
+                        <option value="">Select Role</option>
+                        {roles.map(r => <option key={r.id} value={r.code}>{r.name}</option>)}
+                      </select>
+
+                  ))} */}
+
+                  </div>
+                </div>
+
                 {editTarget && (
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Status</label>
@@ -363,25 +409,6 @@ export default function EmployeeManager({ initialEmployees, branches }: Props) {
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2">Roles <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 gap-2">
-                  {ALL_ROLES.map(role => (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => toggleRole(role)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all text-left ${form.roles.includes(role)
-                          ? "bg-[var(--color-primary-600)] text-white border-[var(--color-primary-600)]"
-                          : "border-[var(--surface-border)] hover:bg-[var(--surface-hover)]"
-                        }`}
-                    >
-                      <Shield className="w-3.5 h-3.5 shrink-0" />
-                      {role.replace(/_/g, " ")}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {error && (
                 <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>

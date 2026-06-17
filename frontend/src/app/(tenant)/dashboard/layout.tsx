@@ -133,16 +133,14 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
                       key={item.href}
                       href={item.href}
                       onClick={() => setSidebarOpen(false)}
-                      className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
-                        active
-                          ? "bg-[var(--color-primary-600)] text-white shadow-sm"
-                          : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
-                      }`}
+                      className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${active
+                        ? "bg-[var(--color-primary-600)] text-white shadow-sm"
+                        : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
+                        }`}
                     >
                       <item.icon
-                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${
-                          active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
-                        }`}
+                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
+                          }`}
                       />
                       {item.label}
                     </Link>
@@ -151,7 +149,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
               </div>
             )}
 
-            {operationsNav.length > 0 && (
+            {/* {operationsNav.length > 0 && (
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-widest px-4 mb-3">
                   Operations
@@ -163,23 +161,21 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
                       key={item.href}
                       href={item.href}
                       onClick={() => setSidebarOpen(false)}
-                      className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
-                        active
+                      className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${active
                           ? "bg-[var(--color-primary-600)] text-white shadow-sm"
                           : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
-                      }`}
+                        }`}
                     >
                       <item.icon
-                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${
-                          active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
-                        }`}
+                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
+                          }`}
                       />
                       {item.label}
                     </Link>
                   )
                 })}
               </div>
-            )}
+            )} */}
           </>
         )}
       </nav>
