@@ -53,17 +53,15 @@ export default async function proxy(request: NextRequest) {
     const isChef = payload.roles.includes('CHEF');
     const isWaiter = payload.roles.includes('WAITER');
     const isCashier = payload.roles.includes('CASHIER');
-    const isManagerOrOwner = payload.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+    const isOwner = payload.roles.includes('HOTEL_OWNER');
 
     if (path === '/dashboard') {
-      if (isChef && !isManagerOrOwner) {
-        return NextResponse.redirect(new URL('/dashboard/kitchen', request.url));
-      }
-      if (isWaiter && !isManagerOrOwner) {
+      if (!isOwner) {
+        if (isChef) return NextResponse.redirect(new URL('/dashboard/kitchen', request.url));
+        if (isWaiter) return NextResponse.redirect(new URL('/dashboard/waiter', request.url));
+        if (isCashier) return NextResponse.redirect(new URL('/dashboard/cashier', request.url));
+        // Fallback for other roles (like managers without owner role) to waiter station for now
         return NextResponse.redirect(new URL('/dashboard/waiter', request.url));
-      }
-      if (isCashier && !isManagerOrOwner) {
-        return NextResponse.redirect(new URL('/dashboard/cashier', request.url));
       }
     }
 
@@ -71,10 +69,9 @@ export default async function proxy(request: NextRequest) {
                              path.startsWith('/dashboard/employees') || 
                              path.startsWith('/dashboard/roles');
                              
-    if (isManagementPath && !isManagerOrOwner) {
-      let redirectPath = '/dashboard';
+    if (isManagementPath && !isOwner) {
+      let redirectPath = '/dashboard/waiter';
       if (isChef) redirectPath = '/dashboard/kitchen';
-      else if (isWaiter) redirectPath = '/dashboard/waiter';
       else if (isCashier) redirectPath = '/dashboard/cashier';
       return NextResponse.redirect(new URL(redirectPath, request.url));
     }

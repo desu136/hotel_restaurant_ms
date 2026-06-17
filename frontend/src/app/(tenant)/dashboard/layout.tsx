@@ -60,13 +60,13 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   }
 
   // Define navigation sections based on user role
-  const isManagerOrOwner = user?.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+  const isOwner = user?.roles.includes('HOTEL_OWNER');
   const isChef = user?.roles.includes('CHEF');
   const isWaiter = user?.roles.includes('WAITER');
   const isCashier = user?.roles.includes('CASHIER');
 
   const managementNav: NavItem[] = []
-  if (isManagerOrOwner) {
+  if (isOwner) {
     managementNav.push(
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
       { href: "/dashboard/branches", label: "Branches", icon: GitBranch, exact: false },
@@ -76,13 +76,13 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   }
 
   const operationsNav: NavItem[] = []
-  if (isManagerOrOwner || isWaiter) {
+  if (isOwner || isWaiter) {
     operationsNav.push({ href: "/dashboard/waiter", label: "Waiter Station", icon: Utensils })
   }
-  if (isManagerOrOwner || isChef) {
+  if (isOwner || isChef) {
     operationsNav.push({ href: "/dashboard/kitchen", label: "Kitchen KDS", icon: ChefHat })
   }
-  if (isManagerOrOwner || isCashier) {
+  if (isOwner || isCashier) {
     operationsNav.push({ href: "/dashboard/cashier", label: "Cashier Counter", icon: Receipt })
   }
 

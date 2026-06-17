@@ -4,8 +4,11 @@ import { cookies } from "next/headers";
 const BACKEND_URL = "http://localhost:4000";
 
 async function proxyRequest(req: Request, params: { path: string[] }) {
-  const { path } = params;
-  const pathname = `/api/${path.join("/")}`;
+  let joinedPath = params.path.join("/");
+  if (joinedPath.startsWith("v1/admin/")) {
+    joinedPath = joinedPath.substring("v1/admin/".length);
+  }
+  const pathname = `/api/${joinedPath}`;
   const { search } = new URL(req.url);
   const targetUrl = `${BACKEND_URL}${pathname}${search}`;
 
@@ -17,8 +20,11 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
+  const authHeader = req.headers.get("Authorization");
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  } else if (authHeader) {
+    headers["Authorization"] = authHeader;
   }
 
   // Forward the request body for non-GET methods
