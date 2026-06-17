@@ -156,7 +156,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
               </div>
             )}
 
-            {/* {operationsNav.length > 0 && (
+            {operationsNav.length > 0 && (
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-widest px-4 mb-3">
                   Operations
@@ -182,7 +182,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
                   )
                 })}
               </div>
-            )} */}
+            )}
           </>
         )}
       </nav>
