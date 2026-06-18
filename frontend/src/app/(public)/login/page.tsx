@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Hotel, ArrowRight, AlertCircle } from "lucide-react"
+import { PasswordInput } from "@/components/ui/password-input"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -79,12 +80,11 @@ export default function LoginPage() {
                   <label className="text-sm font-medium">Password</label>
                   <a href="#" className="text-xs text-[var(--color-primary-600)] hover:underline">Forgot password?</a>
                 </div>
-                <Input 
-                  type="password" 
-                  placeholder="••••••••" 
+                <PasswordInput
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required 
+                  required
                 />
               </div>
               <Button type="submit" className="w-full mt-2" isLoading={isLoading} disabled={isLoading}>

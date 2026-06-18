@@ -18,11 +18,16 @@ interface Restaurant {
   name: string
 }
 
+interface CustomizationValue {
+  name: string
+  extraPrice: number
+}
+
 interface Customization {
   key: string
   label: string
   multiple: boolean
-  values: string[]
+  values: CustomizationValue[]
 }
 
 interface MenuItem {
@@ -166,7 +171,7 @@ export function EditMenuTab() {
   const addCustomizationGroup = () => {
     setCustomizations(prev => [
       ...prev,
-      { key: "", label: "", multiple: false, values: [""] }
+      { key: "", label: "", multiple: false, values: [{ name: "", extraPrice: 0 }] }
     ])
   }
 
@@ -181,17 +186,17 @@ export function EditMenuTab() {
   const addCustomizationValue = (index: number) => {
     setCustomizations(prev => prev.map((c, i) => {
       if (i === index) {
-        return { ...c, values: [...c.values, ""] }
+        return { ...c, values: [...c.values, { name: "", extraPrice: 0 }] }
       }
       return c
     }))
   }
 
-  const updateCustomizationValue = (groupIndex: number, valIndex: number, text: string) => {
+  const updateCustomizationValue = (groupIndex: number, valIndex: number, fields: Partial<CustomizationValue>) => {
     setCustomizations(prev => prev.map((c, i) => {
       if (i === groupIndex) {
         const newVals = [...c.values]
-        newVals[valIndex] = text
+        newVals[valIndex] = { ...newVals[valIndex], ...fields }
         return { ...c, values: newVals }
       }
       return c
@@ -221,7 +226,7 @@ export function EditMenuTab() {
         setFormError("All customizable groups must have a key and label")
         return
       }
-      const filledVals = cust.values.filter(v => v.trim() !== "")
+      const filledVals = cust.values.filter(v => v.name.trim() !== "")
       if (filledVals.length === 0) {
         setFormError(`Customizable group "${cust.label}" must have at least one choice value`)
         return
@@ -236,7 +241,10 @@ export function EditMenuTab() {
       key: c.key.trim().toLowerCase().replace(/\s+/g, "_"),
       label: c.label.trim(),
       multiple: c.multiple,
-      values: c.values.filter(v => v.trim() !== "").map(v => v.trim())
+      values: c.values.filter(v => v.name.trim() !== "").map(v => ({
+        name: v.name.trim(),
+        extraPrice: parseFloat(v.extraPrice.toString()) || 0
+      }))
     }))
 
     const payload = {
@@ -586,18 +594,28 @@ export function EditMenuTab() {
                         
                         <div className="flex flex-wrap gap-2 items-center">
                           {cust.values.map((val, vIdx) => (
-                            <div key={vIdx} className="flex items-center gap-1 bg-[var(--surface)] border px-2 py-1 rounded-lg">
+                            <div key={vIdx} className="flex items-center gap-1.5 bg-[var(--surface)] border border-[var(--surface-border)] px-2 py-1 rounded-lg">
                               <input
-                                placeholder={`State ${vIdx + 1}`}
-                                value={val}
-                                onChange={e => updateCustomizationValue(gIdx, vIdx, e.target.value)}
-                                className="w-24 text-xs bg-transparent focus:outline-none"
+                                placeholder="Choice Name"
+                                value={val.name || ""}
+                                onChange={e => updateCustomizationValue(gIdx, vIdx, { name: e.target.value })}
+                                className="w-28 text-xs bg-transparent focus:outline-none text-[var(--foreground)] placeholder-gray-500"
+                              />
+                              <span className="text-[10px] text-[var(--muted)] border-l pl-1 sm:pl-1.5 border-[var(--surface-border)]">$</span>
+                              <input
+                                placeholder="0.00"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={val.extraPrice || ""}
+                                onChange={e => updateCustomizationValue(gIdx, vIdx, { extraPrice: parseFloat(e.target.value) || 0 })}
+                                className="w-12 text-xs bg-transparent focus:outline-none text-amber-500 font-bold placeholder-gray-500"
                               />
                               {cust.values.length > 1 && (
                                 <button
                                   type="button"
                                   onClick={() => removeCustomizationValue(gIdx, vIdx)}
-                                  className="text-red-500 hover:text-red-600 text-[10px] font-bold"
+                                  className="text-red-500 hover:text-red-600 text-[10px] font-bold border-l pl-1 border-[var(--surface-border)]"
                                 >
                                   ✕
                                 </button>
@@ -612,7 +630,7 @@ export function EditMenuTab() {
                             onClick={() => addCustomizationValue(gIdx)}
                             className="text-xs h-7 px-2 hover:bg-[var(--surface)]"
                           >
-                            + Add Value
+                            + Add Choice
                           </Button>
                         </div>
                       </div>

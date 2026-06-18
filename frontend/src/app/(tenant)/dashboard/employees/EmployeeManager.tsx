@@ -1,6 +1,7 @@
 "use client"
 import * as React from "react"
 import { Users2, Plus, Pencil, UserX, X, Check, Loader2, Shield } from "lucide-react"
+import { PasswordInput } from "@/components/ui/password-input"
 
 // const ALL_ROLES = [
 //   "HOTEL_MANAGER", "RECEPTIONIST",
@@ -345,9 +346,9 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
                     Password {!editTarget && <span className="text-red-500">*</span>}
                     {editTarget && <span className="text-[var(--muted)] font-normal ml-1 text-xs">(leave blank to keep)</span>}
                   </label>
-                  <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  <PasswordInput value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                     placeholder="Min 8 characters"
-                    className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]" />
+                    className="w-full" />
                 </div>
               </div>
 

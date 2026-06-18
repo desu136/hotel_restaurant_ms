@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   Building2, Search, CheckCircle2, XCircle, Clock,
-  X, Plus, ChevronLeft, ChevronRight, Eye,
+  X, Plus, ChevronLeft, ChevronRight, Eye, Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import {
-  useTenants, useCreateTenant, useApproveTenant, useUpdateTenantStatus,
+  useTenants, useCreateTenant, useApproveTenant, useUpdateTenantStatus, useDeleteTenant,
 } from "@/features/admin/tenants/hooks/useTenants";
 import type { CreateTenantInput } from "@/features/admin/types";
 
@@ -49,19 +49,36 @@ export default function TenantsPage() {
     catch (err: any) { alert(err.message || "Failed to approve tenant."); }
   };
 
+  const deleteTenant = useDeleteTenant();
+
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     if (!confirm(`Mark this tenant as ${newStatus}?`)) return;
     try { await updateStatus.mutateAsync({ id, status: newStatus }); }
     catch (err: any) { alert(err.message || `Failed.`); }
   };
 
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Are you absolutely sure you want to permanently delete "${name}"? This action cannot be undone and will delete all branch, menu, and user records for this business.`)) return;
+    try {
+      await deleteTenant.mutateAsync(id);
+    } catch (err: any) {
+      alert(err.message || "Failed to delete tenant.");
+    }
+  };
+
+  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; temporary_password: string } | null>(null);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError("");
     try {
-      await createTenant.mutateAsync(createForm);
+      const result = await createTenant.mutateAsync(createForm);
       setIsCreateOpen(false);
       setCreateForm(EMPTY_FORM);
+      // Show the temporary credentials if returned
+      if (result?.owner_credentials) {
+        setCreatedCredentials(result.owner_credentials);
+      }
     } catch (err: any) {
       setCreateError(err.message || "Failed to create tenant.");
     }
@@ -268,6 +285,14 @@ export default function TenantsPage() {
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </Link>
+                        <button
+                          onClick={() => handleDelete(tenant.id, tenant.business_name)}
+                          disabled={deleteTenant.isPending}
+                          className="p-1.5 rounded text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors disabled:opacity-50"
+                          title="Delete Tenant"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -399,6 +424,46 @@ export default function TenantsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Temporary Credentials Modal */}
+      {createdCredentials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md bg-[var(--surface)] border border-[var(--surface-border)] rounded-2xl shadow-2xl z-10 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base">Tenant Created Successfully</h3>
+                <p className="text-xs text-[var(--muted)]">Share these credentials with the business owner.</p>
+              </div>
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">⚠️ Temporary Login Credentials</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--muted)]">Email:</span>
+                  <code className="text-sm font-mono font-bold bg-[var(--surface-hover)] px-2 py-0.5 rounded">{createdCredentials.email}</code>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--muted)]">Temporary Password:</span>
+                  <code className="text-sm font-mono font-bold bg-[var(--surface-hover)] px-2 py-0.5 rounded">{createdCredentials.temporary_password}</code>
+                </div>
+              </div>
+              <p className="text-[10px] text-[var(--muted)] italic">The owner should log in and change their password immediately.</p>
+            </div>
+
+            <button
+              onClick={() => setCreatedCredentials(null)}
+              className="w-full py-2.5 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-500)] text-white text-sm font-semibold rounded-lg transition-colors"
+            >
+              Done — I've noted the credentials
+            </button>
           </div>
         </div>
       )}

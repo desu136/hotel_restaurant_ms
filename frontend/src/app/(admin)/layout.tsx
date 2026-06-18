@@ -7,6 +7,7 @@ import {
   Users, CreditCard, Settings, LogOut, Hotel,
   Menu, LayoutDashboard, ScrollText, Boxes, ShieldAlert, User,
 } from "lucide-react"
+import { ProfileDropdown } from "@/components/ui/profile-dropdown"
 
 interface NavItem {
   href: string
@@ -15,11 +16,11 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: "/tenants",       label: "Tenants",           icon: Users },
-  { href: "/subscriptions", label: "Subscriptions",     icon: CreditCard },
-  { href: "/modules",       label: "Modules",           icon: Boxes },
-  { href: "/settings",      label: "Platform Settings", icon: Settings },
-  { href: "/audit-logs",    label: "Audit Logs",        icon: ScrollText },
+  { href: "/tenants", label: "Tenants", icon: Users },
+  { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
+  { href: "/modules", label: "Modules", icon: Boxes },
+  { href: "/settings", label: "Platform Settings", icon: Settings },
+  { href: "/audit-logs", label: "Audit Logs", icon: ScrollText },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -62,16 +63,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               key={item.href}
               href={item.href}
               onClick={() => setSidebarOpen(false)}
-              className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
-                active
-                  ? "bg-[var(--color-primary-600)] text-white shadow-sm"
-                  : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
-              }`}
+              className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${active
+                ? "bg-[var(--color-primary-600)] text-white shadow-sm"
+                : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
+                }`}
             >
               <item.icon
-                className={`w-4 h-4 mr-3 shrink-0 transition-colors ${
-                  active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
-                }`}
+                className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
+                  }`}
               />
               {item.label}
             </Link>
@@ -143,9 +142,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-red-500 to-orange-500 border-2 border-[var(--surface)] shadow-sm flex items-center justify-center text-white text-xs font-bold">
-              A
-            </div>
+            <ProfileDropdown settingsHref="/profile" avatarGradient="from-red-500 to-orange-500" />
           </div>
         </header>
 

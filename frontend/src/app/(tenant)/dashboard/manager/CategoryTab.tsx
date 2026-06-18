@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input"
 import { 
   Plus, Pencil, Trash2, Users2, Shield, Mail, Phone, Loader2, Tag, Coffee 
 } from "lucide-react"
+import { PasswordInput } from "@/components/ui/password-input"
 
 interface Category {
   id: string
   name: string
   restaurant_id: string
+  parent_id?: string | null
 }
 
 interface Restaurant {
@@ -46,10 +48,12 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
   // Categories states
   const [categories, setCategories] = React.useState<Category[]>([])
   const [newCatName, setNewCatName] = React.useState("")
+  const [newCatParentId, setNewCatParentId] = React.useState("")
   const [catError, setCatError] = React.useState("")
   const [catAdding, setCatAdding] = React.useState(false)
   const [editingCatId, setEditingCatId] = React.useState<string | null>(null)
   const [editingCatName, setEditingCatName] = React.useState("")
+  const [editingCatParentId, setEditingCatParentId] = React.useState("")
 
   // Staff states
   const [staff, setStaff] = React.useState<Employee[]>([])
@@ -150,11 +154,12 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
       const res = await fetch("/api/restaurant/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCatName.trim(), restaurant_id: selectedRestaurantId })
+        body: JSON.stringify({ name: newCatName.trim(), restaurant_id: selectedRestaurantId, parent_id: newCatParentId || null })
       })
       const data = await res.json()
       if (res.ok) {
         setNewCatName("")
+        setNewCatParentId("")
         // Re-fetch from server to get consistent data (including _count etc.)
         await fetchCategories(selectedRestaurantId)
       } else {
@@ -174,12 +179,13 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
       const res = await fetch(`/api/restaurant/categories/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editingCatName.trim() })
+        body: JSON.stringify({ name: editingCatName.trim(), parent_id: editingCatParentId || null })
       })
       if (res.ok) {
-        setCategories(prev => prev.map(c => c.id === id ? { ...c, name: editingCatName.trim() } : c))
+        setCategories(prev => prev.map(c => c.id === id ? { ...c, name: editingCatName.trim(), parent_id: editingCatParentId || null } : c))
         setEditingCatId(null)
         setEditingCatName("")
+        setEditingCatParentId("")
       }
     } catch (err) {
       console.error(err)
@@ -302,18 +308,29 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Add Category Form */}
-              <form onSubmit={handleAddCategory} className="flex gap-2">
+              <form onSubmit={handleAddCategory} className="flex gap-2 flex-wrap sm:flex-nowrap">
                 <Input
-                  placeholder="New category name (e.g. Starter, Drink)"
+                  placeholder="Category name (e.g. Desserts, Drinks)"
                   value={newCatName}
                   onChange={e => { setNewCatName(e.target.value); setCatError("") }}
                   disabled={!selectedRestaurantId || catAdding}
-                  className="bg-[var(--surface)] text-sm"
+                  className="bg-[var(--surface)] text-sm flex-1"
                 />
+                <select
+                  value={newCatParentId}
+                  onChange={e => setNewCatParentId(e.target.value)}
+                  disabled={!selectedRestaurantId || catAdding}
+                  className="bg-[var(--surface)] border border-[var(--border)] text-sm rounded-md px-3 py-2 text-gray-300 outline-none focus:ring-1 focus:ring-[var(--color-primary-500)] h-10 min-w-[170px]"
+                >
+                  <option value="">None (Main Category)</option>
+                  {categories.filter(c => !c.parent_id).map(mc => (
+                    <option key={mc.id} value={mc.id}>Parent: {mc.name}</option>
+                  ))}
+                </select>
                 <Button 
                   type="submit" 
                   disabled={!selectedRestaurantId || !newCatName.trim() || catAdding}
-                  className="bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white shrink-0"
+                  className="bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white shrink-0 h-10"
                 >
                   {catAdding
                     ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -338,63 +355,82 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
 
               {/* Categories List */}
               <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                {categories.map(cat => (
-                  <div 
-                    key={cat.id} 
-                    className="flex items-center justify-between p-3 rounded-lg border bg-[var(--surface)] hover:border-[var(--color-primary-500)]/40 transition-colors"
-                  >
-                    {editingCatId === cat.id ? (
-                      <div className="flex-1 flex gap-2 mr-2">
-                        <Input
-                          value={editingCatName}
-                          onChange={e => setEditingCatName(e.target.value)}
-                          className="h-8 text-sm"
-                          autoFocus
-                        />
-                        <Button 
-                          size="sm" 
-                          onClick={() => handleUpdateCategory(cat.id)}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white h-8"
-                        >
-                          Save
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => setEditingCatId(null)}
-                          className="h-8"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <span className="font-medium text-sm">{cat.name}</span>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingCatId(cat.id)
-                              setEditingCatName(cat.name)
-                            }}
-                            className="w-8 h-8 p-0 text-[var(--muted)] hover:text-[var(--foreground)]"
+                {categories.map(cat => {
+                  const parentCat = categories.find(c => c.id === cat.parent_id)
+                  return (
+                    <div 
+                      key={cat.id} 
+                      className="flex items-center justify-between p-3 rounded-lg border bg-[var(--surface)] hover:border-[var(--color-primary-500)]/40 transition-colors"
+                    >
+                      {editingCatId === cat.id ? (
+                        <div className="flex-1 flex gap-2 mr-2 flex-wrap items-center">
+                          <Input
+                            value={editingCatName}
+                            onChange={e => setEditingCatName(e.target.value)}
+                            className="h-9 text-sm flex-1 min-w-[150px]"
+                            autoFocus
+                          />
+                          <select
+                            value={editingCatParentId}
+                            onChange={e => setEditingCatParentId(e.target.value)}
+                            className="h-9 bg-[var(--surface)] border border-[var(--border)] text-xs rounded-md px-2 py-0 text-gray-300 outline-none"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <option value="">None (Main Category)</option>
+                            {categories.filter(c => !c.parent_id && c.id !== cat.id).map(mc => (
+                              <option key={mc.id} value={mc.id}>Parent: {mc.name}</option>
+                            ))}
+                          </select>
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleUpdateCategory(cat.id)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white h-9"
+                          >
+                            Save
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteCategory(cat.id)}
-                            className="w-8 h-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => setEditingCatId(null)}
+                            className="h-9"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            Cancel
                           </Button>
                         </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+                      ) : (
+                        <>
+                          <div>
+                            <span className="font-medium text-sm block">{cat.name}</span>
+                            <span className="text-[10px] text-[var(--muted)] bg-white/5 border border-white/15 rounded-full px-2.5 py-0.5 mt-1 inline-block">
+                              {parentCat ? `Parent: ${parentCat.name}` : "Main Category"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingCatId(cat.id)
+                                setEditingCatName(cat.name)
+                                setEditingCatParentId(cat.parent_id || "")
+                              }}
+                              className="w-8 h-8 p-0 text-[var(--muted)] hover:text-[var(--foreground)]"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteCategory(cat.id)}
+                              className="w-8 h-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
 
                 {categories.length === 0 && (
                   <div className="py-12 text-center text-[var(--muted)] text-sm border-2 border-dashed rounded-xl">
@@ -512,12 +548,12 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
 
               <div>
                 <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Password *</label>
-                <Input
+                <PasswordInput
                   required
-                  type="password"
                   placeholder="Minimum 8 characters"
                   value={staffForm.password}
                   onChange={e => setStaffForm(prev => ({ ...prev, password: e.target.value }))}
+                  className="w-full bg-[var(--surface)] text-sm"
                 />
               </div>
 

@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Hotel, UtensilsCrossed, ArrowRight, ArrowLeft, CheckCircle2 } from "lucide-react"
+import { PasswordInput } from "@/components/ui/password-input"
 
 export default function RegisterPage() {
   const [step, setStep] = React.useState(1)
@@ -26,20 +27,22 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    
+
     try {
-      const res = await fetch("/api/v1/public/tenants/register", {
+      const res = await fetch("/api/tenant/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
       })
+      const data = await res.json()
       if (res.ok) {
         setIsSuccess(true)
       } else {
-        alert("Registration failed. Please try again.")
+        alert(data.error ?? "Registration failed. Please try again.")
       }
     } catch (error) {
       console.error(error)
+      alert("Network error. Please check your connection and try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -125,11 +128,11 @@ export default function RegisterPage() {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Business Name</label>
-                      <Input 
-                        required 
-                        placeholder="Grand Hotel & Spa" 
+                      <Input
+                        required
+                        placeholder="Grand Hotel & Spa"
                         value={formData.businessName}
-                        onChange={e => setFormData({...formData, businessName: e.target.value})}
+                        onChange={e => setFormData({ ...formData, businessName: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
@@ -137,7 +140,7 @@ export default function RegisterPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <button
                           type="button"
-                          onClick={() => setFormData({...formData, businessType: 'HOTEL'})}
+                          onClick={() => setFormData({ ...formData, businessType: 'HOTEL' })}
                           className={`p-4 border rounded-lg flex flex-col items-center justify-center space-y-2 transition-all ${formData.businessType === 'HOTEL' ? 'border-[var(--color-primary-500)] bg-[var(--color-primary-50)] text-[var(--color-primary-900)] dark:bg-[var(--color-primary-900)]/20 dark:text-blue-400 ring-1 ring-[var(--color-primary-500)]' : 'border-[var(--surface-border)] hover:bg-[var(--surface-hover)]'}`}
                         >
                           <Hotel className="w-6 h-6" />
@@ -145,7 +148,7 @@ export default function RegisterPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setFormData({...formData, businessType: 'RESTAURANT'})}
+                          onClick={() => setFormData({ ...formData, businessType: 'RESTAURANT' })}
                           className={`p-4 border rounded-lg flex flex-col items-center justify-center space-y-2 transition-all ${formData.businessType === 'RESTAURANT' ? 'border-[var(--color-primary-500)] bg-[var(--color-primary-50)] text-[var(--color-primary-900)] dark:bg-[var(--color-primary-900)]/20 dark:text-blue-400 ring-1 ring-[var(--color-primary-500)]' : 'border-[var(--surface-border)] hover:bg-[var(--surface-hover)]'}`}
                         >
                           <UtensilsCrossed className="w-6 h-6" />
@@ -153,7 +156,7 @@ export default function RegisterPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setFormData({...formData, businessType: 'HOTEL_RESTAURANT'})}
+                          onClick={() => setFormData({ ...formData, businessType: 'HOTEL_RESTAURANT' })}
                           className={`p-4 border rounded-lg flex flex-col items-center justify-center space-y-2 transition-all ${formData.businessType === 'HOTEL_RESTAURANT' ? 'border-[var(--color-primary-500)] bg-[var(--color-primary-50)] text-[var(--color-primary-900)] dark:bg-[var(--color-primary-900)]/20 dark:text-blue-400 ring-1 ring-[var(--color-primary-500)]' : 'border-[var(--surface-border)] hover:bg-[var(--surface-hover)]'}`}
                         >
                           <div className="flex space-x-1">
@@ -165,7 +168,10 @@ export default function RegisterPage() {
                       </div>
                     </div>
                   </CardContent>
-                  <CardFooter className="justify-end">
+                  <CardFooter className="justify-between">
+                    <p className="text-sm text-[var(--muted)]">
+                      Already have an account? <a href="/login" className="text-[var(--color-primary-600)] font-medium hover:underline">Login now</a>
+                    </p>
                     <Button type="submit" disabled={!formData.businessName}>
                       Next <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
@@ -190,30 +196,30 @@ export default function RegisterPage() {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Full Name</label>
-                      <Input 
-                        required 
+                      <Input
+                        required
                         placeholder="John Doe"
                         value={formData.ownerName}
-                        onChange={e => setFormData({...formData, ownerName: e.target.value})}
+                        onChange={e => setFormData({ ...formData, ownerName: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Email Address</label>
-                      <Input 
-                        type="email" 
-                        required 
+                      <Input
+                        type="email"
+                        required
                         placeholder="john@example.com"
                         value={formData.email}
-                        onChange={e => setFormData({...formData, email: e.target.value})}
+                        onChange={e => setFormData({ ...formData, email: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Phone Number</label>
-                      <Input 
-                        required 
+                      <Input
+                        required
                         placeholder="+1 (555) 000-0000"
                         value={formData.phone}
-                        onChange={e => setFormData({...formData, phone: e.target.value})}
+                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
                       />
                     </div>
                   </CardContent>
@@ -245,15 +251,14 @@ export default function RegisterPage() {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Password</label>
-                      <Input 
-                        type="password" 
-                        required 
+                      <PasswordInput
+                        required
                         placeholder="••••••••"
                         value={formData.password}
-                        onChange={e => setFormData({...formData, password: e.target.value})}
+                        onChange={e => setFormData({ ...formData, password: e.target.value })}
                       />
                     </div>
-                    
+
                     <div className="mt-6 p-4 bg-[var(--color-primary-50)] dark:bg-[var(--color-primary-900)]/20 rounded-lg text-sm">
                       <h4 className="font-semibold text-[var(--color-primary-900)] dark:text-blue-300 mb-2">What happens next?</h4>
                       <ul className="space-y-2 text-[var(--muted)] dark:text-blue-100/70">

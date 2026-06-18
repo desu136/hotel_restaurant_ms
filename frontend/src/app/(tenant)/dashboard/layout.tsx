@@ -21,6 +21,7 @@ import {
   Table2,
   QrCode,
 } from "lucide-react"
+import { ProfileDropdown } from "@/components/ui/profile-dropdown"
 
 interface NavItem {
   href: string;
@@ -173,8 +174,8 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
                       href={item.href}
                       onClick={() => setSidebarOpen(false)}
                       className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${active
-                          ? "bg-[var(--color-primary-600)] text-white shadow-sm"
-                          : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
+                        ? "bg-[var(--color-primary-600)] text-white shadow-sm"
+                        : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
                         }`}
                     >
                       <item.icon
@@ -259,9 +260,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[var(--color-primary-500)] to-purple-500 border-2 border-[var(--surface)] shadow-sm flex items-center justify-center text-white text-xs font-bold">
-              {user ? user.name.charAt(0) : <User className="w-4 h-4" />}
-            </div>
+            <ProfileDropdown settingsHref="/dashboard/settings" avatarGradient="from-[var(--color-primary-500)] to-purple-500" />
           </div>
         </header>
 

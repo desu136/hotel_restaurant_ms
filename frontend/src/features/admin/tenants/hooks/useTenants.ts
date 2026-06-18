@@ -72,3 +72,12 @@ export function useApproveTenant() {
     onSuccess: () => qc.invalidateQueries({ queryKey: [TENANTS_KEY] }),
   });
 }
+
+export function useDeleteTenant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/api/v1/admin/tenants/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [TENANTS_KEY] }),
+  });
+}
