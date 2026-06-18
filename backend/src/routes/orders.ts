@@ -3,6 +3,96 @@ import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
+
+// POST /api/orders/public - Customer self-ordering from a table QR code
+router.post('/public', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { restaurant_id, table_id, items, notes } = req.body;
+
+    if (!restaurant_id) {
+      res.status(400).json({ error: 'restaurant_id is required' });
+      return;
+    }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: 'At least one item is required' });
+      return;
+    }
+
+    // Get tenant and branch from the restaurant
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurant_id },
+    });
+
+    if (!restaurant) {
+      res.status(400).json({ error: 'Restaurant not found' });
+      return;
+    }
+
+    const tenantId = restaurant.tenant_id;
+    const branchId = restaurant.branch_id;
+
+    // Get or create walk-in customer for this tenant
+    let walkInCustomer = await prisma.customer.findFirst({
+      where: { full_name: 'QR Customer', phone: `qrcustomer-${tenantId}` },
+    });
+    if (!walkInCustomer) {
+      walkInCustomer = await prisma.customer.create({
+        data: { full_name: 'QR Customer', phone: `qrcustomer-${tenantId}`, source: 'WEB' },
+      });
+    }
+
+    // Calculate total amount and prepare items
+    let totalAmount = 0;
+    const orderItems: { menu_item_id: string; quantity: number; unit_price: number; customizations: any }[] = [];
+    
+    for (const item of items) {
+      const menuItem = await prisma.menuItem.findUnique({ where: { id: item.menu_item_id } });
+      if (!menuItem) {
+        res.status(400).json({ error: `Menu item ${item.menu_item_id} not found` });
+        return;
+      }
+      const unit_price = parseFloat(menuItem.price.toString());
+      const qty = parseInt(item.quantity);
+      totalAmount += unit_price * qty;
+      orderItems.push({
+        menu_item_id: item.menu_item_id,
+        quantity: qty,
+        unit_price,
+        customizations: item.customizations || null,
+      });
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        tenant_id: tenantId,
+        branch_id: branchId,
+        customer_id: walkInCustomer.id,
+        table_id: table_id || null,
+        order_type: 'DINE_IN',
+        status: 'PENDING',
+        total_amount: totalAmount,
+        items: {
+          create: orderItems,
+        },
+        kitchen_tickets: {
+          create: { status: 'PENDING' },
+        },
+      },
+      include: {
+        items: { include: { menu_item: true } },
+        table: true,
+        kitchen_tickets: true,
+      },
+    });
+
+    res.status(201).json(order);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to place order' });
+  }
+});
+
 router.use(authenticate);
 
 // GET /api/orders  – list orders for tenant (filtered by branch if applicable)

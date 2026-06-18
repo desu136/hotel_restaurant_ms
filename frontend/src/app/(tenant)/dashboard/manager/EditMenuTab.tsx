@@ -33,6 +33,7 @@ interface MenuItem {
   category_id?: string | null
   availability: boolean
   customizations?: Customization[] | null
+  image_url?: string | null
   category?: { id: string; name: string } | null
 }
 
@@ -52,9 +53,11 @@ export function EditMenuTab() {
     description: "",
     price: "",
     categoryId: "",
-    availability: true
+    availability: true,
+    imageUrl: ""
   })
   
+  const [imageUploading, setImageUploading] = React.useState(false)
   const [customizations, setCustomizations] = React.useState<Customization[]>([])
   const [formError, setFormError] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
@@ -108,6 +111,27 @@ export function EditMenuTab() {
     }
   }
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageUploading(true)
+    const formData = new FormData()
+    formData.append("image", file)
+    try {
+      const res = await fetch("/api/upload/image", { method: "POST", body: formData })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setForm(prev => ({ ...prev, imageUrl: data.data.url }))
+      } else {
+        setFormError(data.error || "Failed to upload image")
+      }
+    } catch {
+      setFormError("Network error during image upload")
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
   const openAddModal = () => {
     setEditingItem(null)
     setForm({
@@ -115,7 +139,8 @@ export function EditMenuTab() {
       description: "",
       price: "",
       categoryId: categories[0]?.id || "",
-      availability: true
+      availability: true,
+      imageUrl: ""
     })
     setCustomizations([])
     setFormError("")
@@ -129,7 +154,8 @@ export function EditMenuTab() {
       description: item.description || "",
       price: item.price.toString(),
       categoryId: item.category_id || "",
-      availability: item.availability
+      availability: item.availability,
+      imageUrl: item.image_url || ""
     })
     setCustomizations(item.customizations ? JSON.parse(JSON.stringify(item.customizations)) : [])
     setFormError("")
@@ -220,7 +246,8 @@ export function EditMenuTab() {
       price: parseFloat(form.price),
       category_id: form.categoryId,
       availability: form.availability,
-      customizations: formattedCustomizations.length > 0 ? formattedCustomizations : null
+      customizations: formattedCustomizations.length > 0 ? formattedCustomizations : null,
+      image_url: form.imageUrl || null
     }
 
     try {
@@ -323,6 +350,9 @@ export function EditMenuTab() {
               {items.map(item => (
                 <Card key={item.id} className="glass hover:border-[var(--color-primary-500)]/30 transition-all group">
                   <CardContent className="p-5 flex items-start gap-4">
+                    {item.image_url && (
+                      <img src={item.image_url} alt={item.display_name} className="w-16 h-16 rounded-lg object-cover border border-[var(--surface-border)] shrink-0" />
+                    )}
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center justify-between">
                         <h4 className="font-bold text-base">{item.display_name}</h4>
@@ -422,6 +452,22 @@ export function EditMenuTab() {
                     value={form.price}
                     onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))}
                   />
+                </div>
+              </div>
+
+              {/* Image Upload */}
+              <div>
+                <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Item Image</label>
+                <div className="flex items-center gap-3">
+                  {form.imageUrl && (
+                    <img src={form.imageUrl} alt="preview" className="w-16 h-16 object-cover rounded-lg border border-[var(--surface-border)] shrink-0" />
+                  )}
+                  <label className="flex-1 cursor-pointer">
+                    <div className="w-full px-3 py-2 border border-dashed border-[var(--surface-border)] rounded-lg text-xs text-[var(--muted)] hover:border-[var(--color-primary-500)] transition-colors text-center">
+                      {imageUploading ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (form.imageUrl ? "Click to change image" : "Click to upload item image")}
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={imageUploading} />
+                  </label>
                 </div>
               </div>
 
@@ -592,7 +638,7 @@ export function EditMenuTab() {
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={submitting}
+                  disabled={submitting || imageUploading}
                   className="flex-1 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 mr-1" />}

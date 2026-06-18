@@ -18,6 +18,8 @@ import {
   User,
   Tag,
   Store,
+  Table2,
+  QrCode,
 } from "lucide-react"
 
 interface NavItem {
@@ -85,6 +87,8 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
     operationsNav.push(
       { href: "/dashboard/manager/category", label: "Category", icon: Tag, exact: false },
       { href: "/dashboard/manager/menu", label: "Menu", icon: UtensilsCrossed, exact: false },
+      { href: "/dashboard/manager/tables", label: "Tables", icon: Table2, exact: false },
+      { href: "/dashboard/manager/qr", label: "QR Codes", icon: QrCode, exact: false },
       { href: "/dashboard/manager/staff", label: "Staff", icon: Users2, exact: false }
     )
   }

@@ -17,9 +17,14 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
   const token = cookieStore.get("token")?.value;
 
   // Build forwarded headers
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const contentType = req.headers.get("content-type") || "";
+  const headers: Record<string, string> = {};
+  if (contentType) {
+    headers["Content-Type"] = contentType;
+  } else {
+    headers["Content-Type"] = "application/json";
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -28,12 +33,20 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
   }
 
   // Forward the request body for non-GET methods
-  let body: BodyInit | undefined;
+  let body: any;
   if (req.method !== "GET" && req.method !== "HEAD") {
-    try {
-      body = await req.text();
-    } catch {
-      body = undefined;
+    if (contentType.includes("multipart/form-data")) {
+      try {
+        body = await req.arrayBuffer();
+      } catch {
+        body = undefined;
+      }
+    } else {
+      try {
+        body = await req.text();
+      } catch {
+        body = undefined;
+      }
     }
   }
 

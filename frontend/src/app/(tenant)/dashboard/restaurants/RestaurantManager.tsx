@@ -16,10 +16,12 @@ interface Restaurant {
   branch_id: string
   branch?: { name: string } | null
   created_at: string
+  logo_url?: string | null
+  banner_url?: string | null
   _count?: { categories: number; menu_items: number; tables: number }
 }
 
-const emptyForm = { name: "", branch_id: "" }
+const emptyForm = { name: "", branch_id: "", logo_url: "", banner_url: "" }
 
 export default function RestaurantManager() {
   const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
@@ -31,6 +33,57 @@ export default function RestaurantManager() {
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState("")
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
+
+  const [logoUploading, setLogoUploading] = React.useState(false)
+  const [bannerUploading, setBannerUploading] = React.useState(false)
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoUploading(true)
+    const formData = new FormData()
+    formData.append("image", file)
+    try {
+      const res = await fetch("/api/upload/image", {
+        method: "POST",
+        body: formData,
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setForm(f => ({ ...f, logo_url: data.data.url }))
+      } else {
+        setError(data.error || "Failed to upload logo")
+      }
+    } catch {
+      setError("Failed to upload logo due to network error")
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setBannerUploading(true)
+    const formData = new FormData()
+    formData.append("image", file)
+    try {
+      const res = await fetch("/api/upload/image", {
+        method: "POST",
+        body: formData,
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setForm(f => ({ ...f, banner_url: data.data.url }))
+      } else {
+        setError(data.error || "Failed to upload banner")
+      }
+    } catch {
+      setError("Failed to upload banner due to network error")
+    } finally {
+      setBannerUploading(false)
+    }
+  }
 
   // Load restaurants and branches on mount
   const loadData = React.useCallback(async () => {
@@ -55,14 +108,19 @@ export default function RestaurantManager() {
 
   const openCreate = () => {
     setEditTarget(null)
-    setForm({ name: "", branch_id: branches[0]?.id ?? "" })
+    setForm({ name: "", branch_id: branches[0]?.id ?? "", logo_url: "", banner_url: "" })
     setError("")
     setShowModal(true)
   }
 
   const openEdit = (r: Restaurant) => {
     setEditTarget(r)
-    setForm({ name: r.name, branch_id: r.branch_id })
+    setForm({
+      name: r.name,
+      branch_id: r.branch_id,
+      logo_url: r.logo_url || "",
+      banner_url: r.banner_url || ""
+    })
     setError("")
     setShowModal(true)
   }
@@ -81,7 +139,12 @@ export default function RestaurantManager() {
       const res = await fetch(url, {
         method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name.trim(), branch_id: form.branch_id }),
+        body: JSON.stringify({
+          name: form.name.trim(),
+          branch_id: form.branch_id,
+          logo_url: form.logo_url || null,
+          banner_url: form.banner_url || null
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? "Something went wrong"); return }
@@ -345,6 +408,38 @@ export default function RestaurantManager() {
                 )}
               </div>
 
+              {/* Logo Upload */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Restaurant Logo</label>
+                <div className="flex items-center gap-3">
+                  {form.logo_url && (
+                    <img src={form.logo_url} alt="logo preview" className="w-14 h-14 object-cover rounded-lg border border-[var(--surface-border)] shrink-0" />
+                  )}
+                  <label className="flex-1 cursor-pointer">
+                    <div className="w-full px-3 py-2 border border-dashed border-[var(--surface-border)] rounded-lg text-sm text-[var(--muted)] hover:border-[var(--color-primary-500)] transition-colors text-center">
+                      {logoUploading ? <Loader2 className="w-4 h-4 animate-spin inline" /> : "Click to upload logo"}
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={logoUploading} />
+                  </label>
+                </div>
+              </div>
+
+              {/* Banner Upload */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Restaurant Banner</label>
+                <div className="space-y-2">
+                  {form.banner_url && (
+                    <img src={form.banner_url} alt="banner preview" className="w-full h-20 object-cover rounded-lg border border-[var(--surface-border)]" />
+                  )}
+                  <label className="cursor-pointer block">
+                    <div className="w-full px-3 py-2 border border-dashed border-[var(--surface-border)] rounded-lg text-sm text-[var(--muted)] hover:border-[var(--color-primary-500)] transition-colors text-center">
+                      {bannerUploading ? <Loader2 className="w-4 h-4 animate-spin inline" /> : "Click to upload banner image"}
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleBannerUpload} disabled={bannerUploading} />
+                  </label>
+                </div>
+              </div>
+
               {error && (
                 <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -362,7 +457,7 @@ export default function RestaurantManager() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || branches.length === 0}
+                  disabled={submitting || branches.length === 0 || logoUploading || bannerUploading}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[var(--color-primary-600)] text-white rounded-lg text-sm font-semibold hover:bg-[var(--color-primary-500)] disabled:opacity-60 transition-colors"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

@@ -3,6 +3,60 @@ import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
+
+// ─── PUBLIC ENDPOINTS (NO AUTH REQUIRED) ───────────────────────────────────
+
+router.get('/public/details/:restaurantId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const restaurantId = req.params.restaurantId as string;
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId, deleted_at: null },
+      select: {
+        id: true,
+        name: true,
+        logo_url: true,
+        banner_url: true,
+        branch: { select: { name: true } },
+      },
+    });
+    if (!restaurant) {
+      res.status(404).json({ error: 'Restaurant not found' });
+      return;
+    }
+    res.json(restaurant);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch restaurant details' });
+  }
+});
+
+router.get('/public/categories/:restaurantId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const restaurantId = req.params.restaurantId as string;
+    const categories = await prisma.category.findMany({
+      where: { restaurant_id: restaurantId, deleted_at: null },
+      orderBy: { created_at: 'asc' },
+    });
+    res.json(categories);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+router.get('/public/menu/:restaurantId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const restaurantId = req.params.restaurantId as string;
+    const items = await prisma.menuItem.findMany({
+      where: { restaurant_id: restaurantId, availability: true },
+      include: { category: { select: { id: true, name: true } } },
+      orderBy: { created_at: 'asc' },
+    });
+    res.json(items);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch menu items' });
+  }
+});
+
+
 router.use(authenticate);
 
 const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
@@ -34,13 +88,13 @@ router.post('/list', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { branch_id, name } = req.body;
+    const { branch_id, name, logo_url, banner_url } = req.body;
     if (!branch_id || !name) {
       res.status(400).json({ error: 'branch_id and name are required' });
       return;
     }
     const restaurant = await prisma.restaurant.create({
-      data: { tenant_id: tenantId, branch_id, name },
+      data: { tenant_id: tenantId, branch_id, name, logo_url, banner_url },
       include: { branch: { select: { id: true, name: true } }, _count: { select: { categories: true, menu_items: true, tables: true } } },
     });
     res.status(201).json(restaurant);
@@ -54,19 +108,21 @@ router.put('/list/:id', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req:
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { name, branch_id } = req.body;
+    const { name, branch_id, logo_url, banner_url } = req.body;
 
     // Verify the restaurant belongs to this tenant
     const existing = await prisma.restaurant.findFirst({
-      where: { id: req.params.id, tenant_id: tenantId, deleted_at: null },
+      where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
     });
     if (!existing) { res.status(404).json({ error: 'Restaurant not found' }); return; }
 
     const updated = await prisma.restaurant.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: {
         ...(name !== undefined && { name }),
         ...(branch_id !== undefined && { branch_id }),
+        ...(logo_url !== undefined && { logo_url }),
+        ...(banner_url !== undefined && { banner_url }),
       },
       include: { branch: { select: { id: true, name: true } }, _count: { select: { categories: true, menu_items: true, tables: true } } },
     });
@@ -83,12 +139,12 @@ router.delete('/list/:id', requireRole('HOTEL_OWNER'), async (req: Request, res:
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
 
     const existing = await prisma.restaurant.findFirst({
-      where: { id: req.params.id, tenant_id: tenantId, deleted_at: null },
+      where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
     });
     if (!existing) { res.status(404).json({ error: 'Restaurant not found' }); return; }
 
     await prisma.restaurant.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: { deleted_at: new Date() },
     });
     res.json({ success: true });
@@ -196,7 +252,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id, display_name, description, price, category_id, availability, customizations } = req.body;
+    const { restaurant_id, display_name, description, price, category_id, availability, customizations, image_url } = req.body;
     if (!restaurant_id || !display_name) {
       res.status(400).json({ error: 'restaurant_id and display_name are required' });
       return;
@@ -211,6 +267,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
         category_id: category_id ?? null,
         availability: availability ?? true,
         customizations: customizations ?? null,
+        image_url: image_url ?? null,
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -224,7 +281,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
 // PATCH /api/restaurant/menu/:id
 router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
-    const { display_name, description, price, category_id, availability, customizations } = req.body;
+    const { display_name, description, price, category_id, availability, customizations, image_url } = req.body;
     const item = await prisma.menuItem.update({
       where: { id: req.params.id as string },
       data: {
@@ -234,6 +291,7 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
         ...(category_id !== undefined && { category_id }),
         ...(availability !== undefined && { availability }),
         ...(customizations !== undefined && { customizations }),
+        ...(image_url !== undefined && { image_url }),
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -260,8 +318,12 @@ router.get('/tables', async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+    const { restaurant_id } = req.query;
     const tables = await prisma.restaurantTable.findMany({
-      where: { tenant_id: tenantId },
+      where: {
+        tenant_id: tenantId,
+        ...(restaurant_id ? { restaurant_id: restaurant_id as string } : {}),
+      },
       orderBy: { table_number: 'asc' },
     });
     res.json(tables);
@@ -289,4 +351,29 @@ router.post('/tables', requireRole(...MANAGER_ROLES), async (req: Request, res: 
   }
 });
 
+// DELETE /api/restaurant/tables/:id
+router.delete('/tables/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+
+    const tableId = req.params.id as string;
+
+    // Ensure table belongs to this tenant
+    const table = await prisma.restaurantTable.findFirst({
+      where: { id: tableId, tenant_id: tenantId },
+    });
+    if (!table) { res.status(404).json({ error: 'Table not found' }); return; }
+
+    // Delete linked QR codes first (cascade handles DB, but let's be explicit)
+    await prisma.qRCode.deleteMany({ where: { table_id: tableId } });
+    await prisma.restaurantTable.delete({ where: { id: tableId } });
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete table' });
+  }
+});
+
 export default router;
+
