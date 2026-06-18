@@ -46,13 +46,48 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
     let totalAmount = 0;
     const orderItems: { menu_item_id: string; quantity: number; unit_price: number; customizations: any }[] = [];
     
+    interface CustomizationValue {
+      name: string;
+      extraPrice: number;
+    }
+    interface Customization {
+      key: string;
+      label: string;
+      multiple: boolean;
+      values: CustomizationValue[];
+    }
+
     for (const item of items) {
       const menuItem = await prisma.menuItem.findUnique({ where: { id: item.menu_item_id } });
       if (!menuItem) {
         res.status(400).json({ error: `Menu item ${item.menu_item_id} not found` });
         return;
       }
-      const unit_price = parseFloat(menuItem.price.toString());
+      let unit_price = parseFloat(menuItem.price.toString());
+      
+      // Calculate extra price from customizations if present
+      if (item.customizations && menuItem.customizations) {
+        const itemCustomizations = menuItem.customizations as any as Customization[];
+        for (const [key, selectedVal] of Object.entries(item.customizations)) {
+          const group = itemCustomizations.find(g => g.key === key);
+          if (group && group.values) {
+            if (Array.isArray(selectedVal)) {
+              for (const v of selectedVal) {
+                const choice = group.values.find(choiceVal => choiceVal.name === v);
+                if (choice && choice.extraPrice) {
+                  unit_price += parseFloat(choice.extraPrice.toString());
+                }
+              }
+            } else if (typeof selectedVal === 'string' && selectedVal) {
+              const choice = group.values.find(choiceVal => choiceVal.name === selectedVal);
+              if (choice && choice.extraPrice) {
+                unit_price += parseFloat(choice.extraPrice.toString());
+              }
+            }
+          }
+        }
+      }
+
       const qty = parseInt(item.quantity);
       totalAmount += unit_price * qty;
       orderItems.push({
@@ -90,6 +125,27 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Failed to place order' });
+  }
+});
+
+// GET /api/orders/public/:id - Customer self-ordering status check
+router.get('/public/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id as string },
+      include: {
+        items: { include: { menu_item: true } },
+        table: true,
+      },
+    });
+    if (!order) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+    res.json(order);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to fetch order details' });
   }
 });
 

@@ -41,7 +41,7 @@ router.post(
       }
 
       const token = crypto.randomUUID();
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const baseUrl = process.env.FRONTEND_URL || 'http://192.168.1.12:3000';
       const qrString = `${baseUrl}/menu/${table.restaurant_id}?tableId=${table_id}&qrToken=${token}`;
 
       // Generate Data URL for QR Code

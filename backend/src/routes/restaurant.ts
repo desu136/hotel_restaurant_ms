@@ -56,6 +56,22 @@ router.get('/public/menu/:restaurantId', async (req: Request, res: Response): Pr
   }
 });
 
+// GET /api/restaurant/public/table/:id - Customer status table check
+router.get('/public/table/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const table = await prisma.restaurantTable.findUnique({
+      where: { id: req.params.id as string },
+    });
+    if (!table) {
+      res.status(404).json({ error: 'Table not found' });
+      return;
+    }
+    res.json(table);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to fetch table details' });
+  }
+});
 
 router.use(authenticate);
 
@@ -183,13 +199,13 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { name, restaurant_id } = req.body;
+    const { name, restaurant_id, parent_id } = req.body;
     if (!name || !restaurant_id) {
       res.status(400).json({ error: 'name and restaurant_id are required' });
       return;
     }
     const category = await prisma.category.create({
-      data: { name, restaurant_id, tenant_id: tenantId },
+      data: { name, restaurant_id, tenant_id: tenantId, parent_id: parent_id || null },
     });
     res.status(201).json(category);
   } catch (e) {
@@ -200,10 +216,13 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
 // PATCH /api/restaurant/categories/:id
 router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name } = req.body;
+    const { name, parent_id } = req.body;
     const category = await prisma.category.update({
       where: { id: req.params.id as string },
-      data: { name },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(parent_id !== undefined ? { parent_id: parent_id || null } : {}),
+      },
     });
     res.json(category);
   } catch (e) {

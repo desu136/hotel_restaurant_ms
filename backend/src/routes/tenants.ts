@@ -55,26 +55,84 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// POST /api/tenants  — admin-initiated tenant creation
+// POST /api/tenants  — admin-initiated tenant creation with owner account
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const { business_name, owner_name, email, phone, business_type, address, license_info, tax_info } = req.body;
-    const tenant = await prisma.tenant.create({
-      data: {
-        business_name,
-        owner_name,
+
+    if (!business_name || !owner_name || !email || !phone || !business_type) {
+      res.status(400).json({ error: 'business_name, owner_name, email, phone, and business_type are required' });
+      return;
+    }
+
+    // Default password for admin-created accounts
+    const DEFAULT_PASSWORD = 'Welcome@1234';
+    const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create tenant
+      const tenant = await tx.tenant.create({
+        data: {
+          business_name,
+          owner_name,
+          email,
+          phone,
+          business_type: business_type as BusinessType,
+          address,
+          license_info,
+          tax_info,
+          status: 'ACTIVE' as TenantStatus, // Admin-created tenants are immediately active
+        },
+      });
+
+      // 2. Get HOTEL_OWNER role
+      const ownerRole = await tx.role.findUnique({ where: { code: 'HOTEL_OWNER' } });
+
+      // 3. Create the owner user account
+      const user = await tx.user.create({
+        data: {
+          tenant_id: tenant.id,
+          full_name: owner_name,
+          email,
+          phone,
+          password_hash: passwordHash,
+          status: 'ACTIVE',
+          roles: ownerRole ? { create: { role_id: ownerRole.id } } : undefined,
+        },
+      });
+
+      // 4. Attach a trial subscription
+      let plan = await tx.subscriptionPlan.findFirst({ where: { name: 'Trial Plan' } });
+      if (!plan) {
+        plan = await tx.subscriptionPlan.create({
+          data: { name: 'Trial Plan', monthly_price: 0, annual_price: 0, trial_days: 14 },
+        });
+      }
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(startDate.getDate() + plan.trial_days);
+      await tx.tenantSubscription.create({
+        data: { tenant_id: tenant.id, plan_id: plan.id, start_date: startDate, end_date: endDate, status: 'TRIAL' },
+      });
+
+      return { tenant, user };
+    });
+
+    res.status(201).json({
+      success: true,
+      tenant: result.tenant,
+      owner_credentials: {
         email,
-        phone,
-        business_type: business_type as BusinessType,
-        address,
-        license_info,
-        tax_info,
-        status: 'PENDING' as TenantStatus,
+        temporary_password: DEFAULT_PASSWORD,
+        message: 'Please share these credentials with the business owner. They must change the password after first login.',
       },
     });
-    res.status(201).json({ success: true, tenant });
-  } catch (error) {
+  } catch (error: any) {
     console.error('POST /api/tenants error:', error);
+    if (error.code === 'P2002') {
+      res.status(409).json({ error: 'A user with this email already exists' });
+      return;
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -264,6 +322,27 @@ router.post('/:id/approve', async (req: Request, res: Response): Promise<void> =
   } catch (error: any) {
     console.error('POST /api/tenants/:id/approve error:', error);
     res.status(error.statusCode || 500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// DELETE /api/tenants/:id  — permanently delete a tenant and all its data
+router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isUuid(req.params.id as string)) {
+      res.status(404).json({ error: 'Tenant not found' });
+      return;
+    }
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id as string } });
+    if (!tenant) {
+      res.status(404).json({ error: 'Tenant not found' });
+      return;
+    }
+    // Cascade delete via Prisma (schema has onDelete: Cascade on User -> Tenant)
+    await prisma.tenant.delete({ where: { id: req.params.id as string } });
+    res.json({ success: true, message: `Tenant "${tenant.business_name}" has been permanently deleted.` });
+  } catch (error: any) {
+    console.error('DELETE /api/tenants/:id error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
