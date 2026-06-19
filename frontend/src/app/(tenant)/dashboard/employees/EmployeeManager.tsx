@@ -19,15 +19,16 @@ interface EmployeeRole { id: string; code: string; name: string }
 interface Employee {
   id: string; fullName: string; email: string; phone?: string | null
   branchId?: string | null; branchName: string; status: string; roles: EmployeeRole[]
+  waiter_tables?: { id: string; table_number: string }[]
 }
 interface Props { initialEmployees: Employee[]; branches: Branch[], roles: EmployeeRole[] }
 
 type FormData = {
   fullName: string; email: string; phone: string; password: string
-  branchId: string; role: string; status: string
+  branchId: string; role: string; status: string; tableIds: string[]
 }
 const emptyForm = (): FormData => ({
-  fullName: "", email: "", phone: "", password: "", branchId: "", role: "", status: "ACTIVE",
+  fullName: "", email: "", phone: "", password: "", branchId: "", role: "", status: "ACTIVE", tableIds: [],
 })
 
 export default function EmployeeManager({ initialEmployees, branches, roles }: Props) {
@@ -41,6 +42,14 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
   const [filterBranch, setFilterBranch] = React.useState("")
   const [filterStatus, setFilterStatus] = React.useState("")
   const [search, setSearch] = React.useState("")
+  const [allTables, setAllTables] = React.useState<{ id: string; table_number: string }[]>([])
+
+  React.useEffect(() => {
+    fetch("/api/restaurant/tables")
+      .then(res => res.ok ? res.json() : [])
+      .then(data => { if (Array.isArray(data)) setAllTables(data) })
+      .catch(() => {})
+  }, [])
 
   const openCreate = () => {
     setEditTarget(null); setForm(emptyForm()); setError(""); setShowModal(true)
@@ -50,6 +59,7 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
     setForm({
       fullName: emp.fullName, email: emp.email, phone: emp.phone ?? "",
       password: "", branchId: emp.branchId ?? "", role: emp.roles?.[0]?.code ?? "", status: emp.status,
+      tableIds: emp.waiter_tables?.map(t => t.id) ?? []
     })
     setError(""); setShowModal(true)
   }
@@ -76,6 +86,7 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
         branchId: form.branchId || null,
         roles: form.role ? [form.role] : [],
         status: form.status,
+        tableIds: form.role === "WAITER" ? form.tableIds : [],
       }
       if (form.password) payload.password = form.password
 
@@ -409,6 +420,45 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
                   </div>
                 )}
               </div>
+
+              {form.role === "WAITER" && (
+                <div className="border border-[var(--surface-border)] bg-[var(--surface-hover)]/30 rounded-xl p-4 space-y-2.5">
+                  <span className="block text-sm font-bold text-white">Assign Tables for Waiter 🪑</span>
+                  <p className="text-xs text-[var(--muted)]">Ready orders from these tables will automatically be assigned/routed to this waiter.</p>
+                  {allTables.length === 0 ? (
+                    <p className="text-xs text-[var(--muted)] italic">No registered tables found. Please register tables first.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
+                      {allTables.map(table => {
+                        const isChecked = form.tableIds.includes(table.id)
+                        return (
+                          <button
+                            key={table.id}
+                            type="button"
+                            onClick={() => {
+                              setForm(f => ({
+                                ...f,
+                                tableIds: isChecked
+                                  ? f.tableIds.filter(id => id !== table.id)
+                                  : [...f.tableIds, table.id]
+                              }))
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold select-none transition-all text-left ${
+                              isChecked
+                                ? "bg-[var(--color-primary-600)] text-white border-[var(--color-primary-600)] shadow-sm"
+                                : "border-[var(--surface-border)] bg-[var(--surface)] text-[var(--muted)] hover:text-white hover:border-[var(--color-primary-500)]/40"
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+                            Table {table.table_number}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
 
 
               {error && (

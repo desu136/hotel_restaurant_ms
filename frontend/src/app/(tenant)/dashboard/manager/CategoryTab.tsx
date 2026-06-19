@@ -39,6 +39,13 @@ interface Employee {
   roles: EmployeeRole[]
 }
 
+interface RestaurantTable {
+  id: string
+  table_number: string
+  capacity: number
+  waiter_id?: string | null
+}
+
 export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "both" }) {
   // Common states
   const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
@@ -56,6 +63,7 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
   const [editingCatParentId, setEditingCatParentId] = React.useState("")
 
   // Staff states
+  const [tables, setTables] = React.useState<RestaurantTable[]>([])
   const [staff, setStaff] = React.useState<Employee[]>([])
   const [showStaffModal, setShowStaffModal] = React.useState(false)
   const [staffForm, setStaffForm] = React.useState({
@@ -64,6 +72,7 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
     phone: "",
     password: "",
     role: "WAITER", // default
+    tableIds: [] as string[],
   })
   const [staffError, setStaffError] = React.useState("")
   const [staffSubmitting, setStaffSubmitting] = React.useState(false)
@@ -103,6 +112,11 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
         } else {
           console.error("[CategoryTab] Failed to load categories:", catRes.status, await catRes.text())
         }
+
+        const tableRes = await fetch(`/api/restaurant/tables?restaurant_id=${rId}`)
+        if (tableRes.ok) {
+          setTables(await tableRes.json())
+        }
       }
     } catch (err) {
       console.error("Failed to load category/staff data", err)
@@ -120,12 +134,17 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
     setSelectedRestaurantId(id)
     if (!id) {
       setCategories([])
+      setTables([])
       return
     }
     try {
       const catRes = await fetch(`/api/restaurant/categories?restaurant_id=${id}`)
       const catData = catRes.ok ? await catRes.json() : []
       setCategories(catData)
+
+      const tableRes = await fetch(`/api/restaurant/tables?restaurant_id=${id}`)
+      const tableData = tableRes.ok ? await tableRes.json() : []
+      setTables(tableData)
     } catch (err) {
       console.error(err)
     }
@@ -230,7 +249,8 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
           phone: staffForm.phone.trim() || null,
           password: staffForm.password,
           branchId,
-          roles: [staffForm.role]
+          roles: [staffForm.role],
+          tableIds: staffForm.role === "WAITER" ? staffForm.tableIds : []
         })
       })
 
@@ -242,7 +262,7 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
 
       setStaff(prev => [...prev, data])
       setShowStaffModal(false)
-      setStaffForm({ fullName: "", email: "", phone: "", password: "", role: "WAITER" })
+      setStaffForm({ fullName: "", email: "", phone: "", password: "", role: "WAITER", tableIds: [] })
     } catch (err) {
       setStaffError("Network error. Please try again.")
     } finally {
@@ -561,7 +581,7 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
                 <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Role *</label>
                 <select
                   value={staffForm.role}
-                  onChange={e => setStaffForm(prev => ({ ...prev, role: e.target.value }))}
+                  onChange={e => setStaffForm(prev => ({ ...prev, role: e.target.value, tableIds: [] }))}
                   className="w-full h-10 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
                 >
                   <option value="WAITER">Waiter</option>
@@ -569,6 +589,42 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
                   <option value="CASHIER">Cashier</option>
                 </select>
               </div>
+
+              {staffForm.role === "WAITER" && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">
+                    Assign Tables
+                  </label>
+                  {tables.length === 0 ? (
+                    <p className="text-xs text-[var(--muted)]">No tables found. Create tables first in Tables tab.</p>
+                  ) : (
+                    <div className="max-h-36 overflow-y-auto border border-[var(--surface-border)] rounded-lg p-3 space-y-2 bg-[var(--surface-hover)]/10">
+                      {tables.map(table => {
+                        const isChecked = staffForm.tableIds.includes(table.id)
+                        return (
+                          <label key={table.id} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setStaffForm(prev => {
+                                  const tableIds = prev.tableIds.includes(table.id)
+                                    ? prev.tableIds.filter(id => id !== table.id)
+                                    : [...prev.tableIds, table.id]
+                                  return { ...prev, tableIds }
+                                })
+                              }}
+                              className="rounded border-[var(--surface-border)] bg-[var(--surface)] text-[var(--color-primary-600)] focus:ring-[var(--color-primary-500)]"
+                            />
+                            <span className="text-white font-medium text-xs">Table {table.table_number}</span>
+                            <span className="text-[10px] text-[var(--muted)]">({table.capacity} seats)</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {staffError && (
                 <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-2.5 rounded-lg">

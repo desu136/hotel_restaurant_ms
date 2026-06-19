@@ -148,8 +148,58 @@ router.get('/public/:id', async (req: Request, res: Response): Promise<void> => 
     res.status(500).json({ error: 'Failed to fetch order details' });
   }
 });
+// GET /api/orders/public/ready/:restaurantId - Unified waiter screen (no auth, publicly pollable)
+router.get('/public/ready/:restaurantId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const restaurantId = req.params.restaurantId as string;
+    const orders = await prisma.order.findMany({
+      where: {
+        status: 'READY',
+        table: { restaurant_id: restaurantId },
+      },
+      include: {
+        items: { include: { menu_item: { select: { display_name: true } } } },
+        table: {
+          include: {
+            waiter: { select: { id: true, full_name: true } },
+          },
+        },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+    res.json(orders);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to fetch ready orders' });
+  }
+});
 
 router.use(authenticate);
+
+// GET /api/orders/my-ready – Waiter sees only READY orders for tables assigned to them
+router.get('/my-ready', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const waiterId = req.user!.userId;
+    const tenantId = req.user!.tenantId;
+    const orders = await prisma.order.findMany({
+      where: {
+        tenant_id: tenantId as string,
+        status: 'READY',
+        table: { waiter_id: waiterId },
+      },
+      include: {
+        items: { include: { menu_item: { select: { display_name: true } } } },
+        table: { select: { id: true, table_number: true, waiter_id: true } },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+    res.json(orders);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to fetch waiter ready orders' });
+  }
+});
+
 
 // GET /api/orders  – list orders for tenant (filtered by branch if applicable)
 router.get('/', async (req: Request, res: Response): Promise<void> => {
@@ -157,11 +207,23 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.user!.tenantId;
     const { status, limit = '50' } = req.query;
 
+    const isWaiter = req.user!.roles.includes('WAITER') &&
+      !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+
+    const whereClause: any = {
+      tenant_id: tenantId as string,
+      ...(status ? { status: status as any } : {}),
+    };
+
+    if (isWaiter) {
+      whereClause.OR = [
+        { waiter_id: req.user!.userId },
+        { table: { waiter_id: req.user!.userId } }
+      ];
+    }
+
     const orders = await prisma.order.findMany({
-      where: {
-        tenant_id: tenantId as string,
-        ...(status ? { status: status as any } : {}),
-      },
+      where: whereClause,
       include: {
         items: { include: { menu_item: true } },
         table: true,
@@ -182,8 +244,21 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const tenantId = req.user!.tenantId;
+
+    const isWaiter = req.user!.roles.includes('WAITER') &&
+      !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+
     const order = await prisma.order.findFirst({
-      where: { id: id as string, tenant_id: tenantId as string },
+      where: {
+        id: id as string,
+        tenant_id: tenantId as string,
+        ...(isWaiter ? {
+          OR: [
+            { waiter_id: req.user!.userId },
+            { table: { waiter_id: req.user!.userId } }
+          ]
+        } : {})
+      },
       include: {
         items: { include: { menu_item: true } },
         table: true,
@@ -216,6 +291,19 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
     if (!branchId) {
       res.status(400).json({ error: 'Waiter must be assigned to a branch' });
       return;
+    }
+
+    const isWaiter = req.user!.roles.includes('WAITER') &&
+      !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+
+    if (isWaiter && table_id) {
+      const table = await prisma.restaurantTable.findFirst({
+        where: { id: table_id, waiter_id: req.user!.userId }
+      });
+      if (!table) {
+        res.status(403).json({ error: 'Forbidden: You are not assigned to this table' });
+        return;
+      }
     }
 
     // Need a customer ID – for dine-in we use a generic walk-in customer per tenant
@@ -286,9 +374,39 @@ router.patch('/:id/status', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: id as string },
+      include: { table: true }
+    });
+
+    if (!existingOrder) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+
+    const isWaiter = req.user!.roles.includes('WAITER') &&
+      !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+
+    if (isWaiter) {
+      const isAssigned = existingOrder.waiter_id === req.user!.userId || 
+        (existingOrder.table && existingOrder.table.waiter_id === req.user!.userId);
+      if (!isAssigned) {
+        res.status(403).json({ error: 'Forbidden: You cannot modify this order' });
+        return;
+      }
+    }
+
+    let waiterIdToSet = existingOrder?.waiter_id || null;
+    if (!waiterIdToSet && existingOrder?.table?.waiter_id) {
+      waiterIdToSet = existingOrder.table.waiter_id;
+    }
+
     const order = await prisma.order.update({
       where: { id: id as string },
-      data: { status },
+      data: {
+        status,
+        waiter_id: waiterIdToSet,
+      },
       include: { items: { include: { menu_item: true } }, table: true },
     });
 

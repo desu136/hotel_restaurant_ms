@@ -20,6 +20,7 @@ import {
   Store,
   Table2,
   QrCode,
+  Bell,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/ui/profile-dropdown"
 
@@ -95,6 +96,9 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   }
   if (isOwner || isWaiter) {
     operationsNav.push({ href: "/dashboard/waiter", label: "Waiter Station", icon: Utensils })
+  }
+  if (isOwner || isManager || isWaiter) {
+    operationsNav.push({ href: "/dashboard/waiter-screen", label: "Waiter Screen", icon: Bell })
   }
   if (isOwner || isChef) {
     operationsNav.push({ href: "/dashboard/kitchen", label: "Kitchen KDS", icon: ChefHat })

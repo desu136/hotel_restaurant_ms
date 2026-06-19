@@ -19,6 +19,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       include: {
         branch: true,
         roles: { include: { role: true } },
+        waiter_tables: true,
       },
       orderBy: { created_at: 'asc' },
     });
@@ -34,6 +35,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       status: e.status,
       createdAt: e.created_at,
       roles: e.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+      waiter_tables: e.waiter_tables.map(t => ({ id: t.id, table_number: t.table_number })),
     })));
   } catch (error) {
     console.error('GET /api/employees error:', error);
@@ -49,7 +51,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
-    const { fullName, email, phone, password, branchId, roles } = req.body;
+    const { fullName, email, phone, password, branchId, roles, tableIds } = req.body;
 
     if (!fullName || !email || !password) {
       res.status(400).json({ error: 'fullName, email, and password are required' });
@@ -86,19 +88,35 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         status: 'ACTIVE',
         roles: dbRoles.length > 0 ? { create: dbRoles.map(r => ({ role_id: r.id })) } : undefined,
       },
-      include: { branch: true, roles: { include: { role: true } } },
+      include: { branch: true, roles: { include: { role: true } }, waiter_tables: true },
+    });
+
+    // If tables are assigned and role is WAITER
+    if (roles && roles.includes('WAITER') && tableIds && Array.isArray(tableIds)) {
+      // Clear waiter_id for these tables from any previous assignments first (optional but good practice)
+      await prisma.restaurantTable.updateMany({
+        where: { id: { in: tableIds }, tenant_id: tenantId },
+        data: { waiter_id: employee.id }
+      });
+    }
+
+    // Re-fetch tables to return complete user object
+    const finalEmployee = await prisma.user.findUnique({
+      where: { id: employee.id },
+      include: { branch: true, roles: { include: { role: true } }, waiter_tables: true }
     });
 
     res.status(201).json({
-      id: employee.id,
-      tenantId: employee.tenant_id,
-      branchId: employee.branch_id,
-      branchName: employee.branch?.name || 'All Branches / HQ',
-      fullName: employee.full_name,
-      email: employee.email,
-      phone: employee.phone,
-      status: employee.status,
-      roles: employee.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+      id: finalEmployee!.id,
+      tenantId: finalEmployee!.tenant_id,
+      branchId: finalEmployee!.branch_id,
+      branchName: finalEmployee!.branch?.name || 'All Branches / HQ',
+      fullName: finalEmployee!.full_name,
+      email: finalEmployee!.email,
+      phone: finalEmployee!.phone,
+      status: finalEmployee!.status,
+      roles: finalEmployee!.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+      waiter_tables: finalEmployee!.waiter_tables.map(t => ({ id: t.id, table_number: t.table_number })),
     });
   } catch (error: any) {
     console.error('POST /api/employees error:', error);
@@ -127,7 +145,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     }
     const employee = await prisma.user.findFirst({
       where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
-      include: { branch: true, roles: { include: { role: true } } },
+      include: { branch: true, roles: { include: { role: true } }, waiter_tables: true },
     });
     if (!employee) {
       res.status(404).json({ error: 'Employee not found' });
@@ -144,6 +162,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       status: employee.status,
       createdAt: employee.created_at,
       roles: employee.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+      waiter_tables: employee.waiter_tables.map(t => ({ id: t.id, table_number: t.table_number })),
     });
   } catch (error) {
     console.error('GET /api/employees/:id error:', error);
@@ -164,7 +183,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
-    const { fullName, email, phone, password, branchId, roles, status } = req.body;
+    const { fullName, email, phone, password, branchId, roles, status, tableIds } = req.body;
 
     const employee = await prisma.user.findFirst({
       where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
@@ -222,19 +241,44 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
     const updated = await prisma.user.update({
       where: { id: req.params.id as string },
       data: updateData,
-      include: { branch: true, roles: { include: { role: true } } },
+      include: { branch: true, roles: { include: { role: true } }, waiter_tables: true },
+    });
+
+    // Handle waiter table assignments if waiter role exists or tableIds is provided
+    const isWaiter = roles ? roles.includes('WAITER') : updated.roles.some(ur => ur.role.code === 'WAITER');
+    if (tableIds && Array.isArray(tableIds)) {
+      // 1. Unassign all tables from this waiter
+      await prisma.restaurantTable.updateMany({
+        where: { waiter_id: updated.id, tenant_id: tenantId },
+        data: { waiter_id: null }
+      });
+      
+      // 2. If user is still a waiter, assign the new tables
+      if (isWaiter && tableIds.length > 0) {
+        await prisma.restaurantTable.updateMany({
+          where: { id: { in: tableIds }, tenant_id: tenantId },
+          data: { waiter_id: updated.id }
+        });
+      }
+    }
+
+    // Re-fetch employee with new waiter tables
+    const finalEmployee = await prisma.user.findUnique({
+      where: { id: updated.id },
+      include: { branch: true, roles: { include: { role: true } }, waiter_tables: true }
     });
 
     res.json({
-      id: updated.id,
-      tenantId: updated.tenant_id,
-      branchId: updated.branch_id,
-      branchName: updated.branch?.name || 'All Branches / HQ',
-      fullName: updated.full_name,
-      email: updated.email,
-      phone: updated.phone,
-      status: updated.status,
-      roles: updated.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+      id: finalEmployee!.id,
+      tenantId: finalEmployee!.tenant_id,
+      branchId: finalEmployee!.branch_id,
+      branchName: finalEmployee!.branch?.name || 'All Branches / HQ',
+      fullName: finalEmployee!.full_name,
+      email: finalEmployee!.email,
+      phone: finalEmployee!.phone,
+      status: finalEmployee!.status,
+      roles: finalEmployee!.roles.map(ur => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+      waiter_tables: finalEmployee!.waiter_tables.map(t => ({ id: t.id, table_number: t.table_number })),
     });
   } catch (error) {
     console.error('PUT /api/employees/:id error:', error);
