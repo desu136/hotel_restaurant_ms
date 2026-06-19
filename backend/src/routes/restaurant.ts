@@ -343,6 +343,9 @@ router.get('/tables', async (req: Request, res: Response): Promise<void> => {
         tenant_id: tenantId,
         ...(restaurant_id ? { restaurant_id: restaurant_id as string } : {}),
       },
+      include: {
+        waiter: { select: { id: true, full_name: true, email: true } },
+      },
       orderBy: { table_number: 'asc' },
     });
     res.json(tables);
@@ -391,6 +394,34 @@ router.delete('/tables/:id', requireRole(...MANAGER_ROLES), async (req: Request,
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Failed to delete table' });
+  }
+});
+
+// PATCH /api/restaurant/tables/:id/waiter  – assign/unassign waiter to a table
+router.patch('/tables/:id/waiter', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+    const tableId = req.params.id as string;
+    const { waiter_id } = req.body; // null to unassign
+
+    const table = await prisma.restaurantTable.findFirst({ where: { id: tableId, tenant_id: tenantId } });
+    if (!table) { res.status(404).json({ error: 'Table not found' }); return; }
+
+    // Validate waiter exists in the same tenant (if provided)
+    if (waiter_id) {
+      const waiter = await prisma.user.findFirst({ where: { id: waiter_id, tenant_id: tenantId } });
+      if (!waiter) { res.status(404).json({ error: 'Waiter not found in this tenant' }); return; }
+    }
+
+    const updated = await prisma.restaurantTable.update({
+      where: { id: tableId },
+      data: { waiter_id: waiter_id || null },
+      include: { waiter: { select: { id: true, full_name: true, email: true } } },
+    });
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update table waiter assignment' });
   }
 });
 

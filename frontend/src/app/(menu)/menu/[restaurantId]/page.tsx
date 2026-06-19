@@ -565,13 +565,14 @@ export default function CustomerMenuPage() {
                             <span className="text-amber-500 font-extrabold text-sm">${itemPrice.toFixed(2)}</span>
 
                             {/* Direct add controls with explicit stopPropagation */}
-                            <div>
+                            <div onClick={e => e.stopPropagation()}>
                               {inCartCount > 0 ? (
                                 <div className="flex items-center gap-2 bg-amber-500 rounded-lg px-2 py-0.5 text-black shadow-sm">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      const cartIdx = cart.findIndex(c => c.menuItem.id === item.id)
+                                      e.preventDefault()
+                                      const cartIdx = cart.findIndex(c => c.menuItem.id === item.id && Object.keys(c.selectedCustomizations).length === 0)
                                       if (cartIdx >= 0) updateCartQty(cartIdx, -1)
                                     }}
                                     className="font-black text-sm w-4 h-4 flex items-center justify-center"
@@ -582,6 +583,7 @@ export default function CustomerMenuPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
+                                      e.preventDefault()
                                       addToCartDirectly(item)
                                     }}
                                     className="font-black text-sm w-4 h-4 flex items-center justify-center"
@@ -593,6 +595,7 @@ export default function CustomerMenuPage() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
+                                    e.preventDefault()
                                     addToCartDirectly(item)
                                   }}
                                   className="bg-amber-500 text-black border border-amber-500/20 hover:bg-amber-400 rounded-lg px-3.5 py-1 text-[10px] font-black transition-all shadow-sm flex items-center justify-center"
