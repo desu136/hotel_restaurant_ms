@@ -2,12 +2,25 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
+import os from 'os';
 import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
 
 const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
+
+function getLocalIp(): string {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
 
 // POST /api/qr/generate
 router.post(
@@ -41,7 +54,7 @@ router.post(
       }
 
       const token = crypto.randomUUID();
-      const baseUrl = process.env.FRONTEND_URL || 'http://192.168.1.12:3000';
+      const baseUrl = process.env.FRONTEND_URL || `http://${getLocalIp()}:3000`;
       const qrString = `${baseUrl}/menu/${table.restaurant_id}?tableId=${table_id}&qrToken=${token}`;
 
       // Generate Data URL for QR Code
@@ -100,7 +113,7 @@ router.get(
 
       const qrCodesWithUrls = await Promise.all(
         qrCodes.map(async (qr) => {
-          const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          const baseUrl = process.env.FRONTEND_URL || `http://${getLocalIp()}:3000`;
           const qrString = `${baseUrl}/menu/${restaurantId}?tableId=${qr.table_id}&qrToken=${qr.token}`;
           const qrCodeUrl = await QRCode.toDataURL(qrString, {
             width: 300,

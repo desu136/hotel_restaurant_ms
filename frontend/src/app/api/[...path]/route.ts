@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const BACKEND_URL = "http://localhost:4000";
+const BACKEND_URL = "http://127.0.0.1:4000";
 
 async function proxyRequest(req: Request, params: { path: string[] }) {
   let joinedPath = params.path.join("/");
@@ -50,23 +50,28 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
     }
   }
 
-  const backendRes = await fetch(targetUrl, {
-    method: req.method,
-    headers,
-    body,
-  });
-
-  const data = await backendRes.text();
-
-  // Try to parse as JSON, fall back to raw text
   try {
-    const json = JSON.parse(data);
-    return NextResponse.json(json, { status: backendRes.status });
-  } catch {
-    return new NextResponse(data, {
-      status: backendRes.status,
-      headers: { "Content-Type": backendRes.headers.get("Content-Type") || "text/plain" },
+    const backendRes = await fetch(targetUrl, {
+      method: req.method,
+      headers,
+      body,
     });
+
+    const data = await backendRes.text();
+
+    // Try to parse as JSON, fall back to raw text
+    try {
+      const json = JSON.parse(data);
+      return NextResponse.json(json, { status: backendRes.status });
+    } catch {
+      return new NextResponse(data, {
+        status: backendRes.status,
+        headers: { "Content-Type": backendRes.headers.get("Content-Type") || "text/plain" },
+      });
+    }
+  } catch (error) {
+    console.error("Proxy fetch error to backend:", error);
+    return NextResponse.json({ error: "Backend is unreachable" }, { status: 502 });
   }
 }
 
