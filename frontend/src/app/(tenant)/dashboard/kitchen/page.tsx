@@ -32,9 +32,25 @@ interface KitchenOrder {
   items: OrderItem[]
 }
 
+function getOrderTypeLabel(order: KitchenOrder): string {
+  if (order.table) {
+    return `Table ${order.table.table_number}`;
+  }
+  switch (order.order_type) {
+    case "DINE_IN":
+      return "Pre-order Dine-In";
+    case "TAKEAWAY":
+      return "Takeaway";
+    case "DELIVERY":
+      return "Delivery";
+    default:
+      return "Takeaway";
+  }
+}
+
 // ─── Build HTML for a kitchen ticket ─────────────────────────────
 function buildTicketHTML(order: KitchenOrder): string {
-  const tableLabel = order.table ? `Table ${order.table.table_number}` : "Takeaway"
+  const tableLabel = getOrderTypeLabel(order)
   const timeStr = new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   const orderNum = order.id.slice(-6).toUpperCase()
 
@@ -219,7 +235,7 @@ export default function KitchenDashboard() {
   const OrderCard = ({ order, action }: { order: KitchenOrder; action: React.ReactNode }) => {
     const elapsed = getElapsedMins(order.created_at)
     const isLate = elapsed >= 15
-    const tableLabel = order.table ? `Table ${order.table.table_number}` : "Takeaway"
+    const tableLabel = getOrderTypeLabel(order)
     const orderNum = order.id.slice(-6).toUpperCase()
     const isUpdating = updatingId === order.id
 

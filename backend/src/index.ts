@@ -22,7 +22,10 @@ const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3001'],
+  origin: (origin, callback) => {
+    // Dynamically reflect origin to prevent local network/webview CORS block
+    callback(null, true);
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -61,8 +64,8 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Backend API running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Backend API running on http://0.0.0.0:${PORT}`);
 });
 
 export default app;

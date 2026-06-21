@@ -93,6 +93,8 @@ export default function CustomerMenuPage() {
   const [cart, setCart] = React.useState<CartItem[]>([])
   const [orderNotes, setOrderNotes] = React.useState("")
   const [showPayment, setShowPayment] = React.useState(false)
+  const [orderType, setOrderType] = React.useState<"DINE_IN" | "TAKEAWAY" | "DELIVERY">("DINE_IN")
+  const [deliveryAddress, setDeliveryAddress] = React.useState("")
 
   // Item detail page (fully covered screen)
   const [selectedItem, setSelectedItem] = React.useState<MenuItem | null>(null)
@@ -145,6 +147,12 @@ export default function CustomerMenuPage() {
     }
     init()
   }, [restaurantId, tableId])
+
+  React.useEffect(() => {
+    if (tableId) {
+      setOrderType("DINE_IN")
+    }
+  }, [tableId])
 
   // Background polling for changes (reflect modifications quickly)
   React.useEffect(() => {
@@ -387,11 +395,14 @@ export default function CustomerMenuPage() {
           tableId={tableId}
           cartPayload={cartPayload}
           orderNotes={orderNotes}
+          orderType={orderType}
+          deliveryAddress={deliveryAddress}
           onBack={() => setShowPayment(false)}
           onSuccess={() => {
             setShowPayment(false)
             setCart([])
             setOrderNotes("")
+            setDeliveryAddress("")
             setActiveTab("history")
             loadOrderHistory()
           }}
@@ -690,6 +701,46 @@ export default function CustomerMenuPage() {
               </div>
 
               <div className={`border-t ${themeBorder} pt-4 mt-4 space-y-4`}>
+                {!tableId && (
+                  <div className="space-y-2">
+                    <label className={`block text-xs font-black uppercase tracking-wider ${themeTextMuted}`}>Order Option</label>
+                    <div className={`grid grid-cols-3 gap-2 p-1 rounded-xl ${theme === "dark" ? "bg-white/5 border border-white/10" : "bg-gray-100 border border-gray-200"}`}>
+                      {(["DINE_IN", "TAKEAWAY", "DELIVERY"] as const).map(type => {
+                        const isActive = orderType === type;
+                        const label = type === "DINE_IN" ? "Pre-order Dine-In" : type === "TAKEAWAY" ? "Takeaway" : "Delivery";
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setOrderType(type)}
+                            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                              isActive
+                                ? "bg-amber-500 text-black shadow-md"
+                                : `${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-black"}`
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {orderType === "DELIVERY" && (
+                  <div className="space-y-1.5 animate-fadeIn">
+                    <label className={`block text-xs font-black uppercase tracking-wider ${themeTextMuted}`}>Delivery Address</label>
+                    <input
+                      type="text"
+                      placeholder="Enter your complete delivery address..."
+                      value={deliveryAddress}
+                      onChange={e => setDeliveryAddress(e.target.value)}
+                      className={`w-full ${theme === "dark" ? "bg-[#0b0f19]" : "bg-white"} border ${themeBorder} rounded-xl px-3.5 py-2.5 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
+                      required
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className={`block text-xs font-semibold ${themeTextMuted} mb-1.5`}>Add Chef Instruction Notes</label>
                   <textarea
@@ -714,7 +765,8 @@ export default function CustomerMenuPage() {
 
                 <button
                   onClick={() => setShowPayment(true)}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
+                  disabled={orderType === "DELIVERY" && !deliveryAddress.trim()}
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                 >
                   Pay & Place Order · ${cartTotal.toFixed(2)}
                 </button>

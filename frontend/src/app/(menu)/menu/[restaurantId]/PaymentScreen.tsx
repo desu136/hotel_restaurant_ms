@@ -10,6 +10,8 @@ interface PaymentScreenProps {
   tableId: string
   cartPayload: { menu_item_id: string; quantity: number; customizations: any }[]
   orderNotes: string
+  orderType: "DINE_IN" | "TAKEAWAY" | "DELIVERY"
+  deliveryAddress: string
 }
 
 const PAYMENT_METHODS = [
@@ -19,7 +21,7 @@ const PAYMENT_METHODS = [
   { id: "amole", name: "Amole", logo: "💰", color: "#8B2FC9", description: "Dashen Bank digital wallet" },
 ]
 
-export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, tableId, cartPayload, orderNotes }: PaymentScreenProps) {
+export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, tableId, cartPayload, orderNotes, orderType, deliveryAddress }: PaymentScreenProps) {
   const [selectedMethod, setSelectedMethod] = React.useState<string | null>(null)
   const [phone, setPhone] = React.useState("")
   const [paying, setPaying] = React.useState(false)
@@ -40,6 +42,8 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
           table_id: tableId || null,
           items: cartPayload,
           notes: orderNotes,
+          order_type: orderType,
+          delivery_address: deliveryAddress,
         }),
       })
       if (res.ok) {

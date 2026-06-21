@@ -16,6 +16,7 @@ interface ReadyOrder {
   table_id: string | null
   waiter_id: string | null
   status: string
+  order_type: string
   total_amount: number
   created_at: string
   items: OrderItem[]
@@ -167,7 +168,7 @@ export default function WaiterScreenPage() {
                   <div>
                     <span className="text-[10px] font-mono text-[var(--muted)]">ORDER #{order.id.slice(-6).toUpperCase()}</span>
                     <h2 className="text-lg font-black text-white mt-0.5">
-                      {order.table ? `Table ${order.table.table_number}` : "Takeaway"}
+                      {order.table ? `Table ${order.table.table_number}` : order.order_type === "DINE_IN" ? "Pre-order Dine-In" : order.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
                     </h2>
                   </div>
                   <div className="flex flex-col items-end">

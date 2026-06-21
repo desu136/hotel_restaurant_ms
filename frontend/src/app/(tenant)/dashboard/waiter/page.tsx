@@ -371,6 +371,23 @@ export default function WaiterDashboard() {
     }
   }
 
+  const handleAssignTable = async (orderId: string, tableId: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/table`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table_id: tableId })
+      })
+      if (res.ok) {
+        await fetchActiveOrders()
+      } else {
+        alert("Failed to assign table. Please try again.")
+      }
+    } catch (err) {
+      console.error("Failed to assign table to order", err)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "PENDING":
@@ -404,6 +421,10 @@ export default function WaiterDashboard() {
   // Group tables into My Tables and Other Tables
   const myTables = tables.filter(t => t.waiter_id === me?.id)
   const otherTables = tables.filter(t => t.waiter_id !== me?.id)
+
+  const filterMyOrUnassigned = (o: Order) => {
+    return o.waiter_id === me?.id || (o.table_id ? myTables.some(t => t.id === o.table_id) : true);
+  }
 
   if (loading && restaurants.length === 0) {
     return (
@@ -468,7 +489,7 @@ export default function WaiterDashboard() {
             <div>
               <p className="text-xs text-[var(--muted)] font-bold uppercase tracking-wider">My Active Orders</p>
               <p className="text-3xl font-black mt-1">
-                {orders.filter(o => o.waiter_id === me?.id || (o.table_id && myTables.some(t => t.id === o.table_id))).length}
+                {orders.filter(filterMyOrUnassigned).length}
               </p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
@@ -482,7 +503,7 @@ export default function WaiterDashboard() {
             <div>
               <p className="text-xs text-[var(--muted)] font-bold uppercase tracking-wider">Ready to Serve</p>
               <p className="text-3xl font-black mt-1 text-emerald-400 animate-pulse">
-                {orders.filter(o => (o.waiter_id === me?.id || (o.table_id && myTables.some(t => t.id === o.table_id))) && o.status === "READY").length}
+                {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length}
               </p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
@@ -516,7 +537,7 @@ export default function WaiterDashboard() {
                   : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
               }`}
             >
-              Active Orders ({orders.filter(o => o.waiter_id === me?.id || (o.table_id && myTables.some(t => t.id === o.table_id))).length})
+              Active Orders ({orders.filter(filterMyOrUnassigned).length})
             </button>
           </div>
 
@@ -649,7 +670,7 @@ export default function WaiterDashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              {orders.filter(o => o.waiter_id === me?.id || (o.table_id && myTables.some(t => t.id === o.table_id))).map(order => (
+              {orders.filter(filterMyOrUnassigned).map(order => (
                 <Card key={order.id} className="glass overflow-hidden hover:border-blue-500/20 transition-all">
                   <div className="p-5 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                     <div className="space-y-1.5">
@@ -660,8 +681,37 @@ export default function WaiterDashboard() {
                         </span>
                       </div>
                       <p className="text-xs text-[var(--muted)]">
-                        {order.table ? `Table ${order.table.table_number}` : "Takeaway"} • Placed {new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        {order.table ? (
+                          `Table ${order.table.table_number}`
+                        ) : (
+                          <span className="font-semibold text-amber-505 capitalize">
+                            {order.order_type === "DINE_IN" ? "Pre-order Dine-In" : order.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
+                            {order.order_type === "DELIVERY" && (order as any).deliveries?.[0] && ` (${(order as any).deliveries[0].delivery_address})`}
+                          </span>
+                        )} • Placed {new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
+                      {order.order_type === "DINE_IN" && !order.table_id && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-[var(--muted)] font-semibold">Assign Table:</span>
+                          <select
+                            onChange={(e) => {
+                              const tId = e.target.value;
+                              if (tId) {
+                                handleAssignTable(order.id, tId);
+                              }
+                            }}
+                            className="bg-zinc-800 border border-zinc-700 text-xs text-white rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            defaultValue=""
+                          >
+                            <option value="" disabled>Select Table...</option>
+                            {tables.map(t => (
+                              <option key={t.id} value={t.id}>
+                                Table {t.table_number} (Cap: {t.capacity})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       {order.notes && (
                         <p className="text-xs text-amber-500/90 font-medium flex items-center gap-1.5 bg-amber-500/5 px-2.5 py-1 rounded border border-amber-500/15 w-fit">
                           <MessageSquare className="w-3.5 h-3.5" /> Note: {order.notes}
@@ -699,7 +749,7 @@ export default function WaiterDashboard() {
                 </Card>
               ))}
 
-              {orders.filter(o => o.waiter_id === me?.id || (o.table_id && myTables.some(t => t.id === o.table_id))).length === 0 && (
+              {orders.filter(filterMyOrUnassigned).length === 0 && (
                 <div className="py-12 text-center text-[var(--muted)]">No active orders found.</div>
               )}
             </div>
@@ -714,12 +764,12 @@ export default function WaiterDashboard() {
                 <CardTitle className="text-lg font-bold">Ready to Serve Alerts</CardTitle>
                 <CardDescription>Real-time notifications for your tables.</CardDescription>
               </div>
-              {orders.filter(o => (o.waiter_id === me?.id || (o.table_id && myTables.some(t => t.id === o.table_id))) && o.status === "READY").length > 0 && (
+              {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length > 0 && (
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
               )}
             </CardHeader>
             <CardContent className="space-y-4">
-              {orders.filter(o => (o.waiter_id === me?.id || (o.table_id && myTables.some(t => t.id === o.table_id))) && o.status === "READY").map(o => (
+              {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").map(o => (
                 <div 
                   key={o.id} 
                   className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-between animate-fade-in"
@@ -727,7 +777,7 @@ export default function WaiterDashboard() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full">
-                        Table {o.table?.table_number || "Takeaway"}
+                        {o.table ? `Table ${o.table.table_number}` : o.order_type === "DINE_IN" ? "Pre-order Dine-In" : o.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
                       </span>
                       <p className="text-sm font-semibold text-white">Items Ready!</p>
                     </div>

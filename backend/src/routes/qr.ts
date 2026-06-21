@@ -54,7 +54,13 @@ router.post(
       }
 
       const token = crypto.randomUUID();
-      const baseUrl = process.env.FRONTEND_URL || `http://${getLocalIp()}:3000`;
+      let baseUrl = process.env.FRONTEND_URL || `http://${getLocalIp()}:3000`;
+      if (baseUrl.includes('0.0.0.0') || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+        baseUrl = baseUrl
+          .replace('0.0.0.0', getLocalIp())
+          .replace('localhost', getLocalIp())
+          .replace('127.0.0.1', getLocalIp());
+      }
       const qrString = `${baseUrl}/menu/${table.restaurant_id}?tableId=${table_id}&qrToken=${token}`;
 
       // Generate Data URL for QR Code
@@ -113,7 +119,13 @@ router.get(
 
       const qrCodesWithUrls = await Promise.all(
         qrCodes.map(async (qr) => {
-          const baseUrl = process.env.FRONTEND_URL || `http://${getLocalIp()}:3000`;
+          let baseUrl = process.env.FRONTEND_URL || `http://${getLocalIp()}:3000`;
+          if (baseUrl.includes('0.0.0.0') || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+            baseUrl = baseUrl
+              .replace('0.0.0.0', getLocalIp())
+              .replace('localhost', getLocalIp())
+              .replace('127.0.0.1', getLocalIp());
+          }
           const qrString = `${baseUrl}/menu/${restaurantId}?tableId=${qr.table_id}&qrToken=${qr.token}`;
           const qrCodeUrl = await QRCode.toDataURL(qrString, {
             width: 300,

@@ -73,6 +73,26 @@ router.get('/public/table/:id', async (req: Request, res: Response): Promise<voi
   }
 });
 
+// GET /api/restaurant/public/list
+router.get('/public/list', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const restaurants = await prisma.restaurant.findMany({
+      where: { deleted_at: null },
+      select: {
+        id: true,
+        name: true,
+        logo_url: true,
+        banner_url: true,
+        branch: { select: { name: true } },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+    res.json(restaurants);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch public restaurant list' });
+  }
+});
+
 router.use(authenticate);
 
 const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];

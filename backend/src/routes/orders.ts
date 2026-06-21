@@ -7,10 +7,16 @@ const router = Router();
 // POST /api/orders/public - Customer self-ordering from a table QR code
 router.post('/public', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { restaurant_id, table_id, items, notes } = req.body;
+    const { restaurant_id, table_id, items, notes, order_type = 'DINE_IN', delivery_address } = req.body;
 
     if (!restaurant_id) {
       res.status(400).json({ error: 'restaurant_id is required' });
+      return;
+    }
+
+    const validOrderTypes = ['DINE_IN', 'ROOM_SERVICE', 'TAKEAWAY', 'DELIVERY'];
+    if (!validOrderTypes.includes(order_type)) {
+      res.status(400).json({ error: `Invalid order_type. Must be one of: ${validOrderTypes.join(', ')}` });
       return;
     }
 
@@ -104,7 +110,7 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
         branch_id: branchId,
         customer_id: walkInCustomer.id,
         table_id: table_id || null,
-        order_type: 'DINE_IN',
+        order_type: order_type as any,
         status: 'PENDING',
         total_amount: totalAmount,
         items: {
@@ -113,6 +119,14 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
         kitchen_tickets: {
           create: { status: 'PENDING' },
         },
+        ...(order_type === 'DELIVERY' ? {
+          deliveries: {
+            create: {
+              delivery_address: delivery_address || 'No address provided',
+              status: 'PENDING',
+            }
+          }
+        } : {}),
       },
       include: {
         items: { include: { menu_item: true } },
@@ -216,9 +230,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     };
 
     if (isWaiter) {
+      whereClause.branch_id = req.user!.branchId;
       whereClause.OR = [
         { waiter_id: req.user!.userId },
-        { table: { waiter_id: req.user!.userId } }
+        { table: { waiter_id: req.user!.userId } },
+        { table_id: null }
       ];
     }
 
@@ -228,6 +244,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         items: { include: { menu_item: true } },
         table: true,
         bills: true,
+        deliveries: true,
       },
       orderBy: { created_at: 'desc' },
       take: parseInt(limit as string),
@@ -388,17 +405,31 @@ router.patch('/:id/status', async (req: Request, res: Response): Promise<void> =
       !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
 
     if (isWaiter) {
+      // Waiter can only modify orders within their own branch
+      if (existingOrder.branch_id !== req.user!.branchId) {
+        res.status(403).json({ error: 'Forbidden: You cannot modify orders from another branch' });
+        return;
+      }
+
       const isAssigned = existingOrder.waiter_id === req.user!.userId || 
         (existingOrder.table && existingOrder.table.waiter_id === req.user!.userId);
-      if (!isAssigned) {
+      
+      const isTakeawayOrDelivery = existingOrder.order_type === 'TAKEAWAY' || existingOrder.order_type === 'DELIVERY';
+      const isUnassignedPreorder = existingOrder.table_id === null && existingOrder.waiter_id === null;
+
+      if (!isAssigned && !isTakeawayOrDelivery && !isUnassignedPreorder) {
         res.status(403).json({ error: 'Forbidden: You cannot modify this order' });
         return;
       }
     }
 
     let waiterIdToSet = existingOrder?.waiter_id || null;
-    if (!waiterIdToSet && existingOrder?.table?.waiter_id) {
-      waiterIdToSet = existingOrder.table.waiter_id;
+    if (!waiterIdToSet) {
+      if (existingOrder?.table?.waiter_id) {
+        waiterIdToSet = existingOrder.table.waiter_id;
+      } else if (req.user!.roles.includes('WAITER')) {
+        waiterIdToSet = req.user!.userId;
+      }
     }
 
     const order = await prisma.order.update({
@@ -422,6 +453,57 @@ router.patch('/:id/status', async (req: Request, res: Response): Promise<void> =
     res.json(order);
   } catch (e) {
     res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+// PATCH /api/orders/:id/table - Assign a table to a pre-ordered dine-in record
+router.patch('/:id/table', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { table_id } = req.body;
+
+    if (!table_id) {
+      res.status(400).json({ error: 'table_id is required' });
+      return;
+    }
+
+    const table = await prisma.restaurantTable.findUnique({
+      where: { id: table_id },
+      include: { restaurant: true },
+    });
+
+    if (!table) {
+      res.status(404).json({ error: 'Table not found' });
+      return;
+    }
+
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: id as string },
+    });
+
+    if (!existingOrder) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+
+    const order = await prisma.order.update({
+      where: { id: id as string },
+      data: {
+        table_id,
+        waiter_id: table.waiter_id || req.user!.userId,
+      },
+      include: {
+        items: { include: { menu_item: true } },
+        table: true,
+        bills: true,
+        deliveries: true,
+      },
+    });
+
+    res.json(order);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to assign table to order' });
   }
 });
 
