@@ -8,8 +8,9 @@ const nextConfig: NextConfig = {
   },
   // Allow LAN devices (phones, tablets, other PCs) to access the dev server
   allowedDevOrigins: [
-    '192.168.1.76',
-    '192.168.1.*',
+    '192.168.1.3',
+    'http://192.168.1.104:3000',
+    'http://192.168.1.104',
   ],
 };
 

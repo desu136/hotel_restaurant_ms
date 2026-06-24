@@ -1,12 +1,15 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
+import jsQR from "jsqr"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
   Plus, Bell, ClipboardList, Users, MessageSquare,
-  RefreshCw, ArrowLeft, ShoppingBag, Search, Minus
+  RefreshCw, ArrowLeft, ShoppingBag, Search, Minus, LayoutGrid,
+  Home, QrCode, Camera
 } from "lucide-react"
 
 interface Table {
@@ -70,6 +73,123 @@ interface Order {
   waiter_id?: string | null
 }
 
+interface QRScannerProps {
+  onScan: (data: string) => void;
+  onError: (error: string) => void;
+}
+
+function QRScanner({ onScan, onError }: QRScannerProps) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const animRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    async function initCamera() {
+      if (typeof window === "undefined" || !navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        onError("Camera access requires a secure connection (HTTPS) on mobile. Accessing via HTTP blocks camera APIs. Please use HTTPS (e.g. ngrok) or continue testing with the simulated actions below.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+        
+        if (!isMounted) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.setAttribute("playsinline", "true");
+          videoRef.current.play().catch(e => {
+            console.error("Video play failed:", e);
+          });
+        }
+        
+        animRef.current = requestAnimationFrame(scan);
+      } catch (err: any) {
+        console.error("Camera capture error:", err);
+        onError(err.message || "Failed to access camera. Please verify camera permissions are granted.");
+      }
+    }
+
+    function scan() {
+      if (!isMounted) return;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (ctx) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          
+          try {
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert"
+            });
+            if (code && code.data) {
+              onScan(code.data);
+              return; // Stop scan loop
+            }
+          } catch (e) {
+            console.error("jsQR scan error:", e);
+          }
+        }
+      }
+      animRef.current = requestAnimationFrame(scan);
+    }
+
+    initCamera();
+
+    return () => {
+      isMounted = false;
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [onScan, onError]);
+
+  return (
+    <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-cover"
+        muted
+        playsInline
+      />
+      <canvas ref={canvasRef} className="hidden" />
+      
+      {/* Viewfinder Grid Overlay */}
+      <div className="absolute inset-0 border-[30px] border-black/80 pointer-events-none z-10" />
+      <div className="w-64 h-64 border-2 border-white/20 rounded-3xl relative flex items-center justify-center overflow-hidden z-20 pointer-events-none">
+        {/* Corners */}
+        <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-amber-500 rounded-tl-lg" />
+        <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-amber-500 rounded-tr-lg" />
+        <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-amber-500 rounded-bl-lg" />
+        <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-amber-500 rounded-br-lg" />
+        
+        {/* Laser Animation */}
+        <div className="absolute left-0 right-0 h-1 bg-amber-500 opacity-80 shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-pulse" 
+             style={{
+               animation: "scanner-laser 2s ease-in-out infinite",
+               top: "0%"
+             }} 
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function WaiterDashboard() {
   const [me, setMe] = React.useState<{ id: string; name: string; email: string } | null>(null)
   const [restaurants, setRestaurants] = React.useState<{ id: string; name: string }[]>([])
@@ -79,7 +199,64 @@ export default function WaiterDashboard() {
   const [categories, setCategories] = React.useState<Category[]>([])
   const [orders, setOrders] = React.useState<Order[]>([])
   const [prevReadyIds, setPrevReadyIds] = React.useState<string[]>([])
-  const [activeTab, setActiveTab] = React.useState<"tables" | "orders">("tables")
+  const [activeTab, setActiveTab] = React.useState<"home" | "tables" | "orders" | "alerts">("home")
+  const [showScannerModal, setShowScannerModal] = React.useState(false)
+  const [scannerError, setScannerError] = React.useState<string | null>(null)
+
+  const handleQRScan = React.useCallback((codeString: string) => {
+    let tableId: string | null = null;
+    try {
+      const url = new URL(codeString);
+      tableId = url.searchParams.get("tableId");
+    } catch (e) {
+      const match = codeString.match(/[?&]tableId=([^&]+)/);
+      tableId = match ? match[1] : null;
+    }
+
+    if (!tableId) {
+      const foundTable = tables.find(t => t.id === codeString || t.table_number === codeString);
+      if (foundTable) {
+        tableId = foundTable.id;
+      }
+    }
+
+    if (tableId) {
+      const matchedTable = tables.find(t => t.id === tableId);
+      if (matchedTable) {
+        setSelectedTable(matchedTable.id);
+        setOrderModalView("catalog");
+        setCart([]);
+        setShowOrderModal(true);
+        setShowScannerModal(false);
+        setScannerError(null);
+        
+        // Add activity log
+        setActivityLogs(prev => [
+          {
+            id: Math.random().toString(),
+            type: "create_order",
+            message: `Scanned Table T${matchedTable.table_number} QR Code`,
+            timestamp: "Just now"
+          },
+          ...prev
+        ]);
+        return;
+      }
+    }
+    
+    alert(`Invalid QR code scanned: ${codeString}. No matching table found.`);
+  }, [tables]);
+  const [activityLogs, setActivityLogs] = React.useState<Array<{
+    id: string;
+    type: "create_order" | "clear_table" | "serve_order";
+    message: string;
+    timestamp: string;
+  }>>([
+    { id: "1", type: "serve_order", message: "Served Order to Table T1", timestamp: "12m ago" },
+    { id: "2", type: "create_order", message: "Created Order for Table T2", timestamp: "25m ago" },
+    { id: "3", type: "clear_table", message: "Cleared Table T4 (Available)", timestamp: "1h ago" }
+  ])
+  const [orderModalView, setOrderModalView] = React.useState<"catalog" | "ticket">("catalog")
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState("")
 
@@ -327,6 +504,13 @@ export default function WaiterDashboard() {
         })
       )
     )
+    const tbl = tables.find(t => t.id === tableId)
+    if (tbl) {
+      setActivityLogs(prev => [
+        { id: Math.random().toString(), type: "clear_table", message: `Cleared Table T${tbl.table_number} (Available)`, timestamp: "Just now" },
+        ...prev
+      ])
+    }
     await fetchActiveOrders()
   }
 
@@ -351,6 +535,15 @@ export default function WaiterDashboard() {
         })
       })
       if (!res.ok) { const d = await res.json(); setError(d.error ?? "Failed to place order"); return }
+      
+      const tbl = tables.find(t => t.id === selectedTable)
+      if (tbl) {
+        setActivityLogs(prev => [
+          { id: Math.random().toString(), type: "create_order", message: `Placed Order for Table T${tbl.table_number} ($${cartTotal.toFixed(2)})`, timestamp: "Just now" },
+          ...prev
+        ])
+      }
+
       await fetchActiveOrders()
       setCart([]); setOrderNotes(""); setSelectedTable(""); setShowOrderModal(false); setActiveTab("orders")
     } catch { setError("Network error. Please try again.") }
@@ -364,6 +557,13 @@ export default function WaiterDashboard() {
         body: JSON.stringify({ status: "COMPLETED" })
       })
       if (res.ok) {
+        const order = orders.find(o => o.id === orderId)
+        const tbl = order?.table_id ? tables.find(t => t.id === order.table_id) : null
+        const tblLabel = tbl ? `Table T${tbl.table_number}` : "Customer"
+        setActivityLogs(prev => [
+          { id: Math.random().toString(), type: "serve_order", message: `Served Order to ${tblLabel}`, timestamp: "Just now" },
+          ...prev
+        ])
         setOrders(prev => prev.filter(o => o.id !== orderId))
       }
     } catch (err) {
@@ -426,6 +626,56 @@ export default function WaiterDashboard() {
     return o.waiter_id === me?.id || (o.table_id ? myTables.some(t => t.id === o.table_id) : true);
   }
 
+  const renderAlerts = () => {
+    const readyOrders = orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY")
+    return (
+      <Card className="glass h-full">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-lg font-bold">Ready to Serve Alerts</CardTitle>
+            <CardDescription>Real-time notifications for your tables.</CardDescription>
+          </div>
+          {readyOrders.length > 0 && (
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+          )}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {readyOrders.map(o => (
+            <div 
+              key={o.id} 
+              className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-between"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                    {o.table ? `Table ${o.table.table_number}` : o.order_type === "DINE_IN" ? "Pre-order Dine-In" : o.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
+                  </span>
+                  <p className="text-sm font-semibold text-white font-bold">Items Ready!</p>
+                </div>
+                <p className="text-[10px] text-[var(--muted)]">
+                  {o.items.length} items • click Serve to deliver.
+                </p>
+              </div>
+              <Button 
+                onClick={() => handleMarkDelivered(o.id)} 
+                size="sm" 
+                className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 font-semibold"
+              >
+                Serve
+              </Button>
+            </div>
+          ))}
+
+          {readyOrders.length === 0 && (
+            <div className="py-12 text-center text-[var(--muted)] text-sm">
+              ✨ No active serve alerts. Nice job!
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (loading && restaurants.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -436,92 +686,94 @@ export default function WaiterDashboard() {
   }
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-24 md:pb-12">
       {/* Header and Stats */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1">Waiter Station 🤵</h1>
-          <p className="text-[var(--muted)]">
-            Active User: <strong className="text-white">{me?.name || "Loading..."}</strong> • Manage your assigned tables and ready orders.
-          </p>
+      {activeTab === "home" && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight mb-1">Waiter Station 🤵</h1>
+            <p className="text-[var(--muted)]">
+              Active User: <strong className="text-white">{me?.name || "Loading..."}</strong> • Manage your assigned tables and ready orders.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {restaurants.length > 0 && (
+              <select
+                value={selectedRestId}
+                onChange={e => handleRestaurantChange(e.target.value)}
+                className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                {restaurants.map(r => (
+                  <option key={r.id} value={r.id} className="text-black dark:text-white bg-[var(--surface)]">{r.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-3">
-          {restaurants.length > 0 && (
-            <select
-              value={selectedRestId}
-              onChange={e => handleRestaurantChange(e.target.value)}
-              className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              {restaurants.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-          )}
-
-          <Button 
-            onClick={() => setShowOrderModal(true)} 
-            className="bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white shadow-lg font-bold"
-          >
-            <Plus className="w-4 h-4 mr-2" /> New Order
-          </Button>
-        </div>
-      </div>
-
-      {/* Grid Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="glass">
-          <CardContent className="p-6 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-[var(--muted)] font-bold uppercase tracking-wider">My Tables</p>
-              <p className="text-3xl font-black mt-1">
-                {myTables.filter(t => getTableStatus(t.id) === "OCCUPIED").length} / {myTables.length}
-              </p>
+      {/* Compact Status Bar */}
+      {activeTab === "home" && (
+        <div className="bg-[var(--surface-hover)]/60 border border-[var(--surface-border)] backdrop-blur-md rounded-2xl p-4 flex items-center justify-between gap-4 text-xs font-semibold shadow-sm">
+          <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
+            {/* Tables Status */}
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <span className="text-[var(--muted)]">Tables:</span>
+              <span className="text-[var(--foreground)] font-bold">
+                {myTables.filter(t => getTableStatus(t.id) === "OCCUPIED").length}/{myTables.length}
+              </span>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-              <Users className="w-6 h-6 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="glass">
-          <CardContent className="p-6 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-[var(--muted)] font-bold uppercase tracking-wider">My Active Orders</p>
-              <p className="text-3xl font-black mt-1">
+            <span className="text-[var(--surface-border)] hidden sm:inline">|</span>
+
+            {/* Orders Status */}
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              <span className="text-[var(--muted)]">Orders:</span>
+              <span className="text-[var(--foreground)] font-bold">
                 {orders.filter(filterMyOrUnassigned).length}
-              </p>
+              </span>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
-              <ClipboardList className="w-6 h-6 text-purple-500" />
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="glass">
-          <CardContent className="p-6 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-[var(--muted)] font-bold uppercase tracking-wider">Ready to Serve</p>
-              <p className="text-3xl font-black mt-1 text-emerald-400 animate-pulse">
+            <span className="text-[var(--surface-border)] hidden sm:inline">|</span>
+
+            {/* Ready to Serve Status */}
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[var(--muted)]">Ready:</span>
+              <span className="text-emerald-500 dark:text-emerald-400 font-bold">
                 {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length}
-              </p>
+              </span>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <Bell className="w-6 h-6 text-emerald-400" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+
+          <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold bg-[var(--surface-hover)] border border-[var(--surface-border)] px-2.5 py-1 rounded-full">
+            Live Station
+          </div>
+        </div>
+      )}
 
       {/* Main Layout Area */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left/Middle Column: Tabs & Layouts */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Tab buttons */}
-          <div className="flex border-b border-[var(--surface-border)]">
+          {/* Desktop/Tablet Tab buttons */}
+          <div className="hidden md:flex border-b border-[var(--surface-border)] overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => setActiveTab("home")}
+              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
+                activeTab === "home" 
+                  ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]" 
+                  : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              Home
+            </button>
             <button
               onClick={() => setActiveTab("tables")}
-              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
+              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
                 activeTab === "tables" 
                   ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]" 
                   : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -531,7 +783,7 @@ export default function WaiterDashboard() {
             </button>
             <button
               onClick={() => setActiveTab("orders")}
-              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
+              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
                 activeTab === "orders" 
                   ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]" 
                   : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -539,13 +791,105 @@ export default function WaiterDashboard() {
             >
               Active Orders ({orders.filter(filterMyOrUnassigned).length})
             </button>
+            <button
+              onClick={() => setActiveTab("alerts")}
+              className={`lg:hidden px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 flex items-center gap-2 ${
+                activeTab === "alerts" 
+                  ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]" 
+                  : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              <span>Alerts</span>
+              {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length > 0 && (
+                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                  {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length}
+                </span>
+              )}
+            </button>
           </div>
 
-          {activeTab === "tables" ? (
+          {activeTab === "home" && (
+            <div className="space-y-6">
+
+
+              {/* Quick Actions Grid */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">Quick Actions</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* SCAN QR CODE BUTTON - EXTREMELY PROMINENT */}
+                  <button
+                    onClick={() => setShowScannerModal(true)}
+                    className="flex items-center gap-4 bg-amber-500 hover:bg-amber-400 text-black p-5 rounded-2xl shadow-lg transition-all duration-200 active:scale-[0.98] group font-black text-left cursor-pointer"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-black/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <QrCode className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black">Scan Table QR</h4>
+                      <p className="text-[10px] text-black/75 font-normal mt-0.5">Scan a table QR to order immediately.</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("tables")}
+                    className="flex items-center gap-4 bg-[var(--surface-hover)] border border-[var(--surface-border)] hover:bg-[var(--surface-hover)]/80 text-[var(--foreground)] p-5 rounded-2xl transition-all duration-200 active:scale-[0.98] group text-left cursor-pointer shadow-sm"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-[var(--surface)] border border-[var(--surface-border)] flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Plus className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-[var(--foreground)]">New Order</h4>
+                      <p className="text-[10px] text-[var(--muted)] mt-0.5">Select an assigned table to start order.</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Shift Activity Log */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black text-[var(--foreground)] uppercase tracking-wider">Shift Activity Log</h3>
+                <Card className="bg-[var(--surface)] border-[var(--surface-border)] p-4 shadow-sm">
+                  {activityLogs.length === 0 ? (
+                    <p className="text-xs text-[var(--muted)] text-center py-6">No shift activities recorded yet.</p>
+                  ) : (
+                    <div className="flow-root">
+                      <ul className="space-y-4">
+                        {activityLogs.map((log) => (
+                          <li key={log.id} className="flex items-center justify-between py-1 border-b border-[var(--surface-border)] last:border-0">
+                            <div className="flex items-center gap-3">
+                              <span className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                                log.type === "serve_order" 
+                                  ? "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400" 
+                                  : log.type === "create_order" 
+                                  ? "bg-purple-500/10 text-purple-500 dark:text-purple-400" 
+                                  : "bg-blue-500/10 text-blue-500 dark:text-blue-400"
+                              }`}>
+                                {log.type === "serve_order" ? (
+                                  <Bell className="w-4 h-4" />
+                                ) : log.type === "create_order" ? (
+                                  <Plus className="w-4 h-4" />
+                                ) : (
+                                  <LayoutGrid className="w-4 h-4" />
+                                )}
+                              </span>
+                              <span className="text-xs font-semibold text-[var(--foreground)]">{log.message}</span>
+                            </div>
+                            <span className="text-[10px] text-[var(--muted)]">{log.timestamp}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "tables" && (
             <div className="space-y-6">
               {/* My Tables section */}
               <div className="space-y-3">
-                <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <h3 className="text-sm font-black text-[var(--foreground)] uppercase tracking-wider flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-500" /> My Assigned Tables ({myTables.length})
                 </h3>
                 {myTables.length === 0 ? (
@@ -553,14 +897,20 @@ export default function WaiterDashboard() {
                     No tables assigned to you by manager.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                     {myTables.map(table => {
                       const tableStatus = getTableStatus(table.id)
                       const tableReadyOrder = orders.find(o => o.table_id === table.id && o.status === "READY")
                       return (
                         <Card 
                           key={table.id} 
-                          className={`group relative overflow-hidden transition-all duration-300 border-[var(--surface-border)] hover:border-blue-500/40 ${
+                          onClick={() => {
+                            setSelectedTable(table.id)
+                            setOrderModalView("catalog")
+                            setCart([])
+                            setShowOrderModal(true)
+                          }}
+                          className={`group relative overflow-hidden transition-all duration-300 border-[var(--surface-border)] hover:border-blue-500/40 cursor-pointer active:scale-[0.98] ${
                             tableReadyOrder
                               ? "bg-emerald-500/5 ring-1 ring-emerald-500/25 border-emerald-500/40"
                               : tableStatus === "OCCUPIED" 
@@ -568,21 +918,21 @@ export default function WaiterDashboard() {
                               : "bg-emerald-500/5"
                           }`}
                         >
-                          <CardContent className="p-5 flex flex-col items-center justify-center text-center space-y-3">
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-[var(--surface-hover)]">
+                          <CardContent className="p-3 sm:p-5 flex flex-col items-center justify-center text-center space-y-2 sm:space-y-3">
+                            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-[var(--surface-hover)]">
                               Table {table.table_number}
                             </span>
                             
-                            <div className="w-12 h-12 rounded-full bg-[var(--surface)] flex items-center justify-center border shadow-inner">
-                              <Users className="w-5 h-5 text-[var(--muted)]" />
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[var(--surface)] flex items-center justify-center border shadow-inner">
+                              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--muted)]" />
                             </div>
                             
-                            <div className="space-y-1">
-                              <p className="text-xs text-[var(--muted)]">{table.capacity} seats</p>
+                            <div className="space-y-0.5 sm:space-y-1">
+                              <p className="text-[10px] sm:text-xs text-[var(--muted)]">{table.capacity} seats</p>
                               {tableReadyOrder ? (
-                                <p className="text-xs font-black text-emerald-400 animate-pulse uppercase">READY TO SERVE</p>
+                                <p className="text-[10px] sm:text-xs font-black text-emerald-400 animate-pulse uppercase">READY TO SERVE</p>
                               ) : (
-                                <p className={`text-xs font-bold ${
+                                <p className={`text-[10px] sm:text-xs font-bold ${
                                   tableStatus === "AVAILABLE" ? "text-emerald-500" : "text-blue-500"
                                 }`}>
                                   {tableStatus}
@@ -590,34 +940,28 @@ export default function WaiterDashboard() {
                               )}
                             </div>
 
-                            <div className="flex flex-col gap-1 w-full mt-2">
-                              {tableStatus === "AVAILABLE" && (
-                                <Button 
-                                  onClick={() => {
-                                    setSelectedTable(table.id)
-                                    setShowOrderModal(true)
-                                  }} 
-                                  size="sm" 
-                                  className="w-full text-[10px] h-7 bg-blue-600 hover:bg-blue-500 text-white font-bold"
-                                >
-                                  Take Order
-                                </Button>
-                              )}
+                            <div className="flex flex-col gap-1 w-full mt-1.5 sm:mt-2">
                               {tableStatus === "OCCUPIED" && (
                                 <>
                                   {tableReadyOrder && (
                                     <Button 
-                                      onClick={() => handleMarkDelivered(tableReadyOrder.id)} 
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleMarkDelivered(tableReadyOrder.id)
+                                      }} 
                                       size="sm" 
-                                      className="w-full text-[10px] h-7 bg-emerald-600 hover:bg-emerald-500 text-white font-bold animate-pulse"
+                                      className="w-full text-[9px] sm:text-[10px] h-6 sm:h-7 bg-emerald-600 hover:bg-emerald-500 text-white font-bold animate-pulse"
                                     >
                                       Serve Order
                                     </Button>
                                   )}
                                   <Button 
-                                    onClick={() => handleClearTable(table.id)} 
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleClearTable(table.id)
+                                    }} 
                                     size="sm" 
-                                    className="w-full text-[10px] h-7 bg-zinc-700 hover:bg-zinc-600 text-white font-bold"
+                                    className="w-full text-[9px] sm:text-[10px] h-6 sm:h-7 bg-zinc-700 hover:bg-zinc-600 text-white font-bold"
                                   >
                                     Clear Table
                                   </Button>
@@ -642,7 +986,7 @@ export default function WaiterDashboard() {
                     No other tables registered.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 opacity-75">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 opacity-75">
                     {otherTables.map(table => {
                       const tableStatus = getTableStatus(table.id)
                       return (
@@ -652,13 +996,13 @@ export default function WaiterDashboard() {
                             tableStatus === "OCCUPIED" ? "bg-blue-500/5" : "bg-zinc-800/10"
                           }`}
                         >
-                          <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-2.5">
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-[var(--surface-hover)]">
+                          <CardContent className="p-3 sm:p-4 flex flex-col items-center justify-center text-center space-y-1.5 sm:space-y-2.5">
+                            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-[var(--surface-hover)]">
                               Table {table.table_number}
                             </span>
-                            <p className="text-[10px] text-[var(--muted)]">{table.capacity} seats</p>
-                            <p className="text-[10px] text-zinc-500 font-semibold truncate max-w-full">
-                              Waiter: {table.waiter?.full_name || "None"}
+                            <p className="text-[9px] sm:text-[10px] text-[var(--muted)]">{table.capacity} seats</p>
+                            <p className="text-[9px] sm:text-[10px] text-[var(--muted)] font-semibold truncate max-w-full">
+                              {table.waiter?.full_name || "No waiter"}
                             </p>
                           </CardContent>
                         </Card>
@@ -668,31 +1012,47 @@ export default function WaiterDashboard() {
                 )}
               </div>
             </div>
-          ) : (
-            <div className="space-y-4">
+          )}
+
+          {activeTab === "orders" && (
+            <div className="space-y-3">
               {orders.filter(filterMyOrUnassigned).map(order => (
-                <Card key={order.id} className="glass overflow-hidden hover:border-blue-500/20 transition-all">
-                  <div className="p-5 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-3">
-                        <span className="font-black text-white text-md">ORDER #{order.id.slice(-6).toUpperCase()}</span>
-                        <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full uppercase ${getStatusBadge(order.status)}`}>
+                <Card key={order.id} className="bg-[var(--surface)] border-[var(--surface-border)] overflow-hidden hover:border-blue-500/20 transition-all p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      {/* Title row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-[var(--foreground)] text-xs uppercase tracking-wider">
+                          #{order.id.slice(-6).toUpperCase()}
+                        </span>
+                        
+                        {order.table ? (
+                          <span className="bg-blue-500/10 text-blue-500 dark:text-blue-400 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
+                            T{order.table.table_number}
+                          </span>
+                        ) : (
+                          <span className="bg-amber-500/10 text-amber-500 text-[10px] font-extrabold px-1.5 py-0.5 rounded capitalize">
+                            {order.order_type === "DINE_IN" ? "Pre-order" : order.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
+                          </span>
+                        )}
+                        
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase ${getStatusBadge(order.status)}`}>
                           {order.status}
                         </span>
+
+                        <span className="text-[10px] text-[var(--muted)]">
+                          {new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
                       </div>
-                      <p className="text-xs text-[var(--muted)]">
-                        {order.table ? (
-                          `Table ${order.table.table_number}`
-                        ) : (
-                          <span className="font-semibold text-amber-505 capitalize">
-                            {order.order_type === "DINE_IN" ? "Pre-order Dine-In" : order.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
-                            {order.order_type === "DELIVERY" && (order as any).deliveries?.[0] && ` (${(order as any).deliveries[0].delivery_address})`}
-                          </span>
-                        )} • Placed {new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+
+                      {/* Items Row: Inline Comma Separated */}
+                      <p className="text-[11px] text-[var(--muted)] leading-relaxed font-semibold max-w-full">
+                        {order.items.map(it => `${it.quantity}x ${it.menu_item.display_name}`).join(" • ")}
                       </p>
+
                       {order.order_type === "DINE_IN" && !order.table_id && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-xs text-[var(--muted)] font-semibold">Assign Table:</span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[10px] text-[var(--muted)] font-semibold">Assign:</span>
                           <select
                             onChange={(e) => {
                               const tId = e.target.value;
@@ -700,7 +1060,7 @@ export default function WaiterDashboard() {
                                 handleAssignTable(order.id, tId);
                               }
                             }}
-                            className="bg-zinc-800 border border-zinc-700 text-xs text-white rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            className="bg-[var(--surface-hover)] border border-[var(--surface-border)] text-[10px] text-[var(--foreground)] rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-amber-500"
                             defaultValue=""
                           >
                             <option value="" disabled>Select Table...</option>
@@ -712,108 +1072,112 @@ export default function WaiterDashboard() {
                           </select>
                         </div>
                       )}
+
                       {order.notes && (
-                        <p className="text-xs text-amber-500/90 font-medium flex items-center gap-1.5 bg-amber-500/5 px-2.5 py-1 rounded border border-amber-500/15 w-fit">
-                          <MessageSquare className="w-3.5 h-3.5" /> Note: {order.notes}
+                        <p className="text-[10px] text-amber-500/90 font-medium flex items-center gap-1 bg-amber-500/5 px-2 py-0.5 rounded border border-amber-500/10 w-fit mt-1">
+                          <MessageSquare className="w-3 h-3" /> {order.notes}
                         </p>
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-2 items-end shrink-0">
-                      <p className="font-black text-lg text-white">${parseFloat(order.total_amount.toString()).toFixed(2)}</p>
+                    {/* Price and Action Row */}
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <span className="font-extrabold text-xs text-[var(--foreground)]">
+                        ${parseFloat(order.total_amount.toString()).toFixed(2)}
+                      </span>
                       {order.status === "READY" && (
                         <Button 
                           onClick={() => handleMarkDelivered(order.id)} 
                           size="sm" 
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] px-2.5 py-1 h-7 rounded-lg"
                         >
-                          Mark Served & Complete
+                          Serve
                         </Button>
                       )}
-                    </div>
-                  </div>
-                  
-                  {/* Items list */}
-                  <div className="bg-[var(--surface-hover)]/30 border-t border-[var(--surface-border)] px-5 py-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      {order.items.map((it, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-[var(--muted)]">
-                          <span>
-                            <span className="text-[var(--foreground)] font-semibold">{it.quantity}x</span> {it.menu_item.display_name}
-                          </span>
-                          <span>${(parseFloat(it.unit_price.toString()) * it.quantity).toFixed(2)}</span>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 </Card>
               ))}
 
               {orders.filter(filterMyOrUnassigned).length === 0 && (
-                <div className="py-12 text-center text-[var(--muted)]">No active orders found.</div>
+                <div className="py-12 text-center text-[var(--muted)] text-xs">No active orders found.</div>
               )}
+            </div>
+          )}
+
+          {activeTab === "alerts" && (
+            <div className="lg:hidden">
+              {renderAlerts()}
             </div>
           )}
         </div>
 
-        {/* Right Column: Alerts and Notifications panel */}
-        <div className="space-y-6">
-          <Card className="glass h-full">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-bold">Ready to Serve Alerts</CardTitle>
-                <CardDescription>Real-time notifications for your tables.</CardDescription>
-              </div>
-              {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length > 0 && (
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").map(o => (
-                <div 
-                  key={o.id} 
-                  className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-between animate-fade-in"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full">
-                        {o.table ? `Table ${o.table.table_number}` : o.order_type === "DINE_IN" ? "Pre-order Dine-In" : o.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
-                      </span>
-                      <p className="text-sm font-semibold text-white">Items Ready!</p>
-                    </div>
-                    <p className="text-[10px] text-[var(--muted)]">
-                      {o.items.length} items • click Serve to deliver.
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={() => handleMarkDelivered(o.id)} 
-                    size="sm" 
-                    className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 font-semibold"
-                  >
-                    Serve
-                  </Button>
-                </div>
-              ))}
-
-              {orders.filter(o => o.waiter_id === me?.id && o.status === "READY").length === 0 && (
-                <div className="py-12 text-center text-[var(--muted)] text-sm">
-                  ✨ No active serve alerts. Nice job!
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Right Column: Alerts and Notifications panel (Desktop only) */}
+        <div className="hidden lg:block space-y-6">
+          {renderAlerts()}
         </div>
       </div>
 
-      {/* Place Order Modal */}
-      {showOrderModal && (
-        <div className="fixed inset-0 z-55 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#030712] border border-white/5 rounded-2xl w-full max-w-6xl h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
+      {/* Mobile Bottom Navigation Bar — hidden when order modal is open */}
+      <div className={`fixed bottom-0 left-0 right-0 z-40 bg-[#030712] border-t border-white/10 md:hidden flex items-center justify-around px-2 py-3 pb-safe shadow-2xl ${showOrderModal ? 'hidden' : ''}`}>
+        <button
+          onClick={() => setActiveTab("home")}
+          className={`flex flex-col items-center gap-1 transition-all ${
+            activeTab === "home" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
+          }`}
+        >
+          <Home className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Home</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("tables")}
+          className={`flex flex-col items-center gap-1 transition-all ${
+            activeTab === "tables" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
+          }`}
+        >
+          <LayoutGrid className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Tables</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`flex flex-col items-center gap-1 transition-all relative ${
+            activeTab === "orders" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
+          }`}
+        >
+          <ClipboardList className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Orders</span>
+          {orders.filter(filterMyOrUnassigned).length > 0 && (
+            <span className="absolute -top-1 -right-2 bg-amber-500 text-black text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black">
+              {orders.filter(filterMyOrUnassigned).length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("alerts")}
+          className={`flex flex-col items-center gap-1 transition-all relative ${
+            activeTab === "alerts" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
+          }`}
+        >
+          <Bell className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Alerts</span>
+          {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length > 0 && (
+            <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+              {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Place Order — Full Page Overlay (portal to body to escape overflow-y-auto) */}
+      {showOrderModal && typeof window !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-[var(--background)] text-[var(--foreground)] w-full h-full flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#0b0f19]">
+            <div className="p-4 border-b border-[var(--surface-border)] flex justify-between items-center bg-[var(--surface)]">
               <div>
-                <h2 className="text-lg font-black text-white">New Table Order</h2>
-                <p className="text-[10px] text-gray-400">Select items from categories and customize to add to ticket.</p>
+                <h2 className="text-lg font-black text-[var(--foreground)]">
+                  {selectedTable ? `Order for Table ${myTables.find(t => t.id === selectedTable)?.table_number || ""}` : "New Table Order"}
+                </h2>
+                <p className="text-[10px] text-[var(--muted)]">Select items from categories and customize to add to ticket.</p>
               </div>
               <button 
                 onClick={() => {
@@ -822,24 +1186,27 @@ export default function WaiterDashboard() {
                   setOrderNotes("")
                   setSelectedTable("")
                 }} 
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
               >
                 ✕
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 flex overflow-hidden min-h-0">
-              {/* Left Side: Catalog Selector */}
-              <div className="flex-1 flex flex-col min-h-0 bg-[#030712]">
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+
+
+              <div className="flex-1 flex overflow-hidden min-h-0">
+                {/* Left Side: Catalog Selector */}
+                <div className={`flex-1 flex flex-col min-h-0 bg-[var(--background)] ${orderModalView === "catalog" ? "" : "hidden"}`}>
                 
                 {/* Search & Parent Categories Horizontal Scroll */}
-                <div className="p-4 border-b border-white/5 space-y-3 bg-[#0b0f19]/30">
+                <div className="p-4 border-b border-[var(--surface-border)] space-y-3 bg-[var(--surface-hover)]/30">
                   <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
+                    <Search className="w-4 h-4 absolute left-3 top-3 text-[var(--muted)]" />
                     <Input 
                       placeholder="Search menu items..." 
-                      className="pl-9 h-10 bg-white/5 border-white/10 text-white placeholder-gray-500 text-xs rounded-xl"
+                      className="pl-9 h-10 bg-[var(--surface-hover)] border-[var(--surface-border)] text-[var(--foreground)] placeholder-[var(--muted)] text-xs rounded-xl"
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
                     />
@@ -860,7 +1227,7 @@ export default function WaiterDashboard() {
                           className={`shrink-0 px-4 py-2 rounded-full text-[11px] font-bold transition-all ${
                             isActive 
                               ? "bg-amber-500 text-black shadow-md shadow-amber-500/10" 
-                              : "bg-white/5 text-gray-300 hover:bg-white/10"
+                              : "bg-[var(--surface-hover)] text-[var(--foreground)]/80 hover:bg-[var(--surface-hover)]/80"
                           }`}
                         >
                           {pc.name}
@@ -873,7 +1240,7 @@ export default function WaiterDashboard() {
                 {/* Subcategory Sidebar + Menu Items Grid */}
                 <div className="flex-1 flex overflow-hidden min-h-0">
                   {/* Left Sidebar: Subcategories */}
-                  <div className="w-24 border-r border-white/5 bg-[#0b0f19]/40 overflow-y-auto shrink-0 py-2">
+                  <div className="w-24 border-r border-[var(--surface-border)] bg-[var(--surface-hover)]/40 overflow-y-auto shrink-0 py-2">
                     {parentCategories.length > 0 && (
                       <button
                         type="button"
@@ -881,7 +1248,7 @@ export default function WaiterDashboard() {
                         className={`w-full text-left px-3 py-3 text-[11px] font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${
                           activeSubCatId === "all"
                             ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
-                            : "text-gray-400 border-transparent hover:bg-white/5"
+                            : "text-[var(--muted)] border-transparent hover:bg-[var(--surface-hover)]"
                         }`}
                       >
                         All Items
@@ -897,7 +1264,7 @@ export default function WaiterDashboard() {
                           className={`w-full text-left px-3 py-3 text-[11px] font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${
                             isActive
                               ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
-                              : "text-gray-400 border-transparent hover:bg-white/5"
+                              : "text-[var(--muted)] border-transparent hover:bg-[var(--surface-hover)]"
                           }`}
                         >
                           {sc.name}
@@ -907,7 +1274,7 @@ export default function WaiterDashboard() {
                   </div>
 
                   {/* Right: Scrollable Grid list of Menu Items */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  <div className={`flex-1 overflow-y-auto p-4 space-y-3 ${cartCount > 0 ? "pb-28" : "pb-4"}`}>
                     {filteredMenuItems.map(item => {
                       const itemPrice = parseFloat(item.price.toString())
                       const inCartCount = cart
@@ -918,72 +1285,76 @@ export default function WaiterDashboard() {
                         <div
                           key={item.id}
                           onClick={() => openItemDetail(item)}
-                          className="w-full bg-[#0b0f19] border border-white/5 rounded-xl flex gap-3 p-2.5 hover:border-amber-500/20 transition-all cursor-pointer relative group"
+                          className="w-full bg-[var(--surface)] border border-[var(--surface-border)] rounded-2xl flex gap-3.5 p-3 hover:border-amber-500/20 transition-all cursor-pointer relative group select-none min-h-[96px]"
                         >
                           {/* Image */}
-                          <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-[#030712] border border-white/5 flex items-center justify-center">
+                          <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-[var(--background)] border border-[var(--surface-border)] flex items-center justify-center">
                             {item.image_url ? (
                               <img src={item.image_url} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <span className="text-xl">🍽️</span>
+                              <span className="text-2xl">🍽️</span>
                             )}
                           </div>
 
-                          <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div className="flex-1 min-w-0 pr-20 flex flex-col justify-between">
                             <div>
-                              <h3 className="font-bold text-xs text-white leading-tight line-clamp-1 group-hover:text-amber-500 transition-colors">
+                              <h3 className="font-extrabold text-sm text-[var(--foreground)] leading-tight line-clamp-1 group-hover:text-amber-500 transition-colors">
                                 {item.display_name}
                               </h3>
                               {item.description && (
-                                <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2 leading-normal">
+                                <p className="text-[11px] text-[var(--muted)] mt-1 line-clamp-2 leading-relaxed">
                                   {item.description}
                                 </p>
                               )}
                             </div>
-
-                            <div className="flex items-center justify-between mt-1.5" onClick={e => e.stopPropagation()}>
-                              <span className="text-amber-500 font-extrabold text-xs">${itemPrice.toFixed(2)}</span>
-                              
-                              <div>
-                                {inCartCount > 0 ? (
-                                  <div className="flex items-center gap-2 bg-amber-500 rounded-lg px-2 py-0.5 text-black">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const idx = cart.findIndex(c => c.menuItemId === item.id && Object.keys(c.selectedCustomizations).length === 0)
-                                        if (idx >= 0) updateCartQty(idx, -1)
-                                      }}
-                                      className="font-black text-xs w-4 h-4 flex items-center justify-center"
-                                    >
-                                      −
-                                    </button>
-                                    <span className="font-black text-xs">{inCartCount}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => addToCartDirectly(item)}
-                                      className="font-black text-xs w-4 h-4 flex items-center justify-center"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => addToCartDirectly(item)}
-                                    className="bg-amber-500 hover:bg-amber-400 text-black rounded-lg px-3 py-1 text-[10px] font-black transition-all"
-                                  >
-                                    Add
-                                  </button>
-                                )}
-                              </div>
+                            <div className="mt-2">
+                              <span className="text-amber-500 font-black text-sm">${itemPrice.toFixed(2)}</span>
                             </div>
+                          </div>
+
+                          {/* Add / Qty Control */}
+                          <div 
+                            className="absolute bottom-3 right-3" 
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {inCartCount > 0 ? (
+                              <div className="flex items-center gap-2 bg-amber-500 rounded-xl px-2.5 py-1 text-black shadow-lg font-black text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const idx = cart.findIndex(c => c.menuItemId === item.id && Object.keys(c.selectedCustomizations).length === 0)
+                                    if (idx >= 0) updateCartQty(idx, -1)
+                                  }}
+                                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-95 transition-all text-sm font-bold"
+                                >
+                                  −
+                                </button>
+                                <span className="w-4 text-center font-black">{inCartCount}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => addToCartDirectly(item)}
+                                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-95 transition-all text-sm font-bold"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => addToCartDirectly(item)}
+                                className="bg-amber-500 hover:bg-amber-400 active:scale-95 text-black rounded-xl px-4 py-1.5 text-xs font-black shadow-md transition-all flex items-center gap-1"
+                              >
+                                <span>Add</span>
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       )
                     })}
 
                     {filteredMenuItems.length === 0 && (
-                      <div className="text-center py-12 text-gray-500 text-xs">
+                      <div className="text-center py-12 text-[var(--muted)] text-xs">
                         No items found matching search filters.
                       </div>
                     )}
@@ -991,58 +1362,81 @@ export default function WaiterDashboard() {
                 </div>
               </div>
 
-              {/* Right Side: Table Ticket details */}
-              <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/5 bg-[#0b0f19] p-5 flex flex-col min-h-0 shrink-0">
-                <form onSubmit={handleCreateOrder} className="flex flex-col h-full min-h-0 gap-4">
-                  {/* Choose Table */}
-                  <div className="space-y-1.5 shrink-0">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Table</label>
-                    <select
-                      value={selectedTable}
-                      onChange={e => setSelectedTable(e.target.value)}
-                      required
-                      className="w-full h-10 bg-[#030712] border border-white/10 rounded-lg px-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-                    >
-                      <option value="">-- Choose table --</option>
-                      {myTables.map(t => (
-                        <option key={t.id} value={t.id}>
-                          Table {t.table_number} ({getTableStatus(t.id) === "AVAILABLE" ? "Free" : "Occupied"})
-                        </option>
-                      ))}
-                    </select>
+            {/* Floating Cart Popup Button — overlays catalog */}
+            {orderModalView === "catalog" && cartCount > 0 && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10000] w-[calc(100%-2rem)] max-w-lg">
+                <button
+                  type="button"
+                  onClick={() => setOrderModalView("ticket")}
+                  className="w-full flex items-center justify-between gap-4 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-black px-5 py-4 rounded-2xl shadow-[0_8px_40px_rgba(245,158,11,0.45)] transition-all font-black"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="bg-black/20 rounded-xl p-2">
+                      <ShoppingBag className="w-5 h-5 text-black" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-black leading-none">${cartTotal.toFixed(2)}</p>
+                      <p className="text-[11px] font-semibold opacity-75 mt-0.5">A total of {cartCount} item{cartCount !== 1 ? "s" : ""}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-black">Proceed to Order</span>
+                    <ArrowLeft className="w-4 h-4 rotate-180" />
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Right Side: Table Ticket details */}
+            <div className={`w-full flex-1 bg-[var(--surface)] p-5 md:p-8 flex flex-col min-h-0 shrink-0 ${orderModalView === "ticket" ? "flex" : "hidden"}`}>
+              <form onSubmit={handleCreateOrder} className="flex flex-col h-full min-h-0 gap-4">
+                  {/* Back button */}
+                  <Button
+                    type="button"
+                    onClick={() => setOrderModalView("catalog")}
+                    className="w-full sm:w-auto self-start bg-zinc-800 hover:bg-zinc-700 text-white font-extrabold text-xs py-2.5 px-5 rounded-xl mb-4 flex items-center justify-center gap-1.5 shadow-md"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> Back to Menu
+                  </Button>
+                  {/* Selected Table (Read-Only) */}
+                  <div className="bg-[var(--background)] border border-[var(--surface-border)] rounded-xl p-3 flex items-center justify-between shrink-0">
+                    <span className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">Table</span>
+                    <span className="text-xs font-black text-amber-500 uppercase">
+                      Table {myTables.find(t => t.id === selectedTable)?.table_number || "Selected"}
+                    </span>
                   </div>
 
                   {/* Cart List */}
-                  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto py-2 border-y border-white/5 space-y-3">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Order Ticket Items</span>
+                  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto py-2 border-y border-[var(--surface-border)] space-y-3">
+                    <span className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider block">Order Ticket Items</span>
                     {cart.map((item, idx) => (
-                      <div key={idx} className="flex gap-2.5 bg-[#030712] border border-white/5 rounded-xl p-2.5">
+                      <div key={idx} className="flex gap-2.5 bg-[var(--background)] border border-[var(--surface-border)] rounded-xl p-2.5">
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-xs text-white leading-tight truncate">{item.name}</p>
+                          <p className="font-semibold text-xs text-[var(--foreground)] leading-tight truncate">{item.name}</p>
                           {Object.entries(item.selectedCustomizations).map(([k, v]) => (
                             <p key={k} className="text-[9px] text-amber-500 font-semibold mt-0.5">
                               • {k}: {Array.isArray(v) ? v.join(", ") : v}
                             </p>
                           ))}
                           {item.notes && (
-                            <p className="text-[9px] text-gray-400 italic mt-0.5 line-clamp-1">"{item.notes}"</p>
+                            <p className="text-[9px] text-[var(--muted)] italic mt-0.5 line-clamp-1">"{item.notes}"</p>
                           )}
                         </div>
                         <div className="flex flex-col items-end justify-between shrink-0">
                           <span className="text-amber-500 font-extrabold text-xs">${(item.price * item.quantity).toFixed(2)}</span>
-                          <div className="flex items-center gap-1.5 bg-white/5 rounded-lg px-1.5 py-0.5">
+                          <div className="flex items-center gap-1.5 bg-[var(--surface-hover)] rounded-lg px-1.5 py-0.5">
                             <button
                               type="button"
                               onClick={() => updateCartQty(idx, -1)}
-                              className="font-bold text-[10px] text-white w-3.5 h-3.5 flex items-center justify-center hover:text-amber-500"
+                              className="font-bold text-[10px] text-[var(--foreground)] w-3.5 h-3.5 flex items-center justify-center hover:text-amber-500"
                             >
                               −
                             </button>
-                            <span className="font-bold text-[10px] text-white min-w-[8px] text-center">{item.quantity}</span>
+                            <span className="font-bold text-[10px] text-[var(--foreground)] min-w-[8px] text-center">{item.quantity}</span>
                             <button
                               type="button"
                               onClick={() => updateCartQty(idx, 1)}
-                              className="font-bold text-[10px] text-white w-3.5 h-3.5 flex items-center justify-center hover:text-amber-500"
+                              className="font-bold text-[10px] text-[var(--foreground)] w-3.5 h-3.5 flex items-center justify-center hover:text-amber-500"
                             >
                               +
                             </button>
@@ -1052,8 +1446,8 @@ export default function WaiterDashboard() {
                     ))}
 
                     {cart.length === 0 && (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-500 py-12">
-                        <ShoppingBag className="w-8 h-8 mb-2 opacity-50 text-gray-600" />
+                      <div className="flex-1 flex flex-col items-center justify-center text-center text-[var(--muted)] py-12">
+                        <ShoppingBag className="w-8 h-8 mb-2 opacity-50 text-[var(--muted)]" />
                         <p className="text-xs">Cart is empty</p>
                       </div>
                     )}
@@ -1061,19 +1455,19 @@ export default function WaiterDashboard() {
 
                   {/* Ticket Instruction Notes */}
                   <div className="space-y-1 shrink-0">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Chef Instructions</label>
+                    <label className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">Chef Instructions</label>
                     <Input
                       placeholder="E.g., Extra hot sauce, no sesame..."
                       value={orderNotes}
                       onChange={e => setOrderNotes(e.target.value)}
-                      className="bg-[#030712] border-white/10 text-xs text-white"
+                      className="bg-[var(--background)] border-[var(--surface-border)] text-xs text-[var(--foreground)]"
                     />
                   </div>
 
                   {/* Summary & Place Order */}
-                  <div className="mt-auto pt-3 border-t border-white/5 space-y-3 shrink-0">
+                  <div className="mt-auto pt-3 border-t border-[var(--surface-border)] space-y-3 shrink-0">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-gray-300">Total:</span>
+                      <span className="font-bold text-[var(--foreground)] opacity-80">Total:</span>
                       <span className="font-black text-sm text-amber-500">${cartTotal.toFixed(2)}</span>
                     </div>
 
@@ -1091,13 +1485,14 @@ export default function WaiterDashboard() {
                       Place Order · ${cartTotal.toFixed(2)}
                     </Button>
                   </div>
-                </form>
-              </div>
+              </form>
             </div>
+          </div>
+        </div>
 
             {/* FULL COVERED MENU ITEM DETAIL PAGE OVERLAY */}
             {selectedItem && (
-              <div className="absolute inset-0 z-50 bg-[#030712] text-white flex flex-col w-full h-full overflow-y-auto">
+              <div className="absolute inset-0 z-50 bg-[var(--background)] text-[var(--foreground)] flex flex-col w-full h-full overflow-y-auto">
                 <div className="absolute top-4 left-4 z-10">
                   <button
                     type="button"
@@ -1108,7 +1503,7 @@ export default function WaiterDashboard() {
                   </button>
                 </div>
 
-                <div className="relative h-56 bg-gray-900 w-full shrink-0 flex items-center justify-center border-b border-white/5">
+                <div className="relative h-56 bg-gray-900 w-full shrink-0 flex items-center justify-center border-b border-[var(--surface-border)]">
                   {selectedItem.image_url ? (
                     <img src={selectedItem.image_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -1131,7 +1526,7 @@ export default function WaiterDashboard() {
                   </div>
 
                   {selectedItem.description && (
-                    <div className="space-y-1 bg-white/5 rounded-xl p-3">
+                    <div className="space-y-1 bg-[var(--surface-hover)] rounded-xl p-3">
                       <h4 className="text-[10px] font-bold uppercase tracking-wider opacity-60">Description</h4>
                       <p className="text-xs leading-relaxed opacity-90">{selectedItem.description}</p>
                     </div>
@@ -1141,7 +1536,7 @@ export default function WaiterDashboard() {
                     <div className="space-y-4">
                       <h3 className="text-[10px] font-bold uppercase tracking-wider opacity-60">Customizations</h3>
                       {selectedItem.customizations.map(cust => (
-                        <div key={cust.key} className="space-y-2 bg-[#0b0f19] border border-white/5 rounded-xl p-3">
+                        <div key={cust.key} className="space-y-2 bg-[var(--surface)] border border-[var(--surface-border)] rounded-xl p-3">
                           <p className="text-xs font-bold flex items-center gap-1.5">
                             <span>{cust.label}</span>
                             {cust.multiple && (
@@ -1173,7 +1568,7 @@ export default function WaiterDashboard() {
                                   className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
                                     selected
                                       ? "bg-amber-500 border-amber-500 text-black shadow-md"
-                                      : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
+                                      : "bg-[var(--surface-hover)] border-[var(--surface-border)] text-[var(--foreground)] opacity-90 hover:bg-[var(--surface-hover)]/80"
                                   }`}
                                 >
                                   {valName} {valPrice > 0 ? `(+$${valPrice.toFixed(2)})` : ""}
@@ -1193,12 +1588,12 @@ export default function WaiterDashboard() {
                       placeholder="e.g. no onions, extra cheese..."
                       value={itemNotes}
                       onChange={e => setItemNotes(e.target.value)}
-                      className="w-full bg-[#0b0f19] border border-white/10 rounded-xl px-3 py-2 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
+                      className="w-full bg-[var(--surface)] border border-[var(--surface-border)] text-[var(--foreground)] rounded-xl px-3 py-2 text-xs placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none animate-none"
                     />
                   </div>
 
                   <div className="flex items-center gap-4 pt-2">
-                    <div className="flex items-center gap-3 bg-[#0b0f19] border border-white/10 rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-3 bg-[var(--surface)] border border-[var(--surface-border)] rounded-xl px-3 py-2">
                       <button
                         type="button"
                         onClick={() => setItemQty(q => Math.max(1, q - 1))}
@@ -1206,7 +1601,7 @@ export default function WaiterDashboard() {
                       >
                         −
                       </button>
-                      <span className="font-extrabold text-sm w-4 text-center">{itemQty}</span>
+                      <span className="font-extrabold text-sm w-4 text-[var(--foreground)] text-center">{itemQty}</span>
                       <button
                         type="button"
                         onClick={() => setItemQty(q => q + 1)}
@@ -1226,8 +1621,99 @@ export default function WaiterDashboard() {
                 </div>
               </div>
             )}
+        </div>,
+        document.body
+      )}
+
+      {/* MOCK QR SCANNER MODAL */}
+      {showScannerModal && typeof window !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex flex-col items-center justify-end sm:justify-center p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-[var(--surface)] border-t sm:border border-[var(--surface-border)] rounded-t-[2.5rem] sm:rounded-3xl overflow-hidden shadow-2xl relative flex flex-col h-[85vh] sm:h-[500px] transition-transform duration-300">
+            {/* Header */}
+            <div className="p-5 border-b border-[var(--surface-border)] flex justify-between items-center bg-[var(--surface-hover)]/40 shrink-0">
+              <h3 className="text-sm font-black text-[var(--foreground)] uppercase tracking-wider flex items-center gap-2">
+                <QrCode className="w-4 h-4 text-amber-500" />
+                Scan Table QR Code
+              </h3>
+              <button
+                onClick={() => {
+                  setShowScannerModal(false)
+                  setScannerError(null)
+                }}
+                className="text-[var(--muted)] hover:text-[var(--foreground)] text-sm px-2 py-1 hover:bg-[var(--surface-hover)] rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Viewfinder Area */}
+            <div className="flex-1 bg-black relative flex items-center justify-center overflow-hidden">
+              {scannerError ? (
+                <div className="p-6 text-center space-y-3 z-20">
+                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mx-auto text-red-500">
+                    <Camera className="w-6 h-6" />
+                  </div>
+                  <p className="text-xs text-[var(--foreground)] font-bold">Camera Access Failed</p>
+                  <p className="text-[11px] text-[var(--muted)] leading-relaxed max-w-[280px] mx-auto">
+                    {scannerError}
+                  </p>
+                  <p className="text-[10px] text-amber-500/90 font-medium">
+                    Please use HTTPS or allow camera permission. You can still test with simulated actions below.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <QRScanner onScan={handleQRScan} onError={(err) => setScannerError(err)} />
+                  {/* Hint text */}
+                  <div className="absolute bottom-4 left-0 right-0 text-center z-20 pointer-events-none">
+                    <span className="bg-black/60 text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-white/5">
+                      Point camera at table QR code
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Simulated actions */}
+            <div className="p-4 border-t border-[var(--surface-border)] bg-[var(--surface-hover)]/30 space-y-3">
+              <span className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider block">
+                Simulate Scanning Assigned Table QR Code
+              </span>
+              
+              {myTables.length === 0 ? (
+                <p className="text-[11px] text-[var(--muted)] text-center py-2">
+                  No assigned tables available to scan. Assign tables first in layouts.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto pr-1">
+                  {myTables.map(table => (
+                    <button
+                      key={table.id}
+                      onClick={() => {
+                        setSelectedTable(table.id)
+                        setOrderModalView("catalog")
+                        setCart([])
+                        setShowOrderModal(true)
+                        setShowScannerModal(false)
+                        
+                        // Add activity log
+                        setActivityLogs(prev => [
+                          { id: Math.random().toString(), type: "create_order", message: `Scanned Table T${table.table_number} QR Code`, timestamp: "Just now" },
+                          ...prev
+                        ])
+                      }}
+                      className="bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--foreground)] hover:text-amber-500 text-xs font-black py-2.5 px-3 rounded-xl border border-[var(--surface-border)] hover:border-amber-500/30 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      Table T{table.table_number}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

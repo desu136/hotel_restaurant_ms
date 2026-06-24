@@ -2,7 +2,7 @@
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
 import {
-  Loader2, QrCode, Trash2, Download, Plus, AlertCircle, Table2, RefreshCw
+  Loader2, QrCode, Trash2, Download, AlertCircle, Table2, RefreshCw
 } from "lucide-react"
 
 interface Restaurant { id: string; name: string }
@@ -18,7 +18,7 @@ interface QRItem {
   table?: TableItem
 }
 
-export default function QRPage() {
+function QRPageContent() {
   const searchParams = useSearchParams()
   const preselectedRestaurant = searchParams.get("restaurant_id") || ""
   const preselectedTable = searchParams.get("table_id") || ""
@@ -264,5 +264,17 @@ export default function QRPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function QRPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-600)]" />
+      </div>
+    }>
+      <QRPageContent />
+    </React.Suspense>
   )
 }
