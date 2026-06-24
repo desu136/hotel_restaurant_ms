@@ -135,6 +135,14 @@ export async function approveTenant(tenantId: string, planId: string | undefined
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + (plan.trial_days > 0 ? plan.trial_days : 30));
 
+  const existingUser = await prisma.user.findUnique({ where: { email: tenant.email } });
+  let tempPassword: string | null = null;
+  let passwordHash: string | null = null;
+  if (!existingUser) {
+    tempPassword = Math.random().toString(36).slice(-10);
+    passwordHash = await bcrypt.hash(tempPassword, 10);
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     // 1. Activate tenant
     const updatedTenant = await tx.tenant.update({
@@ -166,24 +174,19 @@ export async function approveTenant(tenantId: string, planId: string | undefined
     }
 
     // 4. User: activate existing or create new
-    let tempPassword: string | null = null;
-    const existingUser = await tx.user.findUnique({ where: { email: tenant.email } });
-
     if (existingUser) {
       await tx.user.update({
         where: { id: existingUser.id },
         data: { status: "ACTIVE", tenant_id: tenantId },
       });
     } else {
-      tempPassword = Math.random().toString(36).slice(-10);
-      const passwordHash = await bcrypt.hash(tempPassword, 10);
       await tx.user.create({
         data: {
           tenant_id: tenantId,
           full_name: tenant.owner_name,
           email: tenant.email,
           phone: tenant.phone,
-          password_hash: passwordHash,
+          password_hash: passwordHash!,
           status: "ACTIVE",
           roles: { create: { role_id: roleIdToAssign } },
         },
@@ -201,7 +204,7 @@ export async function approveTenant(tenantId: string, planId: string | undefined
     });
 
     return { updatedTenant, userEmail: tenant.email, tempPassword };
-  });
+  }, { timeout: 30000 });
 
   return {
     tenant: result.updatedTenant,

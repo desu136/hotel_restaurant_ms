@@ -49,7 +49,7 @@ export async function updatePlan(id: string, input: UpdatePlanInput) {
       data,
       include: { modules: { include: { module: true } } },
     });
-  });
+  }, { timeout: 30000 });
 }
 
 export async function deletePlan(id: string) {

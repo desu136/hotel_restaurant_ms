@@ -64,7 +64,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       });
 
       return tenant;
-    });
+    }, { timeout: 30000 });
 
     res.status(201).json({ success: true, tenant: newTenant });
   } catch (error: any) {
