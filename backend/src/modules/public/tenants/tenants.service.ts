@@ -61,5 +61,5 @@ export async function registerTenant(input: RegisterTenantInput) {
     });
 
     return tenant;
-  });
+  }, { timeout: 30000 });
 }

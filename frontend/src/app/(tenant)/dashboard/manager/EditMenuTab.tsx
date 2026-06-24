@@ -21,6 +21,8 @@ interface Restaurant {
 interface CustomizationValue {
   name: string
   extraPrice: number
+  image_url?: string | null
+  recommended?: boolean
 }
 
 interface Customization {
@@ -39,6 +41,7 @@ interface MenuItem {
   availability: boolean
   customizations?: Customization[] | null
   image_url?: string | null
+  image_urls?: string[] | null
   category?: { id: string; name: string } | null
 }
 
@@ -59,10 +62,13 @@ export function EditMenuTab() {
     price: "",
     categoryId: "",
     availability: true,
-    imageUrl: ""
+    imageUrl: "",
+    imageUrls: [] as string[]
   })
   
   const [imageUploading, setImageUploading] = React.useState(false)
+  const [galleryUploading, setGalleryUploading] = React.useState(false)
+  const [choiceUploading, setChoiceUploading] = React.useState<Record<string, boolean>>({})
   const [customizations, setCustomizations] = React.useState<Customization[]>([])
   const [formError, setFormError] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
@@ -137,6 +143,36 @@ export function EditMenuTab() {
     }
   }
 
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (form.imageUrls.length >= 8) {
+      setFormError("Maximum 8 gallery photos allowed")
+      return
+    }
+    setGalleryUploading(true)
+    const formData = new FormData()
+    formData.append("image", file)
+    try {
+      const res = await fetch("/api/upload/image", { method: "POST", body: formData })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setForm(prev => ({ ...prev, imageUrls: [...prev.imageUrls, data.data.url] }))
+      } else {
+        setFormError(data.error || "Failed to upload gallery photo")
+      }
+    } catch {
+      setFormError("Network error during gallery upload")
+    } finally {
+      setGalleryUploading(false)
+      e.target.value = ""
+    }
+  }
+
+  const removeGalleryPhoto = (idx: number) => {
+    setForm(prev => ({ ...prev, imageUrls: prev.imageUrls.filter((_, i) => i !== idx) }))
+  }
+
   const openAddModal = () => {
     setEditingItem(null)
     setForm({
@@ -145,7 +181,8 @@ export function EditMenuTab() {
       price: "",
       categoryId: categories[0]?.id || "",
       availability: true,
-      imageUrl: ""
+      imageUrl: "",
+      imageUrls: []
     })
     setCustomizations([])
     setFormError("")
@@ -160,7 +197,8 @@ export function EditMenuTab() {
       price: item.price.toString(),
       categoryId: item.category_id || "",
       availability: item.availability,
-      imageUrl: item.image_url || ""
+      imageUrl: item.image_url || "",
+      imageUrls: Array.isArray(item.image_urls) ? item.image_urls : []
     })
     setCustomizations(item.customizations ? JSON.parse(JSON.stringify(item.customizations)) : [])
     setFormError("")
@@ -243,7 +281,9 @@ export function EditMenuTab() {
       multiple: c.multiple,
       values: c.values.filter(v => v.name.trim() !== "").map(v => ({
         name: v.name.trim(),
-        extraPrice: parseFloat(v.extraPrice.toString()) || 0
+        extraPrice: parseFloat(v.extraPrice.toString()) || 0,
+        image_url: v.image_url || null,
+        recommended: !!v.recommended
       }))
     }))
 
@@ -255,7 +295,8 @@ export function EditMenuTab() {
       category_id: form.categoryId,
       availability: form.availability,
       customizations: formattedCustomizations.length > 0 ? formattedCustomizations : null,
-      image_url: form.imageUrl || null
+      image_url: form.imageUrl || null,
+      image_urls: form.imageUrls
     }
 
     try {
@@ -358,9 +399,16 @@ export function EditMenuTab() {
               {items.map(item => (
                 <Card key={item.id} className="glass hover:border-[var(--color-primary-500)]/30 transition-all group">
                   <CardContent className="p-5 flex items-start gap-4">
-                    {item.image_url && (
-                      <img src={item.image_url} alt={item.display_name} className="w-16 h-16 rounded-lg object-cover border border-[var(--surface-border)] shrink-0" />
-                    )}
+                    <div className="relative shrink-0">
+                      {item.image_url && (
+                        <img src={item.image_url} alt={item.display_name} className="w-16 h-16 rounded-lg object-cover border border-[var(--surface-border)]" />
+                      )}
+                      {Array.isArray(item.image_urls) && item.image_urls.length > 0 && (
+                        <span className="absolute -bottom-1.5 -right-1.5 bg-[var(--color-primary-600)] text-white text-[8px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                          📷 {item.image_urls.length}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center justify-between">
                         <h4 className="font-bold text-base">{item.display_name}</h4>
@@ -463,9 +511,9 @@ export function EditMenuTab() {
                 </div>
               </div>
 
-              {/* Image Upload */}
+              {/* Primary Image Upload */}
               <div>
-                <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Item Image</label>
+                <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Primary Image</label>
                 <div className="flex items-center gap-3">
                   {form.imageUrl && (
                     <img src={form.imageUrl} alt="preview" className="w-16 h-16 object-cover rounded-lg border border-[var(--surface-border)] shrink-0" />
@@ -477,6 +525,50 @@ export function EditMenuTab() {
                     <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={imageUploading} />
                   </label>
                 </div>
+              </div>
+
+              {/* Gallery Photos (Slideshow animation on public menu) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider">
+                    🎬 Slideshow Gallery Photos
+                    <span className="ml-2 font-normal normal-case text-[var(--muted)]/70">
+                      ({form.imageUrls.length}/8) — cycle on public menu
+                    </span>
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {form.imageUrls.map((url, idx) => (
+                    <div key={idx} className="relative group w-16 h-16 shrink-0">
+                      <img src={url} alt="" className="w-full h-full object-cover rounded-lg border border-[var(--surface-border)]" />
+                      <button
+                        type="button"
+                        onClick={() => removeGalleryPhoto(idx)}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {form.imageUrls.length < 8 && (
+                    <label className="w-16 h-16 shrink-0 cursor-pointer flex flex-col items-center justify-center border-2 border-dashed border-[var(--surface-border)] rounded-lg text-[var(--muted)] hover:border-[var(--color-primary-500)] hover:text-[var(--color-primary-500)] transition-colors">
+                      {galleryUploading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <Plus className="w-5 h-5" />
+                          <span className="text-[9px] mt-0.5 font-bold">Photo</span>
+                        </>
+                      )}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleGalleryUpload} disabled={galleryUploading} />
+                    </label>
+                  )}
+                </div>
+                {form.imageUrls.length === 0 && (
+                  <p className="text-[10px] text-[var(--muted)]/60 mt-1.5">
+                    Add multiple photos and they will animate as a slideshow on the menu page.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -594,32 +686,107 @@ export function EditMenuTab() {
                         
                         <div className="flex flex-wrap gap-2 items-center">
                           {cust.values.map((val, vIdx) => (
-                            <div key={vIdx} className="flex items-center gap-1.5 bg-[var(--surface)] border border-[var(--surface-border)] px-2 py-1 rounded-lg">
-                              <input
-                                placeholder="Choice Name"
-                                value={val.name || ""}
-                                onChange={e => updateCustomizationValue(gIdx, vIdx, { name: e.target.value })}
-                                className="w-28 text-xs bg-transparent focus:outline-none text-[var(--foreground)] placeholder-gray-500"
-                              />
-                              <span className="text-[10px] text-[var(--muted)] border-l pl-1 sm:pl-1.5 border-[var(--surface-border)]">$</span>
-                              <input
-                                placeholder="0.00"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={val.extraPrice || ""}
-                                onChange={e => updateCustomizationValue(gIdx, vIdx, { extraPrice: parseFloat(e.target.value) || 0 })}
-                                className="w-12 text-xs bg-transparent focus:outline-none text-amber-500 font-bold placeholder-gray-500"
-                              />
-                              {cust.values.length > 1 && (
+                            <div key={vIdx} className="flex flex-col gap-2 bg-[var(--surface)] border border-[var(--surface-border)] p-2.5 rounded-lg w-full sm:w-auto">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  placeholder="Choice Name"
+                                  value={val.name || ""}
+                                  onChange={e => updateCustomizationValue(gIdx, vIdx, { name: e.target.value })}
+                                  className="w-28 text-xs bg-transparent focus:outline-none text-[var(--foreground)] placeholder-gray-500"
+                                />
+                                <span className="text-[10px] text-[var(--muted)] border-l pl-1 sm:pl-1.5 border-[var(--surface-border)]">$</span>
+                                <input
+                                  placeholder="0.00"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={val.extraPrice || ""}
+                                  onChange={e => updateCustomizationValue(gIdx, vIdx, { extraPrice: parseFloat(e.target.value) || 0 })}
+                                  className="w-12 text-xs bg-transparent focus:outline-none text-amber-500 font-bold placeholder-gray-500"
+                                />
+                                {cust.values.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCustomizationValue(gIdx, vIdx)}
+                                    className="text-red-500 hover:text-red-600 text-[10px] font-bold border-l pl-1 border-[var(--surface-border)]"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                              
+                              <div className="flex items-center justify-between border-t pt-1.5 border-[var(--surface-border)] gap-3">
+                                <div className="flex items-center">
+                                  {val.image_url ? (
+                                    <div className="relative w-8 h-8 rounded overflow-hidden border border-[var(--surface-border)] shrink-0">
+                                      <img src={val.image_url} alt="" className="w-full h-full object-cover" />
+                                      <button
+                                        type="button"
+                                        onClick={() => updateCustomizationValue(gIdx, vIdx, { image_url: null })}
+                                        className="absolute inset-0 bg-black/60 flex items-center justify-center text-white opacity-0 hover:opacity-100 transition-opacity"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : choiceUploading[`${gIdx}-${vIdx}`] ? (
+                                    <div className="flex items-center gap-1 text-[10px] text-[var(--muted)]">
+                                      <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                                      <span>Uploading...</span>
+                                    </div>
+                                  ) : (
+                                    <label className="text-[10px] text-amber-500 hover:underline cursor-pointer font-bold flex items-center gap-1">
+                                      <Plus className="w-3 h-3" /> Add Image
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                          const file = e.target.files?.[0]
+                                          if (!file) return
+                                          const uploadKey = `${gIdx}-${vIdx}`
+                                          setChoiceUploading(prev => ({ ...prev, [uploadKey]: true }))
+                                          const formData = new FormData()
+                                          formData.append("image", file)
+                                          try {
+                                            const res = await fetch("/api/upload/image", { method: "POST", body: formData })
+                                            const data = await res.json()
+                                            if (res.ok && data.success) {
+                                              updateCustomizationValue(gIdx, vIdx, { image_url: data.data.url })
+                                            }
+                                          } catch (err) {
+                                            console.error("Customization image upload error:", err)
+                                          } finally {
+                                            setChoiceUploading(prev => ({ ...prev, [uploadKey]: false }))
+                                          }
+                                        }}
+                                      />
+                                    </label>
+                                  )}
+                                </div>
+
                                 <button
                                   type="button"
-                                  onClick={() => removeCustomizationValue(gIdx, vIdx)}
-                                  className="text-red-500 hover:text-red-600 text-[10px] font-bold border-l pl-1 border-[var(--surface-border)]"
+                                  onClick={() => {
+                                    if (!cust.multiple) {
+                                      // clear other recommended options in this group
+                                      cust.values.forEach((_, tempIdx) => {
+                                        if (tempIdx !== vIdx) {
+                                          updateCustomizationValue(gIdx, tempIdx, { recommended: false })
+                                        }
+                                      })
+                                    }
+                                    updateCustomizationValue(gIdx, vIdx, { recommended: !val.recommended })
+                                  }}
+                                  className={`text-[9px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 transition-all ${
+                                    val.recommended 
+                                      ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" 
+                                      : "bg-transparent border border-[var(--surface-border)] text-[var(--muted)] hover:text-[var(--foreground)]"
+                                  }`}
                                 >
-                                  ✕
+                                  <span>✨</span>
+                                  <span>{val.recommended ? "Default" : "Set Default"}</span>
                                 </button>
-                              )}
+                              </div>
                             </div>
                           ))}
                           

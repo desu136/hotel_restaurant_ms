@@ -78,7 +78,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
         },
         include: { modules: { include: { module: true } } },
       });
-    });
+    }, { timeout: 30000 });
 
     res.json({ success: true, plan });
   } catch (error) {

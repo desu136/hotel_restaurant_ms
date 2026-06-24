@@ -291,7 +291,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id, display_name, description, price, category_id, availability, customizations, image_url } = req.body;
+    const { restaurant_id, display_name, description, price, category_id, availability, customizations, image_url, image_urls } = req.body;
     if (!restaurant_id || !display_name) {
       res.status(400).json({ error: 'restaurant_id and display_name are required' });
       return;
@@ -307,6 +307,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
         availability: availability ?? true,
         customizations: customizations ?? null,
         image_url: image_url ?? null,
+        image_urls: Array.isArray(image_urls) ? image_urls : [],
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -320,7 +321,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
 // PATCH /api/restaurant/menu/:id
 router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
-    const { display_name, description, price, category_id, availability, customizations, image_url } = req.body;
+    const { display_name, description, price, category_id, availability, customizations, image_url, image_urls } = req.body;
     const item = await prisma.menuItem.update({
       where: { id: req.params.id as string },
       data: {
@@ -331,6 +332,7 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
         ...(availability !== undefined && { availability }),
         ...(customizations !== undefined && { customizations }),
         ...(image_url !== undefined && { image_url }),
+        ...(image_urls !== undefined && { image_urls: Array.isArray(image_urls) ? image_urls : [] }),
       },
       include: { category: { select: { id: true, name: true } } },
     });

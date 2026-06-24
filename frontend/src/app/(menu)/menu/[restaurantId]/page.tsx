@@ -1,8 +1,9 @@
 "use client"
 import * as React from "react"
 import { useParams, useSearchParams } from "next/navigation"
-import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon } from "lucide-react"
+import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon, Check } from "lucide-react"
 import PaymentScreen from "./PaymentScreen"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface Restaurant {
   id: string
@@ -20,6 +21,8 @@ interface Category {
 interface CustomizationValue {
   name: string
   extraPrice: number
+  image_url?: string | null
+  recommended?: boolean
 }
 
 interface Customization {
@@ -36,6 +39,7 @@ interface MenuItem {
   price: string | number
   category_id?: string | null
   image_url?: string | null
+  image_urls?: string[] | null
   customizations?: Customization[] | null
 }
 
@@ -65,6 +69,75 @@ interface TableDetails {
   id: string
   table_number: string
   capacity: number
+}
+
+const SLOTS = [
+  { top: "10%", right: "12%" },
+  { bottom: "12%", right: "8%" },
+  { top: "15%", left: "10%" },
+  { bottom: "15%", left: "8%" }
+]
+
+// ─── Slideshow component: cycles photos with crossfade + Ken Burns on each ───
+function SlideshowImage({
+  images,
+  alt,
+  className,
+  interval = 3000,
+}: {
+  images: string[]
+  alt: string
+  className?: string
+  interval?: number
+}) {
+  const [idx, setIdx] = React.useState(0)
+  const all = images.filter(Boolean)
+
+  React.useEffect(() => {
+    if (all.length <= 1) return
+    const t = setInterval(() => setIdx(i => (i + 1) % all.length), interval)
+    return () => clearInterval(t)
+  }, [all.length, interval])
+
+  if (all.length === 0) return null
+
+  return (
+    <div className={`relative overflow-hidden ${className ?? ""}`}>
+      <AnimatePresence mode="sync">
+        <motion.img
+          key={all[idx]}
+          src={all[idx]}
+          alt={alt}
+          className="absolute inset-0 w-full h-full object-cover"
+          initial={{ opacity: 0, scale: 1.06 }}
+          animate={{
+            opacity: 1,
+            scale: [1, 1.09, 1.03, 1.10, 1],
+            x: [0, 5, -3, 3, 0],
+            y: [0, -3, 5, -2, 0],
+          }}
+          exit={{ opacity: 0, scale: 1.03 }}
+          transition={{
+            opacity: { duration: 0.8, ease: "easeInOut" },
+            scale: { duration: interval / 1000 + 2, ease: "easeInOut", repeat: Infinity, repeatType: "mirror" },
+            x: { duration: interval / 1000 + 2, ease: "easeInOut", repeat: Infinity, repeatType: "mirror" },
+            y: { duration: interval / 1000 + 2, ease: "easeInOut", repeat: Infinity, repeatType: "mirror" },
+          }}
+        />
+      </AnimatePresence>
+      {/* Dots indicator — only when multiple images */}
+      {all.length > 1 && (
+        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1 z-10 pointer-events-none">
+          {all.map((_, i) => (
+            <span
+              key={i}
+              className={`w-1 h-1 rounded-full transition-all duration-500 ${i === idx ? "bg-white w-3" : "bg-white/40"}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function CustomerMenuPage() {
@@ -128,8 +201,9 @@ export default function CustomerMenuPage() {
 
         // Set initial parent category
         const parents = cats.filter(c => !c.parent_id)
-        if (parents.length > 0) {
-          setActiveParentId(parents[0].id)
+        const parentsList = parents
+        if (parentsList.length > 0) {
+          setActiveParentId(parentsList[0].id)
         }
 
         // If tableId is present, fetch the real table number
@@ -279,9 +353,67 @@ export default function CustomerMenuPage() {
   const cartTotal = cart.reduce((sum, c) => sum + getCustomizedItemPrice(c.menuItem, c.selectedCustomizations) * c.quantity, 0)
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0)
 
+  const selectedCustomizationBadges = React.useMemo(() => {
+    if (!selectedItem || !selectedItem.customizations) return []
+    const list: Array<{ name: string; image_url?: string | null; extraPrice: number }> = []
+
+    for (const cust of selectedItem.customizations) {
+      const selectedVal = itemCustomizations[cust.key]
+      if (!selectedVal) continue
+
+      if (Array.isArray(selectedVal)) {
+        for (const v of selectedVal) {
+          const choice = cust.values.find(choiceVal => {
+            const name = typeof choiceVal === "string" ? choiceVal : choiceVal.name
+            return name === v
+          })
+          if (choice) {
+            list.push({
+              name: typeof choice === "string" ? choice : choice.name,
+              image_url: typeof choice === "string" ? null : choice.image_url,
+              extraPrice: typeof choice === "string" ? 0 : choice.extraPrice
+            })
+          }
+        }
+      } else if (typeof selectedVal === "string" && selectedVal) {
+        const choice = cust.values.find(choiceVal => {
+          const name = typeof choiceVal === "string" ? choiceVal : choiceVal.name
+          return name === selectedVal
+        })
+        if (choice) {
+          list.push({
+            name: typeof choice === "string" ? choice : choice.name,
+            image_url: typeof choice === "string" ? null : choice.image_url,
+            extraPrice: typeof choice === "string" ? 0 : choice.extraPrice
+          })
+        }
+      }
+    }
+    return list
+  }, [selectedItem, itemCustomizations])
+
   const openItemDetail = (item: MenuItem) => {
     setSelectedItem(item)
-    setItemCustomizations({})
+
+    // Auto-select recommended/default options
+    const defaults: Record<string, string | string[]> = {}
+    if (item.customizations && item.customizations.length > 0) {
+      item.customizations.forEach(cust => {
+        const recommendedVals = cust.values
+          .filter(v => typeof v !== "string" && v.recommended)
+          .map(v => typeof v === "string" ? v : v.name)
+
+        if (recommendedVals.length > 0) {
+          if (cust.multiple) {
+            defaults[cust.key] = recommendedVals
+          } else {
+            defaults[cust.key] = recommendedVals[0]
+          }
+        }
+      })
+    }
+
+    setItemCustomizations(defaults)
     setItemNotes("")
     setItemQty(1)
   }
@@ -386,7 +518,7 @@ export default function CustomerMenuPage() {
   const themeBorder = theme === "dark" ? "border-white/5" : "border-gray-200"
 
   return (
-    <div className={`min-h-screen ${themeBg} font-sans flex flex-col pb-20 relative transition-colors duration-200`}>
+    <div className={`h-screen ${themeBg} font-sans overflow-hidden flex flex-col pb-36 relative transition-colors duration-200`}>
 
       {showPayment && (
         <PaymentScreen
@@ -410,20 +542,37 @@ export default function CustomerMenuPage() {
       )}
 
       {activeTab === "home" && (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex  flex-col overflow-hidden">
           {/* Banner */}
-          <div
-            className="relative h-44 sm:h-52 bg-cover bg-center flex items-end pb-4"
-            style={
-              restaurant.banner_url
-                ? {
-                  backgroundImage: `linear-gradient(to bottom, ${theme === "dark" ? "rgba(3,7,18,0.2), rgba(3,7,18,0.95)" : "rgba(249,250,251,0.2), rgba(249,250,251,0.98)"}), url(${restaurant.banner_url})`
-                }
-                : {
-                  backgroundImage: `linear-gradient(to bottom, ${theme === "dark" ? "rgba(3,7,18,0.2), rgba(3,7,18,0.95)" : "rgba(249,250,251,0.2), rgba(249,250,251,0.98)"}), linear-gradient(135deg, #f59e0b, #d97706)`
-                }
-            }
-          >
+          <div className="relative h-44 sm:h-52 overflow-hidden flex items-end pb-4">
+            {/* Background Banner Image */}
+            {restaurant.banner_url ? (
+              <motion.img
+                src={restaurant.banner_url}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover z-0"
+                animate={{
+                  scale: [1, 1.08, 3.03, 1.09, 1],
+                  x: [0, 50, -30, 3, 0],
+                  y: [0, -30, 50, -2, 0],
+                }}
+                transition={{
+                  duration: 20,
+                  ease: "easeInOut",
+                  repeat: Infinity,
+                  repeatType: "mirror"
+                }}
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-500 to-amber-600 z-0" />
+            )}
+
+            {/* Dark/Light bottom gradient overlay */}
+            <div className={`absolute inset-0 z-0 pointer-events-none bg-gradient-to-t ${theme === "dark"
+              ? "from-[#030712] via-[#030712]/50 to-black/35"
+              : "from-gray-50 via-gray-50/50 to-black/10"
+              }`} />
+
             <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
               <button
                 onClick={toggleTheme}
@@ -447,7 +596,7 @@ export default function CustomerMenuPage() {
                 </div>
               )}
               <div>
-                <h1 className={`text-xl sm:text-2xl font-black ${themeTextTitle} drop-shadow-sm`}>{restaurant.name}</h1>
+                <h1 className={`text-xl sm:text-2xl font-black text-white drop-shadow-sm`}>{restaurant.name}</h1>
                 {tableDetails ? (
                   <p className="text-amber-500 text-xs font-black mt-0.5 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
                     Table {tableDetails.table_number}
@@ -460,7 +609,7 @@ export default function CustomerMenuPage() {
               </div>
             </div>
             <svg
-              className="absolute bottom-0 left-0 w-full"
+              className="absolute bottom-0 left-0 w-full z-10"
               viewBox="0 0 1440 40"
               preserveAspectRatio="none"
               style={{ height: 16 }}
@@ -491,7 +640,7 @@ export default function CustomerMenuPage() {
             </div>
           </div>
 
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex min-h-0 overflow-hidden">
             {/* Dynamic Left Vertical Sub-Categories List */}
             <div className={`w-24 sm:w-28 ${themeSidebar} overflow-y-auto flex-shrink-0 py-2 border-r ${themeBorder}`}>
               <div className="space-y-1">
@@ -525,7 +674,7 @@ export default function CustomerMenuPage() {
             </div>
 
             {/* Right Scrollable Product List */}
-            <div className="flex-1 overflow-y-auto px-3 py-3">
+            <div className="flex-1 overflow-y-auto px-3 pt-3 pb-32">
               {filteredMenuItems.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <p className="text-3xl mb-2">🍽️</p>
@@ -533,8 +682,15 @@ export default function CustomerMenuPage() {
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  <p className={`text-[10px] ${themeTextMuted} font-bold uppercase tracking-wider px-1`}>
+                  {/* <p className={`text-[10px] ${themeTextMuted} font-bold uppercase tracking-wider px-1`}>
                     {activeSubCategory === "all" ? "All Items" : categories.find(c => c.id === activeSubCategory)?.name}
+                  </p> */}
+                  <p
+                    className={`sticky top-[-12px] z-10 ${themeBg} text-[10px] ${themeTextMuted} font-bold uppercase tracking-wider px-1 py-2`}
+                  >
+                    {activeSubCategory === "all"
+                      ? "All Items"
+                      : categories.find(c => c.id === activeSubCategory)?.name}
                   </p>
                   {filteredMenuItems.map(item => {
                     const itemPrice = parseFloat(item.price.toString())
@@ -548,16 +704,20 @@ export default function CustomerMenuPage() {
                         onClick={() => openItemDetail(item)}
                         className={`w-full ${themeCard} rounded-xl flex gap-3 p-2.5 border hover:border-amber-500/30 active:scale-[0.99] transition-all cursor-pointer relative group`}
                       >
-                        <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-lg overflow-hidden shrink-0 bg-gray-200 dark:bg-gray-900 border border-white/5 flex items-center justify-center">
-                          {item.image_url ? (
-                            <img
-                              src={item.image_url}
-                              alt={item.display_name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                          ) : (
-                            <span className="text-2xl">🍽️</span>
-                          )}
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl shrink-0 bg-gray-200 dark:bg-gray-900 border border-white/5 flex items-center justify-center relative overflow-hidden">
+                          {(() => {
+                            const allImgs = [item.image_url, ...(Array.isArray(item.image_urls) ? item.image_urls : [])].filter(Boolean) as string[]
+                            return allImgs.length > 0 ? (
+                              <SlideshowImage
+                                images={allImgs}
+                                alt={item.display_name}
+                                className="w-full h-full"
+                                interval={2500}
+                              />
+                            ) : (
+                              <span className="text-2xl">🍽️</span>
+                            )
+                          })()}
                         </div>
 
                         <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -713,11 +873,10 @@ export default function CustomerMenuPage() {
                             key={type}
                             type="button"
                             onClick={() => setOrderType(type)}
-                            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                              isActive
+                            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${isActive
                                 ? "bg-amber-500 text-black shadow-md"
                                 : `${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-black"}`
-                            }`}
+                              }`}
                           >
                             {label}
                           </button>
@@ -763,13 +922,6 @@ export default function CustomerMenuPage() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setShowPayment(true)}
-                  disabled={orderType === "DELIVERY" && !deliveryAddress.trim()}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
-                >
-                  Pay & Place Order · ${cartTotal.toFixed(2)}
-                </button>
               </div>
             </div>
           )}
@@ -854,8 +1006,8 @@ export default function CustomerMenuPage() {
 
       {/* ─── FULL COVERED MENU ITEM DETAIL PAGE ─── */}
       {selectedItem && (
-        <div className={`fixed inset-0 z-50 ${theme === "dark" ? "bg-[#030712] text-white" : "bg-white text-gray-900"} flex flex-col w-full h-full overflow-y-auto`}>
-          <div className="absolute top-4 left-4 z-10">
+        <div className={`fixed inset-0 z-50 ${theme === "dark" ? "bg-[#030712] text-white" : "bg-white text-gray-900"} flex flex-col w-full h-[100dvh] overflow-hidden`}>
+          <div className="absolute top-4 left-4 z-30">
             <button
               onClick={() => setSelectedItem(null)}
               className="bg-black/60 backdrop-blur-md hover:bg-black/80 text-white p-2.5 rounded-full shadow-lg border border-white/10 active:scale-90 transition-all"
@@ -864,19 +1016,73 @@ export default function CustomerMenuPage() {
             </button>
           </div>
 
-          <div className="relative h-64 sm:h-72 bg-gray-900 w-full shrink-0 flex items-center justify-center border-b border-white/5">
+          <div className="relative h-52 sm:h-80 bg-gray-950 w-full shrink-0 flex items-center justify-center border-b border-white/5 overflow-hidden">
             {selectedItem.image_url ? (
-              <img src={selectedItem.image_url} alt={selectedItem.display_name} className="w-full h-full object-cover" />
+              <motion.div
+                className="w-full h-full"
+                animate={{
+                  scale: selectedCustomizationBadges.length > 0 ? [1, 1.04, 1] : 1,
+                }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                key={selectedCustomizationBadges.length}
+              >
+                {(() => {
+                  const allImgs = [selectedItem.image_url, ...(Array.isArray(selectedItem.image_urls) ? selectedItem.image_urls : [])].filter(Boolean) as string[]
+                  return (
+                    <SlideshowImage
+                      images={allImgs}
+                      alt={selectedItem.display_name}
+                      className="w-full h-full"
+                      interval={3000}
+                    />
+                  )
+                })()}
+              </motion.div>
             ) : (
               <div className="text-center space-y-2 text-gray-500">
-                <span className="text-6xl block">🍽️</span>
+                <span className="text-6xl block animate-pulse">🍽️</span>
                 <span className="text-xs font-semibold">No Image Available</span>
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30 pointer-events-none" />
+
+            {/* Customization side dish / drink floating overlay slots */}
+            <AnimatePresence>
+              {selectedCustomizationBadges.map((choice, index) => {
+                const slot = SLOTS[index % SLOTS.length]
+                return (
+                  <motion.div
+                    key={choice.name}
+                    initial={{ scale: 0.1, opacity: 1, y: 600, x: index % 2 === 0 ? 120 : -120 }}
+                    animate={{ scale: 1, opacity: 1, y: 0, x: 0 }}
+                    exit={{ scale: 0, opacity: 2, y: 150 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 10, delay: 0.05 * index }}
+                    style={{ position: "absolute", ...slot }}
+                    className="z-20 flex flex-col items-center pointer-events-none select-none"
+                  >
+                    {choice.image_url ? (
+                      <>
+                        <div className="bg-black/85 backdrop-blur-md border border-amber-500/30 text-white px-2 py-0.5 rounded-full text-[9px] font-black shadow-lg mb-1 whitespace-nowrap">
+                          {choice.name} {choice.extraPrice > 0 ? `(+$${choice.extraPrice.toFixed(2)})` : ""}
+                        </div>
+                        <div className="w-14 h-24 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-none bg-gray-900 shadow-2xl p-0.5">
+                          <img src={choice.image_url} alt="" className="w-full h-full object-cover rounded-full" />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="bg-amber-500 text-black px-3 py-1.5 rounded-full text-[10px] font-black shadow-2xl border border-black/10 flex items-center gap-1.5">
+                        <span>✨</span>
+                        <span className="whitespace-nowrap">{choice.name}</span>
+                        {choice.extraPrice > 0 && <span className="opacity-75">(+${choice.extraPrice.toFixed(2)})</span>}
+                      </div>
+                    )}
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
           </div>
 
-          <div className="flex-1 px-5 py-6 max-w-xl mx-auto w-full space-y-5">
+          <div className="flex-1 overflow-y-auto px-5 py-6 max-w-xl mx-auto w-full space-y-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-black">{selectedItem.display_name}</h2>
@@ -899,48 +1105,120 @@ export default function CustomerMenuPage() {
             {selectedItem.customizations && selectedItem.customizations.length > 0 && (
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider opacity-60">Customizations</h3>
-                {selectedItem.customizations.map(cust => (
-                  <div key={cust.key} className={`space-y-2 ${themeCard} rounded-xl p-3 border`}>
-                    <p className="text-xs font-bold flex items-center gap-1.5">
-                      <span>{cust.label}</span>
-                      {cust.multiple && (
-                        <span className="text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded-full font-bold">
-                          Multi-select
-                        </span>
+                {selectedItem.customizations.map(cust => {
+                  const hasImages = cust.values.some(val => typeof val !== "string" && val.image_url)
+
+                  return (
+                    <div key={cust.key} className={`space-y-3.5 ${themeCard} rounded-2xl p-4 border`}>
+                      <p className="text-xs font-bold flex items-center gap-1.5">
+                        <span>{cust.label}</span>
+                        {cust.multiple && (
+                          <span className="text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded-full font-bold">
+                            Multi-select
+                          </span>
+                        )}
+                      </p>
+
+                      {hasImages ? (
+                        <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
+                          {cust.values.map(val => {
+                            const valName = typeof val === "string" ? val : val.name
+                            const valPrice = typeof val === "string" ? 0 : val.extraPrice
+                            const valImg = typeof val === "string" ? null : val.image_url
+                            const valRecommended = typeof val === "string" ? false : !!val.recommended
+
+                            const selected = cust.multiple
+                              ? (itemCustomizations[cust.key] as string[] || []).includes(valName)
+                              : itemCustomizations[cust.key] === valName
+
+                            return (
+                              <button
+                                key={valName}
+                                type="button"
+                                onClick={() => {
+                                  if (cust.multiple) {
+                                    const current = (itemCustomizations[cust.key] as string[] || [])
+                                    const updated = selected ? current.filter(v => v !== valName) : [...current, valName]
+                                    setItemCustomizations(prev => ({ ...prev, [cust.key]: updated }))
+                                  } else {
+                                    setItemCustomizations(prev => ({ ...prev, [cust.key]: selected ? "" : valName }))
+                                  }
+                                }}
+                                className={`flex h-25 w-full flex-col rounded-xl overflow-hidden border text-left transition-all active:scale-[0.98] ${selected
+                                  ? "border-amber-500 bg-amber-500/5 ring-1 ring-amber-500"
+                                  : `${theme === "dark" ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-300"} hover:opacity-90`
+                                  }`}
+                              >
+                                <div className="h-18 w-full bg-gray-900 border-b border-white/5 relative flex items-center justify-center shrink-0">
+                                  {valImg ? (
+                                    <img src={valImg} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="text-xl">🍽️</span>
+                                  )}
+                                  {selected && (
+                                    <div className="absolute top-1.5 right-1.5 bg-amber-500 text-black p-0.5 rounded-full shadow">
+                                      <Check className="w-3 h-3 stroke-[3]" />
+                                    </div>
+                                  )}
+                                  {!selected && valRecommended && (
+                                    <div className="absolute top-1.5 left-1.5 bg-amber-500 text-black text-[7px] font-black px-1 py-0.5 rounded shadow leading-none">
+                                      ✨ REC
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="p-2.5 flex-1 flex flex-col justify-between">
+                                  <span className={`text-[11px] font-bold ${theme === "dark" ? "text-gray-100" : "text-gray-900"} line-clamp-2 leading-tight flex items-center gap-1`}>
+                                    {valRecommended && <span className="text-amber-500 shrink-0">✨</span>}
+                                    <span>{valName}</span>
+                                  </span>
+                                  <span className="text-[10px] text-amber-500 font-extrabold mt-1">
+                                    {valPrice > 0 ? `+$${valPrice.toFixed(2)}` : "Free"}
+                                  </span>
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {cust.values.map(val => {
+                            const valName = typeof val === "string" ? val : val.name
+                            const valPrice = typeof val === "string" ? 0 : val.extraPrice
+                            const valRecommended = typeof val === "string" ? false : !!val.recommended
+                            const selected = cust.multiple
+                              ? (itemCustomizations[cust.key] as string[] || []).includes(valName)
+                              : itemCustomizations[cust.key] === valName
+                            return (
+                              <button
+                                key={valName}
+                                type="button"
+                                onClick={() => {
+                                  if (cust.multiple) {
+                                    const current = (itemCustomizations[cust.key] as string[] || [])
+                                    const updated = selected ? current.filter(v => v !== valName) : [...current, valName]
+                                    setItemCustomizations(prev => ({ ...prev, [cust.key]: updated }))
+                                  } else {
+                                    setItemCustomizations(prev => ({ ...prev, [cust.key]: selected ? "" : valName }))
+                                  }
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1 ${selected
+                                  ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/10"
+                                  : `${theme === "dark" ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-300"} text-gray-300 hover:opacity-85`
+                                  }`}
+                              >
+                                {valRecommended && <span className="text-amber-500">✨</span>}
+                                <span>{valName}</span>
+                                <span className={`text-[9px] font-extrabold ${selected ? "text-black/80" : "text-amber-500"}`}>
+                                  {valPrice > 0 ? `(+$${valPrice.toFixed(2)})` : ""}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
                       )}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {cust.values.map(val => {
-                        const valName = typeof val === "string" ? val : val.name
-                        const valPrice = typeof val === "string" ? 0 : val.extraPrice
-                        const selected = cust.multiple
-                          ? (itemCustomizations[cust.key] as string[] || []).includes(valName)
-                          : itemCustomizations[cust.key] === valName
-                        return (
-                          <button
-                            key={valName}
-                            type="button"
-                            onClick={() => {
-                              if (cust.multiple) {
-                                const current = (itemCustomizations[cust.key] as string[] || [])
-                                const updated = selected ? current.filter(v => v !== valName) : [...current, valName]
-                                setItemCustomizations(prev => ({ ...prev, [cust.key]: updated }))
-                              } else {
-                                setItemCustomizations(prev => ({ ...prev, [cust.key]: selected ? "" : valName }))
-                              }
-                            }}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${selected
-                              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/10"
-                              : `${theme === "dark" ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-300"} text-gray-300 hover:opacity-85`
-                              }`}
-                          >
-                            {valName} {valPrice > 0 ? `(+$${valPrice.toFixed(2)})` : ""}
-                          </button>
-                        )
-                      })}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
 
@@ -954,9 +1232,12 @@ export default function CustomerMenuPage() {
                 className={`w-full ${theme === "dark" ? "bg-[#0b0f19]" : "bg-white"} border ${themeBorder} rounded-xl px-3.5 py-2.5 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50 resize-none`}
               />
             </div>
+          </div>
 
-            <div className="flex items-center gap-4 pt-2">
-              <div className={`flex items-center gap-3 ${theme === "dark" ? "bg-[#0b0f19]" : "bg-gray-100"} border ${themeBorder} rounded-xl px-3 py-2`}>
+          {/* Sticky action footer at the bottom of the modal */}
+          <div className={`shrink-0 border-t ${themeBorder} ${theme === "dark" ? "bg-[#0b0f19]" : "bg-white"} px-5 py-4 w-full`}>
+            <div className="max-w-xl mx-auto flex items-center gap-4">
+              <div className={`flex items-center gap-3 ${theme === "dark" ? "bg-white/5" : "bg-gray-100"} border ${themeBorder} rounded-xl px-3 py-2`}>
                 <button
                   onClick={() => setItemQty(q => Math.max(1, q - 1))}
                   className="font-bold text-base w-7 h-7 flex items-center justify-center hover:text-amber-500 transition-colors"
@@ -982,7 +1263,38 @@ export default function CustomerMenuPage() {
         </div>
       )}
 
-      <footer className={`fixed bottom-0 left-0 right-0 z-30 ${themeFooter} border-t py-2 flex items-center justify-around px-4`}>
+      {/* Floating Bottom Cart Popup */}
+      {cart.length > 0 && !showPayment && (
+        <div className="fixed bottom-16 left-4 right-4 z-40 bg-amber-500 text-black p-3.5 rounded-2xl flex items-center justify-between shadow-2xl transform transition-all duration-300">
+          <div className="flex items-center gap-3">
+            <div className="relative bg-black/10 p-2 rounded-xl">
+              <ShoppingCart className="w-5 h-5 text-black" />
+              <span className="absolute -top-1.5 -right-2 bg-black text-amber-500 text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border border-amber-500">
+                {cartCount}
+              </span>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-85">Cart Total</p>
+              <p className="font-extrabold text-base">${cartTotal.toFixed(2)}</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              if (activeTab === "home") {
+                setActiveTab("cart")
+              } else if (activeTab === "cart") {
+                setShowPayment(true)
+              }
+            }}
+            className="bg-black text-amber-500 hover:bg-black/90 active:scale-95 font-black px-5 py-3 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all"
+          >
+            {activeTab === "home" ? "Confirm Order" : "Proceed to Payment"}
+          </button>
+        </div>
+      )}
+
+      {/* <footer className={`fixed bottom-0 left-0 right-0 z-30 ${themeFooter} border-t py-2 flex items-center justify-around px-4`}>
         <button
           onClick={() => setActiveTab("home")}
           className={`flex flex-col items-center justify-center gap-1 transition-all ${activeTab === "home" ? "text-amber-500 font-bold" : `${themeTextMuted} hover:text-amber-500`
@@ -997,14 +1309,7 @@ export default function CustomerMenuPage() {
           className={`flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === "cart" ? "text-amber-500 font-bold" : `${themeTextMuted} hover:text-amber-500`
             }`}
         >
-          <div className="relative">
-            <ShoppingCart className="w-5 h-5" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[8px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border border-white dark:border-[#030712]">
-                {cartCount}
-              </span>
-            )}
-          </div>
+          <ShoppingCart className="w-5 h-5" />
           <span className="text-[10px]">Cart</span>
         </button>
 
@@ -1016,7 +1321,7 @@ export default function CustomerMenuPage() {
           <Clock className="w-5 h-5" />
           <span className="text-[10px]">History</span>
         </button>
-      </footer>
+      </footer> */}
     </div>
   )
 }
