@@ -93,6 +93,81 @@ router.get('/public/list', async (req: Request, res: Response): Promise<void> =>
   }
 });
 
+// GET /api/restaurant/public/config - Retrieve tenant modules configuration & restaurant list
+router.get('/public/config', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantIdQuery = req.query.tenantId as string | undefined;
+    let tenant = null;
+
+    if (tenantIdQuery) {
+      tenant = await prisma.tenant.findFirst({
+        where: { id: tenantIdQuery, deleted_at: null, business_name: { not: 'System Admin' } },
+      });
+    }
+
+    if (tenant) {
+      // Scoped Tenant Mode
+      const tenantModules = await prisma.tenantModule.findMany({
+        where: { tenant_id: tenant.id, enabled: true },
+        include: { module: true },
+      });
+
+      const modules = tenantModules.map(tm => tm.module.code);
+
+      const restaurants = await prisma.restaurant.findMany({
+        where: { tenant_id: tenant.id, deleted_at: null },
+        select: {
+          id: true,
+          name: true,
+          logo_url: true,
+          banner_url: true,
+          branch: { select: { name: true } },
+        },
+        orderBy: { created_at: 'asc' },
+      });
+
+      res.json({
+        tenantId: tenant.id,
+        business_name: tenant.business_name,
+        business_type: tenant.business_type,
+        modules,
+        restaurants,
+      });
+    } else {
+      // Global Mode - load all active outlets from business tenants
+      const restaurants = await prisma.restaurant.findMany({
+        where: {
+          deleted_at: null,
+          tenant: {
+            status: 'ACTIVE',
+            deleted_at: null,
+            business_name: { not: 'System Admin' },
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          logo_url: true,
+          banner_url: true,
+          branch: { select: { name: true } },
+        },
+        orderBy: { created_at: 'asc' },
+      });
+
+      res.json({
+        tenantId: null,
+        business_name: "Hospitality Hub",
+        business_type: "HOTEL_RESTAURANT",
+        modules: ["RESTAURANT", "MENU", "DELIVERY", "HOTEL", "ROOMS"],
+        restaurants,
+      });
+    }
+  } catch (e) {
+    console.error('Error fetching public config:', e);
+    res.status(500).json({ error: 'Failed to fetch public configurations' });
+  }
+});
+
 router.use(authenticate);
 
 const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
