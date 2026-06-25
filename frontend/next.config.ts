@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   // This covers 192.168.x.x, 10.x.x.x, and 172.16-31.x.x subnets (all private IP ranges).
   allowedDevOrigins: [
     // Current active IPs
-    '192.168.1.7',
+    '192.168.1.44',
     '10.167.172.97',
     // Wildcard for any 192.168.x.x device
     '192.168.1.0/24',
