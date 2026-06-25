@@ -97,7 +97,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   if (isOwner || isWaiter) {
     operationsNav.push({ href: "/dashboard/waiter", label: "Waiter Station", icon: Utensils })
   }
-  if (isOwner || isManager || isWaiter) {
+  if (isOwner || isManager) {
     operationsNav.push({ href: "/dashboard/waiter-screen", label: "Waiter Screen", icon: Bell })
   }
   if (isOwner || isChef) {
@@ -222,6 +222,9 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
 
   const currentNavTitle = allNavItems.find((n) => isActive(n))?.label ?? "Dashboard"
 
+  // Waiter-only users get no sidebar — full screen station experience
+  const isWaiterOnly = isWaiter && !isOwner && !isManager && !isChef && !isCashier
+
   return (
     <div className="h-screen overflow-hidden bg-[var(--background)] flex">
       {/* Mobile overlay */}
@@ -239,10 +242,12 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
         </div>
       )}
 
-      {/* Desktop sidebar — fixed, never scrolls */}
-      <div className="hidden md:flex w-64 shrink-0 h-screen sticky top-0">
-        <Sidebar />
-      </div>
+      {/* Desktop sidebar — hidden for waiter-only users */}
+      {!isWaiterOnly && (
+        <div className="hidden md:flex w-64 shrink-0 h-screen sticky top-0">
+          <Sidebar />
+        </div>
+      )}
 
       {/* Main area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -252,12 +257,14 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
           style={{ background: "color-mix(in srgb, var(--surface) 90%, transparent)", backdropFilter: "blur(12px)" }}
         >
           <div className="flex items-center gap-3">
-            <button
-              className="md:hidden p-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+            {!isWaiterOnly && (
+              <button
+                className="md:hidden p-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            )}
             <h2 className="text-lg font-semibold tracking-tight hidden sm:block">
               {currentNavTitle}
             </h2>
