@@ -35,7 +35,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
-  const [user, setUser] = React.useState<{ name: string; email: string; roles: string[] } | null>(null)
+  const [user, setUser] = React.useState<{ name: string; email: string; roles: string[]; branchName?: string | null } | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
@@ -205,7 +205,10 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold truncate">{user.name}</p>
-              <p className="text-[10px] text-[var(--muted)] truncate">{user.roles.join(", ")}</p>
+              <p className="text-[10px] text-[var(--muted)] truncate">
+                {user.roles.join(", ")}
+                {user.branchName && ` (${user.branchName})`}
+              </p>
             </div>
           </div>
         )}

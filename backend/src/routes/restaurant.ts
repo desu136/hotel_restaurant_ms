@@ -6,6 +6,7 @@ const router = Router();
 
 // ─── PUBLIC ENDPOINTS (NO AUTH REQUIRED) ───────────────────────────────────
 
+// GET /api/restaurant/public/details/:restaurantId
 router.get('/public/details/:restaurantId', async (req: Request, res: Response): Promise<void> => {
   try {
     const restaurantId = req.params.restaurantId as string;
@@ -16,7 +17,9 @@ router.get('/public/details/:restaurantId', async (req: Request, res: Response):
         name: true,
         logo_url: true,
         banner_url: true,
-        branch: { select: { name: true } },
+        branch_id: true,
+        parent_id: true,
+        branch: { select: { id: true, name: true } },
       },
     });
     if (!restaurant) {
@@ -83,7 +86,9 @@ router.get('/public/list', async (req: Request, res: Response): Promise<void> =>
         name: true,
         logo_url: true,
         banner_url: true,
-        branch: { select: { name: true } },
+        branch_id: true,
+        parent_id: true,
+        branch: { select: { id: true, name: true } },
       },
       orderBy: { created_at: 'asc' },
     });
@@ -121,7 +126,9 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           name: true,
           logo_url: true,
           banner_url: true,
-          branch: { select: { name: true } },
+          branch_id: true,
+          parent_id: true,
+          branch: { select: { id: true, name: true } },
         },
         orderBy: { created_at: 'asc' },
       });
@@ -149,7 +156,9 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           name: true,
           logo_url: true,
           banner_url: true,
-          branch: { select: { name: true } },
+          branch_id: true,
+          parent_id: true,
+          branch: { select: { id: true, name: true } },
         },
         orderBy: { created_at: 'asc' },
       });
@@ -171,6 +180,40 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
 router.use(authenticate);
 
 const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
+const OWNER_ROLES = ['HOTEL_OWNER'];
+
+/**
+ * Returns true if the authenticated user is an owner (cross-branch visibility).
+ * Non-owners (managers, waiters, etc.) are branch-scoped.
+ */
+const isOwnerUser = (req: Request) =>
+  req.user!.roles.some(r => OWNER_ROLES.includes(r));
+
+/**
+ * For non-owner users, verify that a given restaurant belongs to their branch.
+ * Throws (returns false + sends 403) if the guard fails.
+ */
+async function guardRestaurantBranch(
+  req: Request,
+  res: Response,
+  restaurant_id: string,
+  tenantId: string
+): Promise<boolean> {
+  if (isOwnerUser(req)) return true; // owners bypass the check
+  const branchId = req.user!.branchId;
+  if (!branchId) {
+    res.status(403).json({ error: 'You are not assigned to any branch.' });
+    return false;
+  }
+  const restaurant = await prisma.restaurant.findFirst({
+    where: { id: restaurant_id, tenant_id: tenantId, branch_id: branchId, deleted_at: null },
+  });
+  if (!restaurant) {
+    res.status(403).json({ error: 'You do not have access to this restaurant outlet.' });
+    return false;
+  }
+  return true;
+}
 
 // ─── RESTAURANTS ───────────────────────────────────────────────────────────
 
@@ -179,10 +222,18 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+
+    const branchFilter = isOwnerUser(req)
+      ? {} // owners see all
+      : req.user!.branchId
+        ? { branch_id: req.user!.branchId } // non-owners see only their branch's outlet
+        : { id: '' }; // no branch assigned → empty result
+
     const restaurants = await prisma.restaurant.findMany({
-      where: { tenant_id: tenantId, deleted_at: null },
+      where: { tenant_id: tenantId, deleted_at: null, ...branchFilter },
       include: {
         branch: { select: { id: true, name: true } },
+        parent: { select: { id: true, name: true } },
         _count: { select: { tables: true, categories: true, menu_items: true } },
       },
       orderBy: { created_at: 'asc' },
@@ -199,17 +250,29 @@ router.post('/list', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { branch_id, name, logo_url, banner_url } = req.body;
-    if (!branch_id || !name) {
-      res.status(400).json({ error: 'branch_id and name are required' });
+    const { branch_id, parent_id, name, logo_url, banner_url } = req.body;
+    if (!name) {
+      res.status(400).json({ error: 'name is required' });
       return;
     }
     const restaurant = await prisma.restaurant.create({
-      data: { tenant_id: tenantId, branch_id, name, logo_url, banner_url },
-      include: { branch: { select: { id: true, name: true } }, _count: { select: { categories: true, menu_items: true, tables: true } } },
+      data: { 
+        tenant_id: tenantId, 
+        branch_id: branch_id || null, 
+        parent_id: parent_id || null, 
+        name, 
+        logo_url, 
+        banner_url 
+      },
+      include: { 
+        branch: { select: { id: true, name: true } }, 
+        parent: { select: { id: true, name: true } },
+        _count: { select: { categories: true, menu_items: true, tables: true } } 
+      },
     });
     res.status(201).json(restaurant);
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Failed to create restaurant' });
   }
 });
@@ -219,7 +282,7 @@ router.put('/list/:id', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req:
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { name, branch_id, logo_url, banner_url } = req.body;
+    const { name, branch_id, parent_id, logo_url, banner_url } = req.body;
 
     // Verify the restaurant belongs to this tenant
     const existing = await prisma.restaurant.findFirst({
@@ -231,11 +294,16 @@ router.put('/list/:id', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req:
       where: { id: req.params.id as string },
       data: {
         ...(name !== undefined && { name }),
-        ...(branch_id !== undefined && { branch_id }),
+        ...(branch_id !== undefined && { branch_id: branch_id || null }),
+        ...(parent_id !== undefined && { parent_id: parent_id || null }),
         ...(logo_url !== undefined && { logo_url }),
         ...(banner_url !== undefined && { banner_url }),
       },
-      include: { branch: { select: { id: true, name: true } }, _count: { select: { categories: true, menu_items: true, tables: true } } },
+      include: { 
+        branch: { select: { id: true, name: true } }, 
+        parent: { select: { id: true, name: true } },
+        _count: { select: { categories: true, menu_items: true, tables: true } } 
+      },
     });
     res.json(updated);
   } catch (e) {
@@ -299,6 +367,7 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
       res.status(400).json({ error: 'name and restaurant_id are required' });
       return;
     }
+    if (!await guardRestaurantBranch(req, res, restaurant_id, tenantId)) return;
     const category = await prisma.category.create({
       data: { name, restaurant_id, tenant_id: tenantId, parent_id: parent_id || null },
     });
@@ -366,11 +435,12 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id, display_name, description, price, category_id, availability, customizations, image_url, image_urls } = req.body;
+    const { restaurant_id, display_name, description, price, category_id, availability, customizations, image_url } = req.body;
     if (!restaurant_id || !display_name) {
       res.status(400).json({ error: 'restaurant_id and display_name are required' });
       return;
     }
+    if (!await guardRestaurantBranch(req, res, restaurant_id, tenantId)) return;
     const item = await prisma.menuItem.create({
       data: {
         tenant_id: tenantId,
@@ -382,7 +452,6 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
         availability: availability ?? true,
         customizations: customizations ?? null,
         image_url: image_url ?? null,
-        image_urls: Array.isArray(image_urls) ? image_urls : [],
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -396,7 +465,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
 // PATCH /api/restaurant/menu/:id
 router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
-    const { display_name, description, price, category_id, availability, customizations, image_url, image_urls } = req.body;
+    const { display_name, description, price, category_id, availability, customizations, image_url } = req.body;
     const item = await prisma.menuItem.update({
       where: { id: req.params.id as string },
       data: {
@@ -407,7 +476,6 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
         ...(availability !== undefined && { availability }),
         ...(customizations !== undefined && { customizations }),
         ...(image_url !== undefined && { image_url }),
-        ...(image_urls !== undefined && { image_urls: Array.isArray(image_urls) ? image_urls : [] }),
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -461,6 +529,7 @@ router.post('/tables', requireRole(...MANAGER_ROLES), async (req: Request, res: 
       res.status(400).json({ error: 'restaurant_id, table_number, and capacity are required' });
       return;
     }
+    if (!await guardRestaurantBranch(req, res, restaurant_id, tenantId)) return;
     const table = await prisma.restaurantTable.create({
       data: { tenant_id: tenantId, restaurant_id, table_number, capacity: parseInt(capacity) },
     });

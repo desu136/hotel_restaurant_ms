@@ -13,15 +13,17 @@ interface Branch {
 interface Restaurant {
   id: string
   name: string
-  branch_id: string
+  branch_id?: string | null
+  parent_id?: string | null
   branch?: { name: string } | null
+  parent?: { name: string } | null
   created_at: string
   logo_url?: string | null
   banner_url?: string | null
   _count?: { categories: number; menu_items: number; tables: number }
 }
 
-const emptyForm = { name: "", branch_id: "", logo_url: "", banner_url: "" }
+const emptyForm = { name: "", branch_id: "", parent_id: "", logo_url: "", banner_url: "" }
 
 export default function RestaurantManager() {
   const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
@@ -108,7 +110,7 @@ export default function RestaurantManager() {
 
   const openCreate = () => {
     setEditTarget(null)
-    setForm({ name: "", branch_id: branches[0]?.id ?? "", logo_url: "", banner_url: "" })
+    setForm({ name: "", branch_id: "", parent_id: "", logo_url: "", banner_url: "" })
     setError("")
     setShowModal(true)
   }
@@ -117,7 +119,8 @@ export default function RestaurantManager() {
     setEditTarget(r)
     setForm({
       name: r.name,
-      branch_id: r.branch_id,
+      branch_id: r.branch_id || "",
+      parent_id: r.parent_id || "",
       logo_url: r.logo_url || "",
       banner_url: r.banner_url || ""
     })
@@ -130,7 +133,13 @@ export default function RestaurantManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) { setError("Restaurant name is required."); return }
-    if (!form.branch_id) { setError("Please select a branch."); return }
+    
+    // If it has a parent, it must have a branch
+    if (form.parent_id && !form.branch_id) {
+      setError("A branch outlet must be linked to a branch.");
+      return
+    }
+
     setSubmitting(true)
     setError("")
     try {
@@ -141,7 +150,8 @@ export default function RestaurantManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
-          branch_id: form.branch_id,
+          branch_id: form.branch_id || null,
+          parent_id: form.parent_id || null,
           logo_url: form.logo_url || null,
           banner_url: form.banner_url || null
         }),
@@ -273,9 +283,18 @@ export default function RestaurantManager() {
 
                   {/* Branch */}
                   <td className="border border-[var(--surface-border)] px-3 py-2 text-[var(--muted)] whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      <GitBranch className="w-3 h-3 shrink-0 text-[var(--muted)]" />
-                      {r.branch?.name ?? branches.find(b => b.id === r.branch_id)?.name ?? <span className="italic opacity-40">Unknown</span>}
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <GitBranch className="w-3 h-3 shrink-0 text-[var(--muted)]" />
+                        {r.branch?.name ?? branches.find(b => b.id === r.branch_id)?.name ?? (
+                          <span className="italic opacity-60 font-semibold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px]">Brand Parent</span>
+                        )}
+                      </div>
+                      {r.parent && (
+                        <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                          Chain: {r.parent.name}
+                        </span>
+                      )}
                     </div>
                   </td>
 
@@ -385,10 +404,27 @@ export default function RestaurantManager() {
                 />
               </div>
 
+              {/* Belongs to Chain (Parent Brand) */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">
+                  Belongs to Chain (Optional)
+                </label>
+                <select
+                  value={form.parent_id}
+                  onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] transition-shadow"
+                >
+                  <option value="">— Standalone / New Parent Brand —</option>
+                  {restaurants.filter(r => !r.parent_id && !r.branch_id && r.id !== editTarget?.id).map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Branch selector */}
               <div>
                 <label className="block text-sm font-medium mb-1.5">
-                  Linked Branch <span className="text-red-500">*</span>
+                  Linked Branch {form.parent_id ? <span className="text-red-500">*</span> : "(Optional if parent brand)"}
                 </label>
                 {branches.length === 0 ? (
                   <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg px-3 py-2">
@@ -400,7 +436,7 @@ export default function RestaurantManager() {
                     onChange={e => setForm(f => ({ ...f, branch_id: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)] transition-shadow"
                   >
-                    <option value="">— Select branch —</option>
+                    <option value="">— None (This is a Parent Brand) —</option>
                     {branches.map(b => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}

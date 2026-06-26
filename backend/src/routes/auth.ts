@@ -97,6 +97,7 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
       where: { id: req.user.userId },
       include: {
         tenant: true,
+        branch: true,
         roles: { include: { role: true } }
       }
     });
@@ -114,7 +115,8 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
         avatar_url: user.avatar_url,
         roles: user.roles.map(ur => ur.role.code),
         tenant: user.tenant,
-        branch_id: user.branch_id
+        branch_id: user.branch_id,
+        branchName: user.branch?.name || null
       }
     });
   } catch (error) {

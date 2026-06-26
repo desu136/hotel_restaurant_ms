@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: [
     // Current active IPs
     '192.168.1.23',
+    '192.168.1.13',
     '10.167.172.97',
     // Wildcard for any 192.168.x.x device
     '192.168.1.0/24',
