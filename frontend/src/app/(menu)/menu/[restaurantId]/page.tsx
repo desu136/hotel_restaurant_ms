@@ -867,7 +867,7 @@ export default function CustomerMenuPage() {
                     <div className={`grid grid-cols-3 gap-2 p-1 rounded-xl ${theme === "dark" ? "bg-white/5 border border-white/10" : "bg-gray-100 border border-gray-200"}`}>
                       {(["DINE_IN", "TAKEAWAY", "DELIVERY"] as const).map(type => {
                         const isActive = orderType === type;
-                        const label = type === "DINE_IN" ? "Pre-order Dine-In" : type === "TAKEAWAY" ? "Takeaway" : "Delivery";
+                        const label = type === "DINE_IN" ? "Dine-In" : type === "TAKEAWAY" ? "Takeaway" : "Delivery";
                         return (
                           <button
                             key={type}
