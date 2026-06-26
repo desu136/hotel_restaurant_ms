@@ -14,6 +14,7 @@ interface RestaurantTable {
 }
 
 export default function TablesPage() {
+  const [currentUser, setCurrentUser] = React.useState<{ id: string; email: string; roles: string[] } | null>(null)
   const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState("")
   const [tables, setTables] = React.useState<RestaurantTable[]>([])
@@ -25,14 +26,26 @@ export default function TablesPage() {
   const [showForm, setShowForm] = React.useState(false)
 
   const fetchRestaurants = async () => {
-    const res = await fetch("/api/restaurant/list")
-    const data = res.ok ? await res.json() : []
-    setRestaurants(data)
-    if (data.length > 0) {
-      setSelectedRestaurantId(data[0].id)
-      await fetchTables(data[0].id)
+    try {
+      // Fetch current user
+      const meRes = await fetch("/api/auth/me")
+      const meData = meRes.ok ? await meRes.json() : null
+      if (meData && meData.success && meData.user) {
+        setCurrentUser(meData.user)
+      }
+
+      const res = await fetch("/api/restaurant/list")
+      const data = res.ok ? await res.json() : []
+      setRestaurants(data)
+      if (data.length > 0) {
+        setSelectedRestaurantId(data[0].id)
+        await fetchTables(data[0].id)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const fetchTables = async (restaurantId: string) => {
@@ -102,18 +115,24 @@ export default function TablesPage() {
       </div>
 
       {/* Restaurant Selector */}
-      {restaurants.length > 1 && (
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-semibold text-[var(--muted)]">Restaurant:</label>
-          <select
-            value={selectedRestaurantId}
-            onChange={e => handleRestaurantChange(e.target.value)}
-            className="bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
-          >
-            {restaurants.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
+      {restaurants.length > 0 && (
+        <div className="flex items-center gap-3 bg-[var(--surface-hover)]/30 p-4 rounded-xl border border-[var(--surface-border)]">
+          <label className="text-sm font-semibold text-[var(--muted)]">Active Restaurant:</label>
+          {currentUser?.roles.includes('HOTEL_OWNER') ? (
+            <select
+              value={selectedRestaurantId}
+              onChange={e => handleRestaurantChange(e.target.value)}
+              className="bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
+            >
+              {restaurants.map(r => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-sm font-bold text-[var(--foreground)]">
+              {restaurants.find(r => r.id === selectedRestaurantId)?.name || 'Loading outlet details...'}
+            </span>
+          )}
         </div>
       )}
 

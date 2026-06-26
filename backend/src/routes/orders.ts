@@ -37,6 +37,10 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
 
     const tenantId = restaurant.tenant_id;
     const branchId = restaurant.branch_id;
+    if (!branchId) {
+      res.status(400).json({ error: 'Orders must be placed at a specific branch outlet.' });
+      return;
+    }
 
     // Get or create walk-in customer for this tenant
     let walkInCustomer = await prisma.customer.findFirst({
@@ -104,30 +108,33 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
       });
     }
 
-    const order = await prisma.order.create({
-      data: {
-        tenant_id: tenantId,
-        branch_id: branchId,
-        customer_id: walkInCustomer.id,
-        table_id: table_id || null,
-        order_type: order_type as any,
-        status: 'PENDING',
-        total_amount: totalAmount,
-        items: {
-          create: orderItems,
-        },
-        kitchen_tickets: {
-          create: { status: 'PENDING' },
-        },
-        ...(order_type === 'DELIVERY' ? {
-          deliveries: {
-            create: {
-              delivery_address: delivery_address || 'No address provided',
-              status: 'PENDING',
-            }
-          }
-        } : {}),
+    const orderData: any = {
+      tenant_id: tenantId,
+      branch_id: branchId,
+      customer_id: walkInCustomer.id,
+      table_id: table_id || null,
+      order_type: order_type as any,
+      status: 'PENDING',
+      total_amount: totalAmount,
+      items: {
+        create: orderItems,
       },
+      kitchen_tickets: {
+        create: { status: 'PENDING' },
+      },
+    };
+
+    if (order_type === 'DELIVERY') {
+      orderData.deliveries = {
+        create: {
+          delivery_address: delivery_address || 'No address provided',
+          status: 'PENDING',
+        }
+      };
+    }
+
+    const order = await prisma.order.create({
+      data: orderData,
       include: {
         items: { include: { menu_item: true } },
         table: true,

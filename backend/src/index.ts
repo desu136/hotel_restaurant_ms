@@ -18,7 +18,7 @@ import uploadRoutes from './routes/upload';
 import qrRoutes from './routes/qr';
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = Number(process.env.PORT) || 4000;
 
 // Middleware
 app.use(cors({

@@ -143,23 +143,23 @@ model Branch {
 }
 
 model User {
-  id                String            @id @default(uuid()) @db.Uuid
-  tenant_id         String?           @db.Uuid
-  branch_id         String?           @db.Uuid
-  full_name         String
-  email             String            @unique
-  phone             String?
-  password_hash     String
-  avatar_url        String?
-  status            UserStatus        @default(ACTIVE)
-  created_at        DateTime          @default(now())
-  updated_at        DateTime          @updatedAt
-  deleted_at        DateTime?
-  audit_logs    AuditLog[]
-  waiter_tables RestaurantTable[]
-  roles         UserRole[]
-  branch            Branch?           @relation(fields: [branch_id], references: [id])
-  tenant            Tenant?           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  id             String            @id @default(uuid()) @db.Uuid
+  tenant_id      String?           @db.Uuid
+  branch_id      String?           @db.Uuid
+  full_name      String
+  email          String            @unique
+  phone          String?
+  password_hash  String
+  status         UserStatus        @default(ACTIVE)
+  created_at     DateTime          @default(now())
+  updated_at     DateTime          @updatedAt
+  deleted_at     DateTime?
+  avatar_url     String?
+  audit_logs     AuditLog[]
+  roles          UserRole[]
+  waiter_tables  RestaurantTable[] @relation("WaiterTables")
+  branch         Branch?           @relation(fields: [branch_id], references: [id])
+  tenant         Tenant?           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id])
   @@index([branch_id])
@@ -316,7 +316,8 @@ model Reservation {
 model Restaurant {
   id         String            @id @default(uuid()) @db.Uuid
   tenant_id  String            @db.Uuid
-  branch_id  String            @db.Uuid
+  branch_id  String?           @db.Uuid
+  parent_id  String?           @db.Uuid
   name       String
   created_at DateTime          @default(now())
   updated_at DateTime          @updatedAt
@@ -326,8 +327,10 @@ model Restaurant {
   categories Category[]
   menu_items MenuItem[]
   tables     RestaurantTable[]
-  branch     Branch            @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  branch     Branch?           @relation(fields: [branch_id], references: [id], onDelete: Cascade)
   tenant     Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  parent     Restaurant?       @relation("RestaurantChain", fields: [parent_id], references: [id])
+  children   Restaurant[]      @relation("RestaurantChain")
 
   @@map("restaurants")
 }
@@ -337,10 +340,10 @@ model Category {
   tenant_id     String     @db.Uuid
   restaurant_id String     @db.Uuid
   name          String
-  parent_id     String?    @db.Uuid
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
   deleted_at    DateTime?
+  parent_id     String?    @db.Uuid
   parent        Category?  @relation("CategoryToCategory", fields: [parent_id], references: [id], onDelete: Cascade)
   subcategories Category[] @relation("CategoryToCategory")
   restaurant    Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
@@ -364,7 +367,6 @@ model MenuItem {
   description      String?
   price            Decimal     @default(0) @db.Decimal(10, 2)
   image_url        String?
-  image_urls       Json?   @default("[]")
   category         Category?   @relation(fields: [category_id], references: [id])
   restaurant       Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
   tenant           Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -374,20 +376,21 @@ model MenuItem {
 }
 
 model RestaurantTable {
-  id            String     @id @default(uuid()) @db.Uuid
-  tenant_id     String     @db.Uuid
-  restaurant_id String     @db.Uuid
+  id            String      @id @default(uuid()) @db.Uuid
+  tenant_id     String      @db.Uuid
+  restaurant_id String      @db.Uuid
   table_number  String
   capacity      Int
-  created_at    DateTime   @default(now())
-  updated_at    DateTime   @updatedAt
-  waiter_id     String?    @db.Uuid
+  waiter_id     String?     @db.Uuid
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
   orders        Order[]
   qr_codes      QRCode[]
-  restaurant    Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
-  tenant        Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  waiter        User?      @relation(fields: [waiter_id], references: [id])
+  restaurant    Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  tenant        Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  waiter        User?       @relation("WaiterTables", fields: [waiter_id], references: [id])
 
+  @@index([waiter_id])
   @@map("restaurant_tables")
 }
 

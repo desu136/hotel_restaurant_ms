@@ -14,8 +14,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const branchFilter = isOwner ? {} : { branch_id: req.user!.branchId || '' };
+
     const employees = await prisma.user.findMany({
-      where: { tenant_id: tenantId, deleted_at: null },
+      where: { tenant_id: tenantId, deleted_at: null, ...branchFilter },
       include: {
         branch: true,
         roles: { include: { role: true } },
@@ -59,6 +62,13 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     }
 
     const passwordHash = await hash(password, 10);
+
+    // Enforce branchId requirement for non-owners
+    const isOwner = roles && roles.includes('HOTEL_OWNER');
+    if (!isOwner && !branchId) {
+      res.status(400).json({ error: 'Branch is required for all employees' });
+      return;
+    }
 
     // Validate branch belongs to tenant
     if (branchId) {
@@ -209,6 +219,25 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
 
     if (password) {
       updateData.password_hash = await hash(password, 10);
+    }
+
+    let isOwner = false;
+    if (roles !== undefined && Array.isArray(roles)) {
+      isOwner = roles.includes('HOTEL_OWNER');
+    } else {
+      const userWithRoles = await prisma.user.findUnique({
+        where: { id: employee.id },
+        include: { roles: { include: { role: true } } }
+      });
+      isOwner = userWithRoles?.roles.some(ur => ur.role.code === 'HOTEL_OWNER') || false;
+    }
+
+    if (!isOwner) {
+      const targetBranchId = branchId !== undefined ? branchId : employee.branch_id;
+      if (!targetBranchId) {
+        res.status(400).json({ error: 'Branch is required for all employees' });
+        return;
+      }
     }
 
     if (branchId !== undefined) {

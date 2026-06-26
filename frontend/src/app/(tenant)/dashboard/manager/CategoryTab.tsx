@@ -20,7 +20,8 @@ interface Category {
 interface Restaurant {
   id: string
   name: string
-  branch_id: string
+  branch_id?: string | null
+  parent_id?: string | null
 }
 
 interface EmployeeRole {
@@ -49,6 +50,7 @@ interface RestaurantTable {
 
 export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "both" }) {
   // Common states
+  const [currentUser, setCurrentUser] = React.useState<{ id: string; email: string; roles: string[] } | null>(null)
   const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<string>("")
   const [loading, setLoading] = React.useState(true)
@@ -90,14 +92,22 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
     try {
       setLoading(true)
 
+      // Fetch current user
+      const meRes = await fetch("/api/auth/me")
+      const meData = meRes.ok ? await meRes.json() : null
+      if (meData && meData.success && meData.user) {
+        setCurrentUser(meData.user)
+      }
+
       // Fetch restaurants
       const restRes = await fetch("/api/restaurant/list")
       const restData = restRes.ok ? await restRes.json() : []
       setRestaurants(restData)
 
       let rId = ""
-      if (restData.length > 0) {
-        rId = restData[0].id
+      const firstSelectable = restData.find((r: any) => r.branch_id !== null)
+      if (firstSelectable) {
+        rId = firstSelectable.id
         setSelectedRestaurantId(rId)
       }
 
@@ -337,15 +347,49 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
       {restaurants.length > 0 && (
         <div className="flex items-center gap-3 bg-[var(--surface-hover)]/30 p-4 rounded-xl border border-[var(--surface-border)]">
           <label className="text-sm font-semibold text-[var(--muted)]">Active Restaurant:</label>
-          <select
-            value={selectedRestaurantId}
-            onChange={e => handleRestaurantChange(e.target.value)}
-            className="bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
-          >
-            {restaurants.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
+          {currentUser?.roles.includes('HOTEL_OWNER') ? (
+            <select
+              value={selectedRestaurantId}
+              onChange={e => handleRestaurantChange(e.target.value)}
+              className="bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
+            >
+              <option value="">— Select Active Restaurant —</option>
+              {(() => {
+                const brandParents = restaurants.filter(r => !r.parent_id && !r.branch_id);
+                const standalones = restaurants.filter(r => !r.parent_id && r.branch_id);
+                return (
+                  <>
+                    {brandParents.map(brand => {
+                      const children = restaurants.filter(r => r.parent_id === brand.id && r.branch_id);
+                      if (children.length === 0) return null;
+                      return (
+                        <optgroup key={brand.id} label={`${brand.name} (Chain)`}>
+                          {children.map(child => (
+                            <option key={child.id} value={child.id}>
+                              {child.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                    {standalones.length > 0 && (
+                      <optgroup label="Standalone Outlets">
+                        {standalones.map(r => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </>
+                );
+              })()}
+            </select>
+          ) : (
+            <span className="text-sm font-bold text-[var(--foreground)]">
+              {restaurants.find(r => r.id === selectedRestaurantId)?.name || 'Loading outlet details...'}
+            </span>
+          )}
         </div>
       )}
 
