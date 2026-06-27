@@ -4,7 +4,7 @@ import { useParams, useSearchParams, useRouter } from "next/navigation"
 import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon, Check, Store, Navigation, ChevronRight } from "lucide-react"
 import PaymentScreen from "./PaymentScreen"
 import { motion, AnimatePresence } from "framer-motion"
-import { setPreferredRestaurantId } from "@/lib/miniapp-bridge"
+import { setPreferredRestaurantId, getUserProfile, MiniAppUser } from "@/lib/miniapp-bridge"
 
 interface Restaurant {
   id: string
@@ -179,6 +179,8 @@ export default function CustomerMenuPage() {
   const [itemNotes, setItemNotes] = React.useState("")
   const [itemQty, setItemQty] = React.useState(1)
 
+  // Authenticated mini-app user (from eChat SSO bridge)
+  const [miniAppUser, setMiniAppUser] = React.useState<MiniAppUser | null>(null)
   // Order history
   const [historyOrders, setHistoryOrders] = React.useState<OrderHistoryItem[]>([])
   const [loadingHistory, setLoadingHistory] = React.useState(false)
@@ -251,6 +253,12 @@ export default function CustomerMenuPage() {
           setTableDetails(await tableRes.json())
         }
       }
+
+      // Load the authenticated user profile from the host app bridge
+      const profile = await getUserProfile()
+      if (profile) {
+        setMiniAppUser(profile)
+      }
     }
     init()
 
@@ -315,28 +323,39 @@ export default function CustomerMenuPage() {
     localStorage.setItem("menu-theme", nextTheme)
   }
 
-  // Load history orders
-  const loadOrderHistory = React.useCallback(async () => {
-    const localIds = JSON.parse(localStorage.getItem(`placed_orders_${activeRestaurantId}`) || "[]")
-    if (localIds.length === 0) {
-      setHistoryOrders([])
-      return
-    }
+  // Load history orders — prefer DB-backed endpoint when user is authenticated
+  const loadOrderHistory = React.useCallback(async (user?: MiniAppUser | null) => {
+    const resolvedUser = user !== undefined ? user : miniAppUser
     setLoadingHistory(true)
     try {
+      if (resolvedUser?.id) {
+        // Authenticated user: fetch full cross-device order history from the backend
+        const res = await fetch(`/api/orders/public/history?userId=${encodeURIComponent(resolvedUser.id)}`)
+        if (res.ok) {
+          const orders = await res.json()
+          setHistoryOrders(orders)
+          return
+        }
+      }
+      // Fallback: use localStorage order IDs (standalone / guest mode)
+      const localIds = JSON.parse(localStorage.getItem(`placed_orders_${activeRestaurantId}`) || "[]")
+      if (localIds.length === 0) {
+        setHistoryOrders([])
+        return
+      }
       const fetchedOrders = await Promise.all(
         localIds.map(async (id: string) => {
           const res = await fetch(`/api/orders/public/${id}`)
           return res.ok ? await res.json() : null
         })
       )
-      setHistoryOrders(fetchedOrders.filter(o => o !== null))
+      setHistoryOrders(fetchedOrders.filter((o): o is OrderHistoryItem => o !== null))
     } catch (err) {
       console.error(err)
     } finally {
       setLoadingHistory(false)
     }
-  }, [activeRestaurantId])
+  }, [activeRestaurantId, miniAppUser])
 
   React.useEffect(() => {
     if (activeTab === "history") {
@@ -594,6 +613,7 @@ export default function CustomerMenuPage() {
             orderNotes={orderNotes}
             orderType={orderType}
             deliveryAddress={deliveryAddress}
+            miniAppUser={miniAppUser}
             onBack={() => setShowPayment(false)}
             onSuccess={() => {
               setShowPayment(false)
@@ -601,7 +621,7 @@ export default function CustomerMenuPage() {
               setOrderNotes("")
               setDeliveryAddress("")
               setActiveTab("history")
-              loadOrderHistory()
+              loadOrderHistory(miniAppUser)
             }}
           />
         )}
@@ -997,82 +1017,6 @@ export default function CustomerMenuPage() {
                   </div>
 
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ─── HISTORY TAB VIEW ─── */}
-        {activeTab === "history" && (
-          <div className="flex-1 flex flex-col p-4 max-w-lg mx-auto w-full">
-            <div className="flex items-center gap-2 mb-4">
-              <button onClick={() => setActiveTab("home")} className={`p-1.5 rounded-lg transition-colors ${theme === "dark" ? "hover:bg-white/5" : "hover:bg-black/5"}`}>
-                <ArrowLeft className={`w-5 h-5 ${themeTextTitle}`} />
-              </button>
-              <h2 className="text-lg font-black">Your Order Status</h2>
-            </div>
-
-            {loadingHistory ? (
-              <div className="flex-1 flex items-center justify-center py-20">
-                <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : historyOrders.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center py-20 space-y-3">
-                <Clock className="w-14 h-14 opacity-20" />
-                <div>
-                  <p className={`font-bold ${themeTextTitle}`}>No recent orders found</p>
-                  <p className={`text-xs ${themeTextMuted} mt-1`}>Orders placed from this table will appear here.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3.5 overflow-y-auto max-h-[70vh] pr-1">
-                {historyOrders.map(order => {
-                  const orderDate = new Date(order.created_at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit"
-                  })
-                  // Safe numeric conversion to fix Runtime TypeError toFixed on string Decimal types
-                  const totalAmountNum = parseFloat((order.total_amount || 0).toString())
-
-                  return (
-                    <div key={order.id} className={`p-3 space-y-2.5 rounded-xl ${themeCard} border`}>
-                      <div className={`flex items-center justify-between border-b ${themeBorder} pb-2`}>
-                        <div>
-                          <p className="font-black text-xs">Order #{order.id.slice(0, 8).toUpperCase()}</p>
-                          <p className={`text-[10px] ${themeTextMuted} mt-0.5`}>Placed at {orderDate}</p>
-                        </div>
-                        <span
-                          className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${order.status === "PENDING"
-                            ? "bg-amber-505/10 text-amber-505 border-amber-505/20"
-                            : order.status === "PREPARING"
-                              ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                              : order.status === "READY"
-                                ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                : "bg-gray-500/10 text-gray-500 border-gray-500/20"
-                            }`}
-                        >
-                          {order.status}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        {order.items.map((item, i) => (
-                          <div key={i} className="flex justify-between text-xs opacity-90">
-                            <span>
-                              {item.quantity}x {item.menu_item.display_name}
-                            </span>
-                            <span>${(item.quantity * parseFloat(item.unit_price.toString())).toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className={`flex justify-between items-center pt-2 border-t ${themeBorder} text-xs`}>
-                        <span className={themeTextMuted}>Total amount</span>
-                        <span className="text-amber-505 font-extrabold">${totalAmountNum.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
             )}
           </div>
@@ -1511,34 +1455,7 @@ export default function CustomerMenuPage() {
         )}
       </AnimatePresence>
 
-      {/* <footer className={`fixed bottom-0 left-0 right-0 z-30 ${themeFooter} border-t py-2 flex items-center justify-around px-4`}>
-        <button
-          onClick={() => setActiveTab("home")}
-          className={`flex flex-col items-center justify-center gap-1 transition-all ${activeTab === "home" ? "text-amber-500 font-bold" : `${themeTextMuted} hover:text-amber-500`
-            }`}
-        >
-          <Home className="w-5 h-5" />
-          <span className="text-[10px]">Home</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("cart")}
-          className={`flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === "cart" ? "text-amber-500 font-bold" : `${themeTextMuted} hover:text-amber-500`
-            }`}
-        >
-          <ShoppingCart className="w-5 h-5" />
-          <span className="text-[10px]">Cart</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("history")}
-          className={`flex flex-col items-center justify-center gap-1 transition-all ${activeTab === "history" ? "text-amber-500 font-bold" : `${themeTextMuted} hover:text-amber-500`
-            }`}
-        >
-          <Clock className="w-5 h-5" />
-          <span className="text-[10px]">History</span>
-        </button>
-      </footer> */}
     </div>
   )
 }
+

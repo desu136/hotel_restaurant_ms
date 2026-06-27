@@ -14,7 +14,8 @@
     "build:backend": "npm run build --workspace=backend",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "seed": "npm run seed --workspace=backend"
+    "seed": "npm run seed --workspace=backend",
+    "seed:admin": "npx tsx backend/scripts/seed_admin.ts"
   },
   "devDependencies": {
     "tsx": "^4.22.4"
