@@ -153,8 +153,13 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
+
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    // Non-owners can only view employees in their own branch
+    const branchFilter = isOwner ? {} : { branch_id: req.user!.branchId || '' };
+
     const employee = await prisma.user.findFirst({
-      where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
+      where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null, ...branchFilter },
       include: { branch: true, roles: { include: { role: true } }, waiter_tables: true },
     });
     if (!employee) {

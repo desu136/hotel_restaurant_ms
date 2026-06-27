@@ -77,8 +77,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   if (isOwner) {
     managementNav.push(
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
-      { href: "/dashboard/branches", label: "Branches", icon: GitBranch, exact: false },
-      { href: "/dashboard/restaurants", label: "Restaurants", icon: Store, exact: false },
+      { href: "/dashboard/restaurants", label: "Restaurant", icon: Store, exact: false },
       { href: "/dashboard/employees", label: "Employees", icon: Users2, exact: false },
       { href: "/dashboard/roles", label: "Roles & Permissions", icon: ShieldCheck, exact: false }
     )
@@ -116,11 +115,11 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
     >
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[var(--surface-border)] shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-primary-500)] to-purple-600 flex items-center justify-center mr-3 shadow-sm">
-          <Hotel className="w-4 h-4 text-white" />
+        <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-600)] flex items-center justify-center mr-3 shadow-sm">
+          <Hotel className="w-4 h-4 text-[var(--btn-fg)]" />
         </div>
         <span className="font-bold text-lg tracking-tight">
-          Hospitality<span className="text-[var(--color-primary-600)]">Hub</span>
+          Hospitality<span className="opacity-60">Hub</span>
         </span>
       </div>
 
@@ -150,13 +149,12 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
                       href={item.href}
                       onClick={() => setSidebarOpen(false)}
                       className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${active
-                        ? "bg-[var(--color-primary-600)] text-white shadow-sm"
+                        ? "bg-[var(--color-primary-600)] text-[var(--btn-fg)] shadow-sm"
                         : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
                         }`}
                     >
                       <item.icon
-                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
-                          }`}
+                      className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-[var(--btn-fg)]" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"}`}
                       />
                       {item.label}
                     </Link>
@@ -178,13 +176,12 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
                       href={item.href}
                       onClick={() => setSidebarOpen(false)}
                       className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${active
-                        ? "bg-[var(--color-primary-600)] text-white shadow-sm"
+                        ? "bg-[var(--color-primary-600)] text-[var(--btn-fg)] shadow-sm"
                         : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
                         }`}
                     >
                       <item.icon
-                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-white" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"
-                          }`}
+                      className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-[var(--btn-fg)]" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"}`}
                       />
                       {item.label}
                     </Link>
@@ -199,8 +196,8 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
       {/* Footer */}
       <div className="p-4 border-t border-[var(--surface-border)] shrink-0 flex flex-col gap-3">
         {user && (
-          <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-[var(--surface-hover)]">
-            <div className="w-8 h-8 rounded-full bg-[var(--color-primary-500)]/20 flex items-center justify-center text-[var(--color-primary-600)] font-bold text-sm shrink-0">
+          <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-[var(--surface-hover)] border border-[var(--surface-border)]/40">
+            <div className="w-8 h-8 rounded-full bg-[var(--color-primary-600)] flex items-center justify-center text-[var(--btn-fg)] font-bold text-sm shrink-0">
               {user.name.charAt(0)}
             </div>
             <div className="min-w-0">
@@ -214,7 +211,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
         )}
         <button
           onClick={handleLogout}
-          className="flex items-center w-full px-4 py-2.5 rounded-lg text-sm font-medium text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-all"
+          className="flex items-center w-full px-4 py-2.5 rounded-lg text-sm font-medium text-[var(--muted)] hover:bg-red-600 hover:text-white dark:hover:bg-red-600 dark:hover:text-white transition-all duration-150"
         >
           <LogOut className="w-4 h-4 mr-3 shrink-0" />
           Sign Out
@@ -229,7 +226,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   const isWaiterOnly = isWaiter && !isOwner && !isManager && !isChef && !isCashier
 
   return (
-    <div className="h-screen overflow-hidden bg-[var(--background)] flex">
+    <div className="tenant-theme h-screen overflow-hidden bg-[var(--background)] flex">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -274,7 +271,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <ProfileDropdown settingsHref="/dashboard/settings" avatarGradient="from-[var(--color-primary-500)] to-purple-500" />
+            <ProfileDropdown settingsHref="/dashboard/settings" avatarGradient="from-[var(--color-primary-600)] to-[var(--color-primary-500)]" />
           </div>
         </header>
 

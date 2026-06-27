@@ -9,7 +9,7 @@ interface RestaurantTable {
   id: string
   table_number: string
   capacity: number
-  restaurant_id: string
+  branch_id: string
   status?: string
 }
 
@@ -51,7 +51,7 @@ export default function TablesPage() {
   const fetchTables = async (restaurantId: string) => {
     const res = await fetch(`/api/restaurant/tables?restaurant_id=${restaurantId}`)
     const data = res.ok ? await res.json() : []
-    setTables(data.filter((t: RestaurantTable) => t.restaurant_id === restaurantId))
+    setTables(data)
   }
 
   React.useEffect(() => { fetchRestaurants() }, [])

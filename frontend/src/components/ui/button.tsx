@@ -10,14 +10,15 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', isLoading, children, disabled, ...props }, ref) => {
     
-    const baseStyles = "inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
+    const baseStyles = "inline-flex items-center justify-center rounded-lg font-medium transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
     
     const variants = {
-      primary: "bg-[var(--color-primary-600)] text-white hover:bg-[var(--color-primary-500)] focus:ring-[var(--color-primary-500)] shadow-sm",
-      secondary: "bg-[var(--surface-hover)] text-[var(--foreground)] hover:bg-[var(--surface-border)] focus:ring-[var(--surface-border)]",
-      outline: "border border-[var(--surface-border)] bg-transparent hover:bg-[var(--surface-hover)] text-[var(--foreground)]",
-      ghost: "bg-transparent hover:bg-[var(--surface-hover)] text-[var(--foreground)]",
-      danger: "bg-red-600 text-white hover:bg-red-500 focus:ring-red-500",
+      // Black bg + white text in light; white bg + black text in dark
+      primary:   "bg-[var(--color-primary-600)] text-[var(--btn-fg)] hover:bg-[var(--color-primary-500)] active:bg-[var(--btn-pressed)] focus:ring-[var(--color-primary-500)] shadow-sm",
+      secondary: "bg-[var(--surface-hover)] text-[var(--foreground)] hover:bg-[var(--surface-border)] hover:text-[var(--surface)] active:bg-[var(--btn-pressed)] focus:ring-[var(--surface-border)]",
+      outline:   "border border-[var(--surface-border)] bg-transparent hover:bg-[var(--surface-hover)] active:bg-[var(--surface-border)] text-[var(--foreground)] focus:ring-[var(--surface-border)]",
+      ghost:     "bg-transparent hover:bg-[var(--surface-hover)] active:bg-[var(--surface-border)] text-[var(--foreground)]",
+      danger:    "bg-red-600 text-white hover:bg-red-500 active:bg-red-700 focus:ring-red-500",
     }
 
     const sizes = {
@@ -45,3 +46,4 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   }
 )
 Button.displayName = "Button"
+

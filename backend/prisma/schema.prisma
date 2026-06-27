@@ -36,6 +36,8 @@ model Tenant {
   modules           TenantModule[]
   subscriptions     TenantSubscription[]
   users             User[]
+  masterCategories  MasterCategory[]
+  masterMenuItems   MasterMenuItem[]
 
   @@map("tenants")
 }
@@ -123,43 +125,53 @@ model TenantModule {
 }
 
 model Branch {
-  id           String        @id @default(uuid()) @db.Uuid
-  tenant_id    String        @db.Uuid
-  name         String
-  address      String?
-  phone        String?
-  created_at   DateTime      @default(now())
-  updated_at   DateTime      @updatedAt
-  deleted_at   DateTime?
-  tenant       Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  orders       Order[]
-  reservations Reservation[]
-  restaurants  Restaurant[]
-  rooms        Room[]
-  users        User[]
+  id            String @id @default(uuid()) @db.Uuid
+  tenant_id     String @db.Uuid
+  restaurant_id String @db.Uuid
+
+  name    String
+  address String?
+  phone   String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+
+  orders           Order[]
+  reservations     Reservation[]
+  rooms            Room[]
+  users            User[]
+  categories       Category[]
+  menuItems        MenuItem[]
+  restaurantTables RestaurantTable[]
 
   @@index([tenant_id])
+  @@index([restaurant_id])
   @@map("branches")
 }
 
 model User {
-  id             String            @id @default(uuid()) @db.Uuid
-  tenant_id      String?           @db.Uuid
-  branch_id      String?           @db.Uuid
-  full_name      String
-  email          String            @unique
-  phone          String?
-  password_hash  String
-  status         UserStatus        @default(ACTIVE)
-  created_at     DateTime          @default(now())
-  updated_at     DateTime          @updatedAt
-  deleted_at     DateTime?
-  avatar_url     String?
-  audit_logs     AuditLog[]
-  roles          UserRole[]
-  waiter_tables  RestaurantTable[] @relation("WaiterTables")
-  branch         Branch?           @relation(fields: [branch_id], references: [id])
-  tenant         Tenant?           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  id            String            @id @default(uuid()) @db.Uuid
+  tenant_id     String?           @db.Uuid
+  branch_id     String?           @db.Uuid
+  full_name     String
+  email         String            @unique
+  phone         String?
+  password_hash String
+  status        UserStatus        @default(ACTIVE)
+  created_at    DateTime          @default(now())
+  updated_at    DateTime          @updatedAt
+  deleted_at    DateTime?
+  avatar_url    String?
+  audit_logs    AuditLog[]
+  roles         UserRole[]
+  waiter_tables RestaurantTable[] @relation("WaiterTables")
+  branch        Branch?           @relation(fields: [branch_id], references: [id])
+  tenant        Tenant?           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id])
   @@index([branch_id])
@@ -314,81 +326,161 @@ model Reservation {
 }
 
 model Restaurant {
-  id         String            @id @default(uuid()) @db.Uuid
-  tenant_id  String            @db.Uuid
-  branch_id  String?           @db.Uuid
-  parent_id  String?           @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
+  tenant_id String  @db.Uuid
+  parent_id String? @db.Uuid
+
   name       String
-  created_at DateTime          @default(now())
-  updated_at DateTime          @updatedAt
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
   deleted_at DateTime?
+
   banner_url String?
   logo_url   String?
-  categories Category[]
-  menu_items MenuItem[]
-  tables     RestaurantTable[]
-  branch     Branch?           @relation(fields: [branch_id], references: [id], onDelete: Cascade)
-  tenant     Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  parent     Restaurant?       @relation("RestaurantChain", fields: [parent_id], references: [id])
-  children   Restaurant[]      @relation("RestaurantChain")
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  parent   Restaurant?  @relation("RestaurantChain", fields: [parent_id], references: [id])
+  children Restaurant[] @relation("RestaurantChain")
+
+  branches Branch[] // <-- One restaurant has many branches
+  
+  masterCategories MasterCategory[]
+  masterMenuItems  MasterMenuItem[]
 
   @@map("restaurants")
 }
 
-model Category {
-  id            String     @id @default(uuid()) @db.Uuid
-  tenant_id     String     @db.Uuid
-  restaurant_id String     @db.Uuid
-  name          String
-  created_at    DateTime   @default(now())
-  updated_at    DateTime   @updatedAt
-  deleted_at    DateTime?
-  parent_id     String?    @db.Uuid
-  parent        Category?  @relation("CategoryToCategory", fields: [parent_id], references: [id], onDelete: Cascade)
-  subcategories Category[] @relation("CategoryToCategory")
-  restaurant    Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
-  tenant        Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  menu_items    MenuItem[]
+model MasterCategory {
+  id            String @id @default(uuid()) @db.Uuid
+  tenant_id     String @db.Uuid
+  restaurant_id String @db.Uuid
 
-  @@map("categories")
+  name String
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  parent_id String? @db.Uuid
+
+  parent MasterCategory? @relation("MasterCategoryTree", fields: [parent_id], references: [id], onDelete: Cascade)
+
+  subcategories MasterCategory[] @relation("MasterCategoryTree")
+
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  tenant     Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  menu_items MasterMenuItem[]
+  categories Category[]
 }
 
-model MenuItem {
-  id               String      @id @default(uuid()) @db.Uuid
-  tenant_id        String      @db.Uuid
-  restaurant_id    String      @db.Uuid
-  dexel_product_id String      @default("")
-  display_name     String
-  availability     Boolean     @default(true)
-  created_at       DateTime    @default(now())
-  updated_at       DateTime    @updatedAt
-  category_id      String?     @db.Uuid
-  customizations   Json?
-  description      String?
-  price            Decimal     @default(0) @db.Decimal(10, 2)
-  image_url        String?
-  category         Category?   @relation(fields: [category_id], references: [id])
-  restaurant       Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
-  tenant           Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  order_items      OrderItem[]
+model Category {
+  id String @id @default(uuid()) @db.Uuid
 
-  @@map("menu_items")
+  tenant_id String @db.Uuid
+  branch_id String @db.Uuid
+
+  master_category_id String? @db.Uuid
+
+  name String
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  parent_id String? @db.Uuid
+
+  parent Category? @relation("CategoryTree", fields: [parent_id], references: [id], onDelete: Cascade)
+
+  subcategories Category[] @relation("CategoryTree")
+
+  branch Branch @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+
+  master_category MasterCategory? @relation(fields: [master_category_id], references: [id])
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  menu_items   MenuItem[]
+}
+
+model MasterMenuItem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenant_id          String   @db.Uuid
+  restaurant_id      String   @db.Uuid
+
+  master_category_id String?  @db.Uuid
+
+  dexel_product_id   String   @default("")
+
+  display_name       String
+  description        String?
+  image_url          String?
+  customizations     Json?
+
+  price              Decimal  @default(0) @db.Decimal(10, 2)
+  availability       Boolean  @default(true)
+
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  deleted_at         DateTime?
+
+  restaurant         Restaurant      @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  category           MasterCategory? @relation(fields: [master_category_id], references: [id])
+  tenant             Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  menuItems          MenuItem[]
+}
+model MenuItem {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenant_id String @db.Uuid
+
+  branch_id String @db.Uuid
+
+  dexel_product_id String @default("")
+
+  master_menu_item_id String? @db.Uuid
+
+  category_id String? @db.Uuid
+
+  display_name String
+
+  description String?
+
+  image_url String?
+
+  customizations Json?
+
+  availability Boolean @default(true)
+
+  price Decimal @db.Decimal(10, 2)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  branch           Branch          @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  category         Category?       @relation(fields: [category_id], references: [id])
+  master_menu_item MasterMenuItem? @relation(fields: [master_menu_item_id], references: [id])
+  tenant           Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  order_items  OrderItem[]
 }
 
 model RestaurantTable {
-  id            String      @id @default(uuid()) @db.Uuid
-  tenant_id     String      @db.Uuid
-  restaurant_id String      @db.Uuid
-  table_number  String
-  capacity      Int
-  waiter_id     String?     @db.Uuid
-  created_at    DateTime    @default(now())
-  updated_at    DateTime    @updatedAt
-  orders        Order[]
-  qr_codes      QRCode[]
-  restaurant    Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
-  tenant        Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  waiter        User?       @relation("WaiterTables", fields: [waiter_id], references: [id])
+  id           String      @id @default(uuid()) @db.Uuid
+  tenant_id    String      @db.Uuid
+  branch_id    String      @db.Uuid
+  table_number String
+  capacity     Int
+  waiter_id    String?     @db.Uuid
+  created_at   DateTime    @default(now())
+  updated_at   DateTime    @updatedAt
+  orders       Order[]
+  qr_codes     QRCode[]
+  branch       Branch      @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  tenant       Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  waiter       User?       @relation("WaiterTables", fields: [waiter_id], references: [id])
 
   @@index([waiter_id])
   @@map("restaurant_tables")

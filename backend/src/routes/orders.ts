@@ -7,7 +7,7 @@ const router = Router();
 // POST /api/orders/public - Customer self-ordering from a table QR code
 router.post('/public', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { restaurant_id, table_id, items, notes, order_type = 'DINE_IN', delivery_address } = req.body;
+    const { restaurant_id, branch_id, table_id, items, notes, order_type = 'DINE_IN', delivery_address } = req.body;
 
     if (!restaurant_id) {
       res.status(400).json({ error: 'restaurant_id is required' });
@@ -25,22 +25,48 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Get tenant and branch from the restaurant
-    const restaurant = await prisma.restaurant.findUnique({
-      where: { id: restaurant_id },
-    });
+    let resolvedBranchId = branch_id;
+    let tenantId = null;
 
-    if (!restaurant) {
-      res.status(400).json({ error: 'Restaurant not found' });
+    if (table_id) {
+      const table = await prisma.restaurantTable.findUnique({
+        where: { id: table_id },
+        include: { branch: true }
+      });
+      if (table) {
+        resolvedBranchId = table.branch_id;
+        tenantId = table.tenant_id;
+      }
+    }
+
+    if (!resolvedBranchId) {
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: restaurant_id },
+        include: { branches: true }
+      });
+      if (restaurant && restaurant.branches.length > 0) {
+        resolvedBranchId = restaurant.branches[0].id;
+        tenantId = restaurant.tenant_id;
+      }
+    }
+
+    if (!resolvedBranchId) {
+      res.status(400).json({ error: 'branch_id or table_id is required' });
       return;
     }
 
-    const tenantId = restaurant.tenant_id;
-    const branchId = restaurant.branch_id;
-    if (!branchId) {
-      res.status(400).json({ error: 'Orders must be placed at a specific branch outlet.' });
-      return;
+    if (!tenantId) {
+      const branch = await prisma.branch.findUnique({
+        where: { id: resolvedBranchId },
+      });
+      if (!branch) {
+        res.status(404).json({ error: 'Branch not found' });
+        return;
+      }
+      tenantId = branch.tenant_id;
     }
+
+    const branchId = resolvedBranchId;
 
     // Get or create walk-in customer for this tenant
     let walkInCustomer = await prisma.customer.findFirst({
@@ -176,7 +202,7 @@ router.get('/public/ready/:restaurantId', async (req: Request, res: Response): P
     const orders = await prisma.order.findMany({
       where: {
         status: 'READY',
-        table: { restaurant_id: restaurantId },
+        table: { branch: { restaurant_id: restaurantId } },
       },
       include: {
         items: { include: { menu_item: { select: { display_name: true } } } },
@@ -476,7 +502,7 @@ router.patch('/:id/table', async (req: Request, res: Response): Promise<void> =>
 
     const table = await prisma.restaurantTable.findUnique({
       where: { id: table_id },
-      include: { restaurant: true },
+      include: { branch: { include: { restaurant: true } } },
     });
 
     if (!table) {
