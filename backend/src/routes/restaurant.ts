@@ -17,9 +17,11 @@ router.get('/public/details/:restaurantId', async (req: Request, res: Response):
         name: true,
         logo_url: true,
         banner_url: true,
-        branch_id: true,
         parent_id: true,
-        branch: { select: { id: true, name: true } },
+        branches: {
+          where: { deleted_at: null },
+          select: { id: true, name: true, address: true, phone: true }
+        },
       },
     });
     if (!restaurant) {
@@ -32,11 +34,46 @@ router.get('/public/details/:restaurantId', async (req: Request, res: Response):
   }
 });
 
+async function resolveBranchId(restaurantId: string, req: Request): Promise<string | null> {
+  const { tableId, branchId } = req.query;
+
+  if (tableId && typeof tableId === 'string') {
+    const table = await prisma.restaurantTable.findUnique({
+      where: { id: tableId },
+      select: { branch_id: true }
+    });
+    if (table) return table.branch_id;
+  }
+
+  if (branchId && typeof branchId === 'string') {
+    return branchId;
+  }
+
+  // Fallback: If restaurantId is actually a branch_id
+  const isBranch = await prisma.branch.findUnique({
+    where: { id: restaurantId },
+    select: { id: true }
+  });
+  if (isBranch) return isBranch.id;
+
+  // Otherwise, get the first branch of the restaurant
+  const firstBranch = await prisma.branch.findFirst({
+    where: { restaurant_id: restaurantId, deleted_at: null },
+    select: { id: true }
+  });
+  return firstBranch?.id ?? null;
+}
+
 router.get('/public/categories/:restaurantId', async (req: Request, res: Response): Promise<void> => {
   try {
     const restaurantId = req.params.restaurantId as string;
+    const branchId = await resolveBranchId(restaurantId, req);
+    if (!branchId) {
+      res.json([]);
+      return;
+    }
     const categories = await prisma.category.findMany({
-      where: { restaurant_id: restaurantId, deleted_at: null },
+      where: { branch_id: branchId, deleted_at: null },
       orderBy: { created_at: 'asc' },
     });
     res.json(categories);
@@ -48,8 +85,13 @@ router.get('/public/categories/:restaurantId', async (req: Request, res: Respons
 router.get('/public/menu/:restaurantId', async (req: Request, res: Response): Promise<void> => {
   try {
     const restaurantId = req.params.restaurantId as string;
+    const branchId = await resolveBranchId(restaurantId, req);
+    if (!branchId) {
+      res.json([]);
+      return;
+    }
     const items = await prisma.menuItem.findMany({
-      where: { restaurant_id: restaurantId, availability: true },
+      where: { branch_id: branchId, availability: true },
       include: { category: { select: { id: true, name: true } } },
       orderBy: { created_at: 'asc' },
     });
@@ -86,9 +128,11 @@ router.get('/public/list', async (req: Request, res: Response): Promise<void> =>
         name: true,
         logo_url: true,
         banner_url: true,
-        branch_id: true,
         parent_id: true,
-        branch: { select: { id: true, name: true } },
+        branches: {
+          where: { deleted_at: null },
+          select: { id: true, name: true, address: true, phone: true }
+        },
       },
       orderBy: { created_at: 'asc' },
     });
@@ -126,9 +170,11 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           name: true,
           logo_url: true,
           banner_url: true,
-          branch_id: true,
           parent_id: true,
-          branch: { select: { id: true, name: true } },
+          branches: {
+            where: { deleted_at: null },
+            select: { id: true, name: true, address: true, phone: true }
+          },
         },
         orderBy: { created_at: 'asc' },
       });
@@ -156,9 +202,11 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           name: true,
           logo_url: true,
           banner_url: true,
-          branch_id: true,
           parent_id: true,
-          branch: { select: { id: true, name: true } },
+          branches: {
+            where: { deleted_at: null },
+            select: { id: true, name: true, address: true, phone: true }
+          },
         },
         orderBy: { created_at: 'asc' },
       });
@@ -206,10 +254,20 @@ async function guardRestaurantBranch(
     return false;
   }
   const restaurant = await prisma.restaurant.findFirst({
-    where: { id: restaurant_id, tenant_id: tenantId, branch_id: branchId, deleted_at: null },
+    where: {
+      id: restaurant_id,
+      tenant_id: tenantId,
+      deleted_at: null,
+      branches: {
+        some: {
+          id: branchId,
+          deleted_at: null,
+        }
+      }
+    },
   });
   if (!restaurant) {
-    res.status(403).json({ error: 'You do not have access to this restaurant outlet.' });
+    res.status(403).json({ error: 'You do not have access to this restaurant branch.' });
     return false;
   }
   return true;
@@ -226,15 +284,34 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
     const branchFilter = isOwnerUser(req)
       ? {} // owners see all
       : req.user!.branchId
-        ? { branch_id: req.user!.branchId } // non-owners see only their branch's outlet
+        ? {
+            branches: {
+              some: {
+                id: req.user!.branchId,
+                deleted_at: null,
+              }
+            }
+          } // non-owners see only their branch's restaurant
         : { id: '' }; // no branch assigned → empty result
 
     const restaurants = await prisma.restaurant.findMany({
       where: { tenant_id: tenantId, deleted_at: null, ...branchFilter },
       include: {
-        branch: { select: { id: true, name: true } },
+        branches: {
+          where: { deleted_at: null },
+          select: {
+            id: true,
+            name: true,
+            _count: {
+              select: {
+                categories: true,
+                menuItems: true,
+                restaurantTables: true,
+              }
+            }
+          }
+        },
         parent: { select: { id: true, name: true } },
-        _count: { select: { tables: true, categories: true, menu_items: true } },
       },
       orderBy: { created_at: 'asc' },
     });
@@ -244,13 +321,85 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// GET /api/restaurant/my — Returns the root restaurant (brand) for the authenticated owner
+router.get('/my', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+    const restaurant = await prisma.restaurant.findFirst({
+      where: { tenant_id: tenantId, parent_id: null, deleted_at: null },
+      select: {
+        id: true, name: true, logo_url: true, banner_url: true, created_at: true,
+        _count: { select: { children: true } },
+      },
+    });
+    res.json(restaurant ?? null);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch restaurant profile' });
+  }
+});
+
+// POST /api/restaurant/my — Creates the root restaurant (brand) for the owner — only once
+router.post('/my', requireRole('HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+    const { name, logo_url, banner_url } = req.body;
+    if (!name?.trim()) { res.status(400).json({ error: 'Restaurant name is required' }); return; }
+
+    // Enforce one root restaurant per tenant
+    const existing = await prisma.restaurant.findFirst({
+      where: { tenant_id: tenantId, parent_id: null, deleted_at: null },
+    });
+    if (existing) {
+      res.status(409).json({ error: 'You already have a restaurant registered. Edit it instead.' });
+      return;
+    }
+
+    const restaurant = await prisma.restaurant.create({
+      data: { tenant_id: tenantId, name: name.trim(), logo_url: logo_url || null, banner_url: banner_url || null },
+      select: { id: true, name: true, logo_url: true, banner_url: true, created_at: true },
+    });
+    res.status(201).json(restaurant);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to create restaurant profile' });
+  }
+});
+
+// PUT /api/restaurant/my — Updates the root restaurant (brand) profile
+router.put('/my', requireRole('HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+    const { name, logo_url, banner_url } = req.body;
+
+    const existing = await prisma.restaurant.findFirst({
+      where: { tenant_id: tenantId, parent_id: null, deleted_at: null },
+    });
+    if (!existing) { res.status(404).json({ error: 'No restaurant profile found. Create one first.' }); return; }
+
+    const updated = await prisma.restaurant.update({
+      where: { id: existing.id },
+      data: {
+        ...(name?.trim() && { name: name.trim() }),
+        ...(logo_url !== undefined && { logo_url: logo_url || null }),
+        ...(banner_url !== undefined && { banner_url: banner_url || null }),
+      },
+      select: { id: true, name: true, logo_url: true, banner_url: true, created_at: true },
+    });
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update restaurant profile' });
+  }
+});
+
 
 // POST /api/restaurant/list
 router.post('/list', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { branch_id, parent_id, name, logo_url, banner_url } = req.body;
+    const { parent_id, name, logo_url, banner_url } = req.body;
     if (!name) {
       res.status(400).json({ error: 'name is required' });
       return;
@@ -258,16 +407,14 @@ router.post('/list', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Re
     const restaurant = await prisma.restaurant.create({
       data: { 
         tenant_id: tenantId, 
-        branch_id: branch_id || null, 
         parent_id: parent_id || null, 
         name, 
         logo_url, 
         banner_url 
       },
       include: { 
-        branch: { select: { id: true, name: true } }, 
-        parent: { select: { id: true, name: true } },
-        _count: { select: { categories: true, menu_items: true, tables: true } } 
+        branches: { select: { id: true, name: true } }, 
+        parent: { select: { id: true, name: true } }
       },
     });
     res.status(201).json(restaurant);
@@ -282,7 +429,7 @@ router.put('/list/:id', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req:
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { name, branch_id, parent_id, logo_url, banner_url } = req.body;
+    const { name, parent_id, logo_url, banner_url } = req.body;
 
     // Verify the restaurant belongs to this tenant
     const existing = await prisma.restaurant.findFirst({
@@ -294,15 +441,13 @@ router.put('/list/:id', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req:
       where: { id: req.params.id as string },
       data: {
         ...(name !== undefined && { name }),
-        ...(branch_id !== undefined && { branch_id: branch_id || null }),
         ...(parent_id !== undefined && { parent_id: parent_id || null }),
         ...(logo_url !== undefined && { logo_url }),
         ...(banner_url !== undefined && { banner_url }),
       },
       include: { 
-        branch: { select: { id: true, name: true } }, 
-        parent: { select: { id: true, name: true } },
-        _count: { select: { categories: true, menu_items: true, tables: true } } 
+        branches: { select: { id: true, name: true } }, 
+        parent: { select: { id: true, name: true } }
       },
     });
     res.json(updated);
@@ -336,19 +481,47 @@ router.delete('/list/:id', requireRole('HOTEL_OWNER'), async (req: Request, res:
 
 // ─── CATEGORIES ────────────────────────────────────────────────────────────
 
-// GET /api/restaurant/categories  — optionally ?restaurant_id=...
+// GET /api/restaurant/categories  — optionally ?restaurant_id=... or ?branch_id=... or ?is_master=...
 router.get('/categories', async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id } = req.query;
+    const { restaurant_id, branch_id, is_master } = req.query;
+
+    if (is_master === 'true') {
+      const masterCategories = await prisma.masterCategory.findMany({
+        where: {
+          tenant_id: tenantId,
+          deleted_at: null,
+          ...(restaurant_id ? { restaurant_id: restaurant_id as string } : {}),
+        },
+        orderBy: { created_at: 'asc' },
+      });
+      res.json(masterCategories);
+      return;
+    }
+
+    let branchFilter: any = {};
+    if (!isOwnerUser(req) && req.user!.branchId) {
+      // Non-owner branch accounts always see only their own branch's categories
+      branchFilter = { branch_id: req.user!.branchId };
+    } else if (branch_id) {
+      branchFilter = { branch_id: branch_id as string };
+    } else if (restaurant_id) {
+      branchFilter = { branch: { restaurant_id: restaurant_id as string } };
+    }
+
     const categories = await prisma.category.findMany({
       where: {
         tenant_id: tenantId,
         deleted_at: null,
-        ...(restaurant_id ? { restaurant_id: restaurant_id as string } : {}),
+        ...branchFilter,
       },
-      include: { _count: { select: { menu_items: true } } },
+      include: { 
+        _count: { select: { menu_items: true } },
+        master_category: true,
+        branch: { select: { id: true, name: true } },
+      },
       orderBy: { created_at: 'asc' },
     });
     res.json(categories);
@@ -362,17 +535,72 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { name, restaurant_id, parent_id } = req.body;
-    if (!name || !restaurant_id) {
-      res.status(400).json({ error: 'name and restaurant_id are required' });
+    const { name, restaurant_id, branch_id, parent_id, is_master } = req.body;
+    if (!name) {
+      res.status(400).json({ error: 'name is required' });
       return;
     }
-    if (!await guardRestaurantBranch(req, res, restaurant_id, tenantId)) return;
+
+    if (is_master) {
+      if (!restaurant_id) {
+        res.status(400).json({ error: 'restaurant_id is required for master category' });
+        return;
+      }
+      const masterCat = await prisma.masterCategory.create({
+        data: { name, tenant_id: tenantId, restaurant_id, parent_id: parent_id || null }
+      });
+      
+      // Broadcast to all active branches
+      const branches = await prisma.branch.findMany({
+        where: { restaurant_id, deleted_at: null }
+      });
+      for (const branch of branches) {
+        await prisma.category.create({
+          data: {
+            name,
+            tenant_id: tenantId,
+            branch_id: branch.id,
+            master_category_id: masterCat.id,
+            parent_id: parent_id || null
+          }
+        });
+      }
+      res.status(201).json(masterCat);
+      return;
+    }
+
+    let resolvedBranchId = branch_id;
+    if (!resolvedBranchId) {
+      if (req.user!.branchId) {
+        resolvedBranchId = req.user!.branchId;
+      } else if (restaurant_id) {
+        const firstBranch = await prisma.branch.findFirst({
+          where: { restaurant_id: restaurant_id as string, deleted_at: null },
+        });
+        resolvedBranchId = firstBranch?.id;
+      }
+    }
+
+    if (!resolvedBranchId) {
+      res.status(400).json({ error: 'branch_id or restaurant_id with an active branch is required' });
+      return;
+    }
+
+    // Guard: Ensure user has access to the resolved branch
+    if (!isOwnerUser(req)) {
+      const userBranchId = req.user!.branchId;
+      if (userBranchId !== resolvedBranchId) {
+        res.status(403).json({ error: 'You do not have access to this branch.' });
+        return;
+      }
+    }
+
     const category = await prisma.category.create({
-      data: { name, restaurant_id, tenant_id: tenantId, parent_id: parent_id || null },
+      data: { name, branch_id: resolvedBranchId, tenant_id: tenantId, parent_id: parent_id || null },
     });
     res.status(201).json(category);
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Failed to create category' });
   }
 });
@@ -381,14 +609,41 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
 router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, parent_id } = req.body;
-    const category = await prisma.category.update({
-      where: { id: req.params.id as string },
-      data: {
-        ...(name !== undefined ? { name } : {}),
-        ...(parent_id !== undefined ? { parent_id: parent_id || null } : {}),
-      },
-    });
-    res.json(category);
+    const categoryId = req.params.id as string;
+
+    const cat = await prisma.category.findUnique({ where: { id: categoryId } });
+    if (cat) {
+      const updatedCat = await prisma.category.update({
+        where: { id: categoryId },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(parent_id !== undefined ? { parent_id: parent_id || null } : {}),
+        },
+      });
+      res.json(updatedCat);
+      return;
+    }
+
+    const masterCat = await prisma.masterCategory.findUnique({ where: { id: categoryId } });
+    if (masterCat) {
+      const updatedMaster = await prisma.masterCategory.update({
+        where: { id: categoryId },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(parent_id !== undefined ? { parent_id: parent_id || null } : {}),
+        },
+      });
+      if (name !== undefined) {
+        await prisma.category.updateMany({
+          where: { master_category_id: categoryId },
+          data: { name }
+        });
+      }
+      res.json(updatedMaster);
+      return;
+    }
+
+    res.status(404).json({ error: 'Category not found' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to update category' });
   }
@@ -397,11 +652,33 @@ router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Reque
 // DELETE /api/restaurant/categories/:id  — soft delete
 router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.category.update({
-      where: { id: req.params.id as string },
-      data: { deleted_at: new Date() },
-    });
-    res.json({ success: true });
+    const categoryId = req.params.id as string;
+    const cat = await prisma.category.findUnique({ where: { id: categoryId } });
+    if (cat) {
+      await prisma.category.update({
+        where: { id: categoryId },
+        data: { deleted_at: new Date() },
+      });
+      res.json({ success: true });
+      return;
+    }
+
+    const masterCat = await prisma.masterCategory.findUnique({ where: { id: categoryId } });
+    if (masterCat) {
+      const now = new Date();
+      await prisma.masterCategory.update({
+        where: { id: categoryId },
+        data: { deleted_at: now },
+      });
+      await prisma.category.updateMany({
+        where: { master_category_id: categoryId },
+        data: { deleted_at: now },
+      });
+      res.json({ success: true });
+      return;
+    }
+
+    res.status(404).json({ error: 'Category not found' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to delete category' });
   }
@@ -409,19 +686,49 @@ router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Requ
 
 // ─── MENU ITEMS ────────────────────────────────────────────────────────────
 
-// GET /api/restaurant/menu  — ?restaurant_id=...&category_id=...
+// GET /api/restaurant/menu  — ?restaurant_id=...&branch_id=...&category_id=...&is_master=...
 router.get('/menu', async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id, category_id } = req.query;
+    const { restaurant_id, branch_id, category_id, is_master } = req.query;
+
+    if (is_master === 'true') {
+      const masterItems = await prisma.masterMenuItem.findMany({
+        where: {
+          tenant_id: tenantId,
+          deleted_at: null,
+          ...(restaurant_id ? { restaurant_id: restaurant_id as string } : {}),
+          ...(category_id ? { master_category_id: category_id as string } : {}),
+        },
+        include: { category: { select: { id: true, name: true } } },
+        orderBy: { created_at: 'asc' },
+      });
+      res.json(masterItems);
+      return;
+    }
+
+    let branchFilter: any = {};
+    if (!isOwnerUser(req) && req.user!.branchId) {
+      // Non-owner branch accounts always see only their own branch's menu items
+      branchFilter = { branch_id: req.user!.branchId };
+    } else if (branch_id) {
+      branchFilter = { branch_id: branch_id as string };
+    } else if (restaurant_id) {
+      branchFilter = { branch: { restaurant_id: restaurant_id as string } };
+    }
+
     const items = await prisma.menuItem.findMany({
       where: {
         tenant_id: tenantId,
-        ...(restaurant_id ? { restaurant_id: restaurant_id as string } : {}),
+        ...branchFilter,
         ...(category_id ? { category_id: category_id as string } : {}),
       },
-      include: { category: { select: { id: true, name: true } } },
+      include: { 
+        category: { select: { id: true, name: true } },
+        master_menu_item: true,
+        branch: { select: { id: true, name: true } },
+      },
       orderBy: { created_at: 'asc' },
     });
     res.json(items);
@@ -435,16 +742,93 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id, display_name, description, price, category_id, availability, customizations, image_url } = req.body;
-    if (!restaurant_id || !display_name) {
-      res.status(400).json({ error: 'restaurant_id and display_name are required' });
+    const { restaurant_id, branch_id, display_name, description, price, category_id, availability, customizations, image_url, is_master } = req.body;
+    if (!display_name) {
+      res.status(400).json({ error: 'display_name is required' });
       return;
     }
-    if (!await guardRestaurantBranch(req, res, restaurant_id, tenantId)) return;
+
+    if (is_master) {
+      if (!restaurant_id) {
+        res.status(400).json({ error: 'restaurant_id is required for master menu item' });
+        return;
+      }
+      const masterItem = await prisma.masterMenuItem.create({
+        data: {
+          tenant_id: tenantId,
+          restaurant_id,
+          master_category_id: category_id || null,
+          display_name,
+          description: description ?? null,
+          price: price ?? 0,
+          availability: availability ?? true,
+          customizations: customizations ?? null,
+          image_url: image_url ?? null,
+        },
+        include: { category: { select: { id: true, name: true } } },
+      });
+
+      // Broadcast to all active branches
+      const branches = await prisma.branch.findMany({
+        where: { restaurant_id, deleted_at: null }
+      });
+      for (const branch of branches) {
+        let localCategoryId = null;
+        if (category_id) {
+          const localCategory = await prisma.category.findFirst({
+            where: { branch_id: branch.id, master_category_id: category_id, deleted_at: null }
+          });
+          localCategoryId = localCategory?.id || null;
+        }
+        await prisma.menuItem.create({
+          data: {
+            tenant_id: tenantId,
+            branch_id: branch.id,
+            master_menu_item_id: masterItem.id,
+            category_id: localCategoryId,
+            display_name,
+            description: description ?? null,
+            price: price ?? 0,
+            availability: availability ?? true,
+            customizations: customizations ?? null,
+            image_url: image_url ?? null,
+          }
+        });
+      }
+
+      res.status(201).json(masterItem);
+      return;
+    }
+
+    let resolvedBranchId = branch_id;
+    if (!resolvedBranchId) {
+      if (req.user!.branchId) {
+        resolvedBranchId = req.user!.branchId;
+      } else if (restaurant_id) {
+        const firstBranch = await prisma.branch.findFirst({
+          where: { restaurant_id: restaurant_id as string, deleted_at: null },
+        });
+        resolvedBranchId = firstBranch?.id;
+      }
+    }
+
+    if (!resolvedBranchId) {
+      res.status(400).json({ error: 'branch_id or restaurant_id with an active branch is required' });
+      return;
+    }
+
+    if (!isOwnerUser(req)) {
+      const userBranchId = req.user!.branchId;
+      if (userBranchId !== resolvedBranchId) {
+        res.status(403).json({ error: 'You do not have access to this branch.' });
+        return;
+      }
+    }
+
     const item = await prisma.menuItem.create({
       data: {
         tenant_id: tenantId,
-        restaurant_id,
+        branch_id: resolvedBranchId,
         display_name,
         description: description ?? null,
         price: price ?? 0,
@@ -466,20 +850,60 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
 router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
     const { display_name, description, price, category_id, availability, customizations, image_url } = req.body;
-    const item = await prisma.menuItem.update({
-      where: { id: req.params.id as string },
-      data: {
-        ...(display_name !== undefined && { display_name }),
-        ...(description !== undefined && { description }),
-        ...(price !== undefined && { price }),
-        ...(category_id !== undefined && { category_id }),
-        ...(availability !== undefined && { availability }),
-        ...(customizations !== undefined && { customizations }),
-        ...(image_url !== undefined && { image_url }),
-      },
-      include: { category: { select: { id: true, name: true } } },
-    });
-    res.json(item);
+    const menuItemId = req.params.id as string;
+
+    const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
+    if (item) {
+      const updatedItem = await prisma.menuItem.update({
+        where: { id: menuItemId },
+        data: {
+          ...(display_name !== undefined && { display_name }),
+          ...(description !== undefined && { description }),
+          ...(price !== undefined && { price }),
+          ...(category_id !== undefined && { category_id }),
+          ...(availability !== undefined && { availability }),
+          ...(customizations !== undefined && { customizations }),
+          ...(image_url !== undefined && { image_url }),
+        },
+        include: { category: { select: { id: true, name: true } } },
+      });
+      res.json(updatedItem);
+      return;
+    }
+
+    const masterItem = await prisma.masterMenuItem.findUnique({ where: { id: menuItemId } });
+    if (masterItem) {
+      const updatedMaster = await prisma.masterMenuItem.update({
+        where: { id: menuItemId },
+        data: {
+          ...(display_name !== undefined && { display_name }),
+          ...(description !== undefined && { description }),
+          ...(price !== undefined && { price }),
+          ...(category_id !== undefined && { master_category_id: category_id }),
+          ...(availability !== undefined && { availability }),
+          ...(customizations !== undefined && { customizations }),
+          ...(image_url !== undefined && { image_url }),
+        },
+        include: { category: { select: { id: true, name: true } } },
+      });
+
+      // Propagate display details to local cloned menu items
+      await prisma.menuItem.updateMany({
+        where: { master_menu_item_id: menuItemId },
+        data: {
+          ...(display_name !== undefined && { display_name }),
+          ...(description !== undefined && { description }),
+          ...(customizations !== undefined && { customizations }),
+          ...(image_url !== undefined && { image_url }),
+          ...(price !== undefined && { price }),
+          ...(availability !== undefined && { availability }),
+        }
+      });
+      res.json(updatedMaster);
+      return;
+    }
+
+    res.status(404).json({ error: 'Menu item not found' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to update menu item' });
   }
@@ -488,8 +912,28 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
 // DELETE /api/restaurant/menu/:id
 router.delete('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.menuItem.delete({ where: { id: req.params.id as string } });
-    res.json({ success: true });
+    const menuItemId = req.params.id as string;
+    const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
+    if (item) {
+      await prisma.menuItem.delete({ where: { id: menuItemId } });
+      res.json({ success: true });
+      return;
+    }
+
+    const masterItem = await prisma.masterMenuItem.findUnique({ where: { id: menuItemId } });
+    if (masterItem) {
+      await prisma.masterMenuItem.update({
+        where: { id: menuItemId },
+        data: { deleted_at: new Date() },
+      });
+      await prisma.menuItem.deleteMany({
+        where: { master_menu_item_id: menuItemId }
+      });
+      res.json({ success: true });
+      return;
+    }
+
+    res.status(404).json({ error: 'Menu item not found' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to delete menu item' });
   }
@@ -497,19 +941,28 @@ router.delete('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, r
 
 // ─── TABLES ────────────────────────────────────────────────────────────────
 
-// GET /api/restaurant/tables
+// GET /api/restaurant/tables  — ?restaurant_id=... or ?branch_id=...
 router.get('/tables', async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id } = req.query;
+    const { restaurant_id, branch_id } = req.query;
+
+    let branchFilter: any = {};
+    if (!isOwnerUser(req) && req.user!.branchId) {
+      // Non-owner branch accounts always see only their own branch's tables
+      branchFilter = { branch_id: req.user!.branchId };
+    } else if (branch_id) {
+      branchFilter = { branch_id: branch_id as string };
+    } else if (restaurant_id) {
+      branchFilter = { branch: { restaurant_id: restaurant_id as string } };
+    }
+
     const tables = await prisma.restaurantTable.findMany({
-      where: {
-        tenant_id: tenantId,
-        ...(restaurant_id ? { restaurant_id: restaurant_id as string } : {}),
-      },
+      where: { tenant_id: tenantId, ...branchFilter },
       include: {
         waiter: { select: { id: true, full_name: true, email: true } },
+        branch: { select: { id: true, name: true } },
       },
       orderBy: { table_number: 'asc' },
     });
@@ -520,18 +973,78 @@ router.get('/tables', async (req: Request, res: Response): Promise<void> => {
 });
 
 // POST /api/restaurant/tables
+// Owners: pass branch_id (one branch), branch_ids[] (selected branches), or all_branches:true + restaurant_id (all branches).
+// Branch managers: creates table in their own branch only.
 router.post('/tables', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id, table_number, capacity } = req.body;
-    if (!restaurant_id || !table_number || !capacity) {
-      res.status(400).json({ error: 'restaurant_id, table_number, and capacity are required' });
+    const { restaurant_id, branch_id, branch_ids, all_branches, table_number, capacity } = req.body;
+    if (!table_number || !capacity) {
+      res.status(400).json({ error: 'table_number and capacity are required' });
       return;
     }
-    if (!await guardRestaurantBranch(req, res, restaurant_id, tenantId)) return;
+
+    const parsedCapacity = parseInt(capacity);
+
+    // ── Owner: multi-branch creation ────────────────────────────────────────
+    if (isOwnerUser(req) && (all_branches || (Array.isArray(branch_ids) && branch_ids.length > 1))) {
+      let targetBranchIds: string[] = [];
+
+      if (all_branches && restaurant_id) {
+        const branches = await prisma.branch.findMany({
+          where: { restaurant_id: restaurant_id as string, tenant_id: tenantId, deleted_at: null },
+          select: { id: true },
+        });
+        targetBranchIds = branches.map(b => b.id);
+      } else if (Array.isArray(branch_ids)) {
+        targetBranchIds = branch_ids as string[];
+      }
+
+      if (targetBranchIds.length === 0) {
+        res.status(400).json({ error: 'No valid branches found for table creation' });
+        return;
+      }
+
+      const created = await Promise.all(
+        targetBranchIds.map(bid =>
+          prisma.restaurantTable.create({
+            data: { tenant_id: tenantId, branch_id: bid, table_number, capacity: parsedCapacity },
+          })
+        )
+      );
+      res.status(201).json(created);
+      return;
+    }
+
+    // ── Single branch creation (owner specifying one branch, or branch manager) ─
+    let resolvedBranchId = branch_id;
+    if (!resolvedBranchId) {
+      if (req.user!.branchId) {
+        resolvedBranchId = req.user!.branchId;
+      } else if (restaurant_id) {
+        const firstBranch = await prisma.branch.findFirst({
+          where: { restaurant_id: restaurant_id as string, deleted_at: null },
+        });
+        resolvedBranchId = firstBranch?.id;
+      }
+    }
+
+    if (!resolvedBranchId) {
+      res.status(400).json({ error: 'branch_id or restaurant_id with an active branch is required' });
+      return;
+    }
+
+    if (!isOwnerUser(req)) {
+      const userBranchId = req.user!.branchId;
+      if (userBranchId !== resolvedBranchId) {
+        res.status(403).json({ error: 'You do not have access to this branch.' });
+        return;
+      }
+    }
+
     const table = await prisma.restaurantTable.create({
-      data: { tenant_id: tenantId, restaurant_id, table_number, capacity: parseInt(capacity) },
+      data: { tenant_id: tenantId, branch_id: resolvedBranchId, table_number, capacity: parsedCapacity },
     });
     res.status(201).json(table);
   } catch (e) {
@@ -547,13 +1060,17 @@ router.delete('/tables/:id', requireRole(...MANAGER_ROLES), async (req: Request,
 
     const tableId = req.params.id as string;
 
-    // Ensure table belongs to this tenant
     const table = await prisma.restaurantTable.findFirst({
       where: { id: tableId, tenant_id: tenantId },
     });
     if (!table) { res.status(404).json({ error: 'Table not found' }); return; }
 
-    // Delete linked QR codes first (cascade handles DB, but let's be explicit)
+    // Non-owners can only delete tables in their own branch
+    if (!isOwnerUser(req) && req.user!.branchId !== table.branch_id) {
+      res.status(403).json({ error: 'You do not have access to this branch.' });
+      return;
+    }
+
     await prisma.qRCode.deleteMany({ where: { table_id: tableId } });
     await prisma.restaurantTable.delete({ where: { id: tableId } });
 
@@ -569,15 +1086,21 @@ router.patch('/tables/:id/waiter', requireRole(...MANAGER_ROLES), async (req: Re
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
     const tableId = req.params.id as string;
-    const { waiter_id } = req.body; // null to unassign
+    const { waiter_id } = req.body;
 
     const table = await prisma.restaurantTable.findFirst({ where: { id: tableId, tenant_id: tenantId } });
     if (!table) { res.status(404).json({ error: 'Table not found' }); return; }
 
-    // Validate waiter exists in the same tenant (if provided)
+    // Non-owners can only manage tables in their own branch
+    if (!isOwnerUser(req) && req.user!.branchId !== table.branch_id) {
+      res.status(403).json({ error: 'You do not have access to this branch.' });
+      return;
+    }
+
+    // Waiter must be in the same branch as the table
     if (waiter_id) {
-      const waiter = await prisma.user.findFirst({ where: { id: waiter_id, tenant_id: tenantId } });
-      if (!waiter) { res.status(404).json({ error: 'Waiter not found in this tenant' }); return; }
+      const waiter = await prisma.user.findFirst({ where: { id: waiter_id, tenant_id: tenantId, branch_id: table.branch_id } });
+      if (!waiter) { res.status(404).json({ error: 'Waiter not found in this branch' }); return; }
     }
 
     const updated = await prisma.restaurantTable.update({

@@ -215,11 +215,12 @@ export default function MyOrdersPage() {
           // Order cards
           filtered.map((order: any) => {
             const restaurantName: string =
-              order.branch?.restaurants?.[0]?.name ||
+              order.branch?.restaurant?.name ||
               order.branch?.name ||
               "Restaurant"
             const restaurantId: string | null =
-              order.branch?.restaurants?.[0]?.id || null
+              order.branch?.restaurant?.id || null
+
 
             const firstItem = (order.items || [])[0]
             const firstImage = firstItem?.menu_item?.image_url

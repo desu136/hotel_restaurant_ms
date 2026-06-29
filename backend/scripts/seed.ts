@@ -28,7 +28,7 @@ const PERMISSIONS = [
   'module.enable', 'module.disable', 'module.assign',
   // Platform settings
   'platform.settings.view', 'platform.settings.update', 'platform.analytics.view',
-  
+
   // Organization Management
   'hotel.view', 'hotel.update',
   'branch.create', 'branch.view', 'branch.update', 'branch.delete',
@@ -40,12 +40,12 @@ const PERMISSIONS = [
   'report.view', 'analytics.view', 'restaurant.report.view',
   // Billing
   'billing.view',
-  
+
   // Hotel Modules (Room & Guest)
   'room.create', 'room.view', 'room.update', 'room.delete', 'room.assign', 'room.transfer',
   'reservation.create', 'reservation.view', 'reservation.update', 'reservation.confirm', 'reservation.cancel',
   'guest.create', 'guest.view', 'guest.update', 'guest.checkin', 'guest.checkout',
-  
+
   // Restaurant Modules
   'category.create', 'category.view', 'category.update', 'category.delete',
   'menu.create', 'menu.view', 'menu.update', 'menu.delete',
@@ -54,12 +54,12 @@ const PERMISSIONS = [
   'order.create', 'order.view', 'order.update', 'order.cancel', 'order.accept', 'order.prepare', 'order.ready',
   'assigned.order.view', 'service.request.view', 'service.request.resolve',
   'kitchen.view',
-  
+
   // Cashier Billing
   'bill.create', 'bill.view', 'bill.update',
   'payment.view', 'payment.record',
   'transaction.view', 'finance.daily.view',
-  
+
   // Delivery
   'delivery.view_assigned', 'delivery.accept', 'delivery.pickup', 'delivery.complete', 'delivery.status.update'
 ]
@@ -191,49 +191,6 @@ async function main() {
     })
   }
 
-  // 5. Create Default Super Admin User
-  console.log("Seeding SUPER_ADMIN user...")
-  const adminEmail = 'admin@hospitalityhub.com'
-  const adminPassword = await hash('admin123', 10)
-
-  const adminUser = await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: {}, 
-    create: {
-      email: adminEmail,
-      full_name: 'Super Admin',
-      password_hash: adminPassword,
-      tenant_id: systemTenant.id,
-      status: 'ACTIVE',
-      roles: {
-        create: {
-          role_id: roleMap['SUPER_ADMIN']
-        }
-      }
-    },
-  })
-
-  // 6. Create Default Subscription Plans (if not exist)
-  console.log("Seeding default subscription plans...")
-  let trialPlan = await prisma.subscriptionPlan.findFirst({
-    where: { name: 'Trial Plan' }
-  })
-  if (!trialPlan) {
-    trialPlan = await prisma.subscriptionPlan.create({
-      data: { name: 'Trial Plan', monthly_price: 0, annual_price: 0, trial_days: 14 }
-    })
-  }
-
-  const plansCount = await prisma.subscriptionPlan.count()
-  if (plansCount <= 1) {
-    await prisma.subscriptionPlan.createMany({
-      data: [
-        { name: 'Basic', monthly_price: 49.99, annual_price: 499.99, trial_days: 0 },
-        { name: 'Pro', monthly_price: 99.99, annual_price: 999.99, trial_days: 0 }
-      ]
-    })
-  }
-
   // 7. Create Demo Hotel Owner Tenant (Release 2 testing)
   console.log("Seeding Hotel Owner demo tenant & user...")
   let hotelTenant = await prisma.tenant.findFirst({
@@ -251,6 +208,27 @@ async function main() {
         status: 'ACTIVE',
       }
     })
+
+    // 6. Create Default Subscription Plans (if not exist)
+    console.log("Seeding default subscription plans...")
+    let trialPlan = await prisma.subscriptionPlan.findFirst({
+      where: { name: 'Trial Plan' }
+    })
+    if (!trialPlan) {
+      trialPlan = await prisma.subscriptionPlan.create({
+        data: { name: 'Trial Plan', monthly_price: 0, annual_price: 0, trial_days: 14 }
+      })
+    }
+
+    const plansCount = await prisma.subscriptionPlan.count()
+    if (plansCount <= 1) {
+      await prisma.subscriptionPlan.createMany({
+        data: [
+          { name: 'Basic', monthly_price: 49.99, annual_price: 499.99, trial_days: 0 },
+          { name: 'Pro', monthly_price: 99.99, annual_price: 999.99, trial_days: 0 }
+        ]
+      })
+    }
 
     // Create a Trial Subscription for the hotel owner
     const startDate = new Date()
@@ -288,128 +266,402 @@ async function main() {
     }
   })
 
+  // 8. Seed a demo Restaurant, Categories, Menu Items and Tables
+  console.log("Seeding demo restaurant data...")
+  // let demoRestaurant = await prisma.restaurant.findFirst({
+  //   where: { tenant_id: hotelTenant.id }
+  // })
+  // if (!demoRestaurant) {
+  //   demoRestaurant = await prisma.restaurant.create({
+  //     data: {
+  //       tenant_id: hotelTenant.id,
+  //       branch_id: defaultBranch.id,
+  //       name: 'Grand Horizon Bistro'
+  //     }
+  //   })
+  // }
+
+  // Categories
+  let demoRestaurant = await prisma.restaurant.findFirst({
+    where: {
+      tenant_id: hotelTenant.id,
+      deleted_at: null,
+    },
+  })
+
+  if (!demoRestaurant) {
+    demoRestaurant = await prisma.restaurant.create({
+      data: {
+        tenant_id: hotelTenant.id,
+        name: "Grand Horizon Bistro",
+      },
+    })
+  }
+
   // Create a default branch for this tenant
   let defaultBranch = await prisma.branch.findFirst({
-    where: { tenant_id: hotelTenant.id }
+    where: {
+      tenant_id: hotelTenant.id,
+      name: "Main Branch",
+      deleted_at: null,
+    },
   })
+
   if (!defaultBranch) {
     defaultBranch = await prisma.branch.create({
       data: {
         tenant_id: hotelTenant.id,
-        name: 'Main Branch',
-        address: 'Addis Ababa, Ethiopia',
-        phone: '1234567890'
-      }
+        restaurant_id: demoRestaurant.id,
+        name: "Main Branch",
+        address: "Main Campus",
+        phone: "+251900000000",
+      },
     })
   }
 
+
+  // 5. Create Default Super Admin User
+  console.log("Seeding SUPER_ADMIN user...")
+  const adminEmail = 'admin@hospitalityhub.com'
+  const adminPassword = await hash('admin123', 10)
+
+  const adminUser = await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      full_name: 'Super Admin',
+      password_hash: adminPassword,
+      tenant_id: systemTenant.id,
+      status: 'ACTIVE',
+      roles: {
+        create: {
+          role_id: roleMap['SUPER_ADMIN']
+        }
+      }
+    },
+  })
+
+
+
+
+
+  // Create a default branch for this tenant
+  // let defaultBranch = await prisma.branch.findFirst({
+  //   where: { tenant_id: hotelTenant.id }
+  // })
+  // if (!defaultBranch) {
+  //   defaultBranch = await prisma.branch.create({
+  //     data: {
+  //       tenant_id: hotelTenant.id,
+  //       name: 'Main Branch',
+  //       address: 'Addis Ababa, Ethiopia',
+  //       phone: '1234567890'
+  //     }
+  //   })
+  // }
+
   // Create test staff accounts for role-specific dashboards
+  // const staffRoles = [
+  //   { email: 'manager@grandhorizon.com', name: 'Alice Manager', role: 'HOTEL_MANAGER', password: 'manager123' },
+  //   { email: 'waiter@grandhorizon.com', name: 'Bob Waiter', role: 'WAITER', password: 'waiter123' },
+  //   { email: 'chef@grandhorizon.com', name: 'Charlie Chef', role: 'CHEF', password: 'chef123' },
+  //   { email: 'cashier@grandhorizon.com', name: 'David Cashier', role: 'CASHIER', password: 'cashier123' },
+  // ]
+
+  // for (const staff of staffRoles) {
+  //   const passwordHash = await hash(staff.password, 10)
+  //   await prisma.user.upsert({
+  //     where: { email: staff.email },
+  //     update: {},
+  //     create: {
+  //       email: staff.email,
+  //       full_name: staff.name,
+  //       password_hash: passwordHash,
+  //       tenant_id: hotelTenant.id,
+  //       branch_id: defaultBranch.id,
+  //       status: 'ACTIVE',
+  //       roles: {
+  //         create: {
+  //           role_id: roleMap[staff.role]
+  //         }
+  //       }
+  //     }
+  //   })
+  // }
   const staffRoles = [
-    { email: 'manager@grandhorizon.com', name: 'Alice Manager', role: 'HOTEL_MANAGER', password: 'manager123' },
-    { email: 'waiter@grandhorizon.com', name: 'Bob Waiter', role: 'WAITER', password: 'waiter123' },
-    { email: 'chef@grandhorizon.com', name: 'Charlie Chef', role: 'CHEF', password: 'chef123' },
-    { email: 'cashier@grandhorizon.com', name: 'David Cashier', role: 'CASHIER', password: 'cashier123' },
-  ]
+    {
+      email: "manager@grandhorizon.com",
+      name: "Alice Manager",
+      role: "HOTEL_MANAGER",
+      password: "manager123",
+    },
+    {
+      email: "waiter@grandhorizon.com",
+      name: "Bob Waiter",
+      role: "WAITER",
+      password: "waiter123",
+    },
+    {
+      email: "chef@grandhorizon.com",
+      name: "Charlie Chef",
+      role: "CHEF",
+      password: "chef123",
+    },
+    {
+      email: "cashier@grandhorizon.com",
+      name: "David Cashier",
+      role: "CASHIER",
+      password: "cashier123",
+    },
+  ];
 
   for (const staff of staffRoles) {
-    const passwordHash = await hash(staff.password, 10)
+    const passwordHash = await hash(staff.password, 10);
+
     await prisma.user.upsert({
-      where: { email: staff.email },
+      where: {
+        email: staff.email,
+      },
       update: {},
       create: {
         email: staff.email,
         full_name: staff.name,
         password_hash: passwordHash,
         tenant_id: hotelTenant.id,
-        branch_id: defaultBranch.id,
-        status: 'ACTIVE',
+        branch_id: defaultBranch.id, // belongs to the default branch
+        status: "ACTIVE",
         roles: {
           create: {
-            role_id: roleMap[staff.role]
-          }
-        }
-      }
-    })
+            role_id: roleMap[staff.role],
+          },
+        },
+      },
+    });
   }
 
-  // 8. Seed a demo Restaurant, Categories, Menu Items and Tables
-  console.log("Seeding demo restaurant data...")
-  let demoRestaurant = await prisma.restaurant.findFirst({
-    where: { tenant_id: hotelTenant.id }
-  })
-  if (!demoRestaurant) {
-    demoRestaurant = await prisma.restaurant.create({
-      data: {
-        tenant_id: hotelTenant.id,
-        branch_id: defaultBranch.id,
-        name: 'Grand Horizon Bistro'
-      }
-    })
-  }
 
-  // Categories
-  const categoryData = ['Appetizers', 'Mains', 'Drinks', 'Desserts']
-  const categoryMap: Record<string, string> = {}
+  const categoryData = ["Appetizers", "Mains", "Drinks", "Desserts"];
+
+  const categoryMap: Record<string, string> = {};
+
   for (const catName of categoryData) {
-    const existing = await prisma.category.findFirst({
-      where: { tenant_id: hotelTenant.id, name: catName }
-    })
-    const cat = existing ?? await prisma.category.create({
-      data: { tenant_id: hotelTenant.id, restaurant_id: demoRestaurant.id, name: catName }
-    })
-    categoryMap[catName] = cat.id
-  }
-
-  // Menu Items (using Dexel product IDs as placeholders)
-  const menuItems = [
-    { name: 'Truffle Fries', dexel_id: 'DEXEL-001', category: 'Appetizers' },
-    { name: 'Crispy Calamari', dexel_id: 'DEXEL-002', category: 'Appetizers' },
-    { name: 'Grand Horizon Burger', dexel_id: 'DEXEL-003', category: 'Mains' },
-    { name: 'Pan-Seared Salmon', dexel_id: 'DEXEL-004', category: 'Mains' },
-    { name: 'Wild Mushroom Risotto', dexel_id: 'DEXEL-005', category: 'Mains' },
-    { name: 'Craft IPA Beer', dexel_id: 'DEXEL-006', category: 'Drinks' },
-    { name: 'Chardonnay White Wine', dexel_id: 'DEXEL-007', category: 'Drinks' },
-    { name: 'Lava Chocolate Cake', dexel_id: 'DEXEL-008', category: 'Desserts' },
-  ]
-  for (const item of menuItems) {
-    const existing = await prisma.menuItem.findFirst({
-      where: { tenant_id: hotelTenant.id, dexel_product_id: item.dexel_id }
-    })
-    if (!existing) {
-      await prisma.menuItem.create({
+    const masterCategory =
+      (await prisma.masterCategory.findFirst({
+        where: {
+          tenant_id: hotelTenant.id,
+          restaurant_id: demoRestaurant.id,
+          name: catName,
+        },
+      })) ??
+      (await prisma.masterCategory.create({
         data: {
           tenant_id: hotelTenant.id,
           restaurant_id: demoRestaurant.id,
+          name: catName,
+        },
+      }));
+
+    const branchCategory =
+      (await prisma.category.findFirst({
+        where: {
+          tenant_id: hotelTenant.id,
+          branch_id: defaultBranch.id,
+          name: catName,
+        },
+      })) ??
+      (await prisma.category.create({
+        data: {
+          tenant_id: hotelTenant.id,
+          branch_id: defaultBranch.id,
+          master_category_id: masterCategory.id,
+          name: catName,
+        },
+      }));
+
+    categoryMap[catName] = branchCategory.id;
+  }
+
+  // const categoryData = ['Appetizers', 'Mains', 'Drinks', 'Desserts']
+  // const categoryMap: Record<string, string> = {}
+  // for (const catName of categoryData) {
+  //   const existing = await prisma.category.findFirst({
+  //     where: { tenant_id: hotelTenant.id, name: catName }
+  //   })
+  //   const cat = existing ?? await prisma.category.create({
+  //     data: { tenant_id: hotelTenant.id, restaurant_id: demoRestaurant.id, name: catName }
+  //   })
+  //   categoryMap[catName] = cat.id
+  // }
+
+
+
+
+  const menuItems = [
+    { name: "Truffle Fries", dexel_id: "DEXEL-001", category: "Appetizers" },
+    { name: "Crispy Calamari", dexel_id: "DEXEL-002", category: "Appetizers" },
+    { name: "Grand Horizon Burger", dexel_id: "DEXEL-003", category: "Mains" },
+    { name: "Pan-Seared Salmon", dexel_id: "DEXEL-004", category: "Mains" },
+    { name: "Wild Mushroom Risotto", dexel_id: "DEXEL-005", category: "Mains" },
+    { name: "Craft IPA Beer", dexel_id: "DEXEL-006", category: "Drinks" },
+    { name: "Chardonnay White Wine", dexel_id: "DEXEL-007", category: "Drinks" },
+    { name: "Lava Chocolate Cake", dexel_id: "DEXEL-008", category: "Desserts" },
+  ];
+
+  for (const item of menuItems) {
+    const masterCategory = await prisma.masterCategory.findFirst({
+      where: {
+        tenant_id: hotelTenant.id,
+        restaurant_id: demoRestaurant.id,
+        name: item.category,
+      },
+    });
+
+    const branchCategory = await prisma.category.findFirst({
+      where: {
+        tenant_id: hotelTenant.id,
+        branch_id: defaultBranch.id,
+        name: item.category,
+      },
+    });
+
+    if (!masterCategory || !branchCategory) {
+      throw new Error(`Category '${item.category}' not found.`);
+    }
+
+    let masterItem = await prisma.masterMenuItem.findFirst({
+      where: {
+        tenant_id: hotelTenant.id,
+        dexel_product_id: item.dexel_id,
+      },
+    });
+
+    if (!masterItem) {
+      masterItem = await prisma.masterMenuItem.create({
+        data: {
+          tenant_id: hotelTenant.id,
+          restaurant_id: demoRestaurant.id,
+          master_category_id: masterCategory.id,
+
           dexel_product_id: item.dexel_id,
           display_name: item.name,
-          availability: true
-        }
-      })
+
+          availability: true,
+          price: 0,
+        },
+      });
+    }
+
+    const existingBranchItem = await prisma.menuItem.findFirst({
+      where: {
+        tenant_id: hotelTenant.id,
+        branch_id: defaultBranch.id,
+        dexel_product_id: item.dexel_id,
+      },
+    });
+
+    if (!existingBranchItem) {
+      await prisma.menuItem.create({
+        data: {
+          tenant_id: hotelTenant.id,
+          branch_id: defaultBranch.id,
+
+          category_id: branchCategory.id,
+          master_menu_item_id: masterItem.id,
+
+          dexel_product_id: item.dexel_id,
+          display_name: item.name,
+
+          availability: true,
+          price: 0,
+        },
+      });
     }
   }
 
+  // Menu Items (using Dexel product IDs as placeholders)
+  // const menuItems = [
+  //   { name: 'Truffle Fries', dexel_id: 'DEXEL-001', category: 'Appetizers' },
+  //   { name: 'Crispy Calamari', dexel_id: 'DEXEL-002', category: 'Appetizers' },
+  //   { name: 'Grand Horizon Burger', dexel_id: 'DEXEL-003', category: 'Mains' },
+  //   { name: 'Pan-Seared Salmon', dexel_id: 'DEXEL-004', category: 'Mains' },
+  //   { name: 'Wild Mushroom Risotto', dexel_id: 'DEXEL-005', category: 'Mains' },
+  //   { name: 'Craft IPA Beer', dexel_id: 'DEXEL-006', category: 'Drinks' },
+  //   { name: 'Chardonnay White Wine', dexel_id: 'DEXEL-007', category: 'Drinks' },
+  //   { name: 'Lava Chocolate Cake', dexel_id: 'DEXEL-008', category: 'Desserts' },
+  // ]
+  // for (const item of menuItems) {
+  //   const existing = await prisma.menuItem.findFirst({
+  //     where: { tenant_id: hotelTenant.id, dexel_product_id: item.dexel_id }
+  //   })
+  //   if (!existing) {
+  //     await prisma.menuItem.create({
+  //       data: {
+  //         tenant_id: hotelTenant.id,
+  //         restaurant_id: demoRestaurant.id,
+  //         dexel_product_id: item.dexel_id,
+  //         display_name: item.name,
+  //         availability: true
+  //       }
+  //     })
+  //   }
+  // }
+
+
   // Tables
   const tableData = [
-    { number: '101', capacity: 2 }, { number: '102', capacity: 4 },
-    { number: '103', capacity: 4 }, { number: '104', capacity: 6 },
-    { number: '105', capacity: 2 }, { number: '201', capacity: 8 },
-    { number: '202', capacity: 4 }, { number: '203', capacity: 4 },
-  ]
-  for (const t of tableData) {
+    { number: "101", capacity: 2 },
+    { number: "102", capacity: 4 },
+    { number: "103", capacity: 4 },
+    { number: "104", capacity: 6 },
+    { number: "105", capacity: 2 },
+    { number: "201", capacity: 8 },
+    { number: "202", capacity: 4 },
+    { number: "203", capacity: 4 },
+  ];
+
+  for (const table of tableData) {
     const existing = await prisma.restaurantTable.findFirst({
-      where: { tenant_id: hotelTenant.id, table_number: t.number }
-    })
+      where: {
+        tenant_id: hotelTenant.id,
+        branch_id: defaultBranch.id,
+        table_number: table.number,
+      },
+    });
+
     if (!existing) {
       await prisma.restaurantTable.create({
         data: {
           tenant_id: hotelTenant.id,
-          restaurant_id: demoRestaurant.id,
-          table_number: t.number,
-          capacity: t.capacity
-        }
-      })
+          branch_id: defaultBranch.id,
+          table_number: table.number,
+          capacity: table.capacity,
+        },
+      });
     }
   }
+
+  // const tableData = [
+  //   { number: '101', capacity: 2 }, { number: '102', capacity: 4 },
+  //   { number: '103', capacity: 4 }, { number: '104', capacity: 6 },
+  //   { number: '105', capacity: 2 }, { number: '201', capacity: 8 },
+  //   { number: '202', capacity: 4 }, { number: '203', capacity: 4 },
+  // ]
+  // for (const t of tableData) {
+  //   const existing = await prisma.restaurantTable.findFirst({
+  //     where: { tenant_id: hotelTenant.id, table_number: t.number }
+  //   })
+  //   if (!existing) {
+  //     await prisma.restaurantTable.create({
+  //       data: {
+  //         tenant_id: hotelTenant.id,
+  //         restaurant_id: demoRestaurant.id,
+  //         table_number: t.number,
+  //         capacity: t.capacity
+  //       }
+  //     })
+  //   }
+  // }
 
   console.log("✅ Seeding complete!")
   console.log(`\nSuper Admin Login:\nEmail: ${adminEmail}\nPassword: admin123\n`)

@@ -12,6 +12,10 @@ interface Restaurant {
   logo_url?: string | null
   banner_url?: string | null
   branch?: { name: string } | null
+  branches?: Array<{
+    id: string
+    name: string
+  }> | null
 }
 
 interface Category {
@@ -1353,8 +1357,8 @@ export default function CustomerMenuPage() {
               className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 bg-white rounded-t-[32px] shadow-2xl overflow-visible pb-8 pt-3 px-5 text-gray-900"
             >
               {/* Overlapping top brand logo */}
-              <div className="absolute -top-7 right-6 w-14 h-14 bg-red-600 rounded-full shadow-lg flex items-center justify-center z-50 border-2 border-white">
-                <span className="text-white font-black text-2xl tracking-tighter">M</span>
+              <div className="absolute -top-7 right-6 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center z-50 border-2 border-white overflow-hidden">
+                <img src="/dexel_logo.png" className="w-11 h-11 object-contain" alt="Dexel Logo" />
               </div>
 
               {/* Drag Handle */}
@@ -1422,7 +1426,7 @@ export default function CustomerMenuPage() {
                         </div>
                         <p className="font-extrabold text-xs text-gray-900 leading-snug line-clamp-2">
                           {rest.name}
-                          {rest.branch?.name ? ` in ${rest.branch.name}` : ""}
+                          {rest.branches?.[0]?.name ? ` in ${rest.branches[0].name}` : ""}
                         </p>
                       </div>
 

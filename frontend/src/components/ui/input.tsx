@@ -14,7 +14,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           "flex h-10 w-full rounded-md border bg-transparent px-3 py-2 text-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
           error 
             ? "border-red-500 focus-visible:ring-red-500" 
-            : "border-[var(--surface-border)] focus-visible:ring-[var(--color-primary-500)]",
+            : "border-[var(--input-border-color,var(--surface-border))] focus-visible:ring-[var(--color-primary-500)]",
           className
         )}
         ref={ref}

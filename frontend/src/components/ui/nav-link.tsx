@@ -14,8 +14,8 @@ interface NavLinkProps {
 export function NavLink({
   href,
   children,
-  className = "flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-  activeClassName = "bg-[var(--color-primary-600)]/10 text-[var(--color-primary-600)] hover:bg-[var(--color-primary-600)]/15 font-semibold",
+  className = "flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-150",
+  activeClassName = "bg-[var(--color-primary-600)] text-[var(--btn-fg)] font-semibold",
 }: NavLinkProps) {
   const pathname = usePathname()
   

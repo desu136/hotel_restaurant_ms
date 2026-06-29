@@ -1,16 +1,16 @@
 import * as React from "react"
-import RestaurantManager from "./RestaurantManager"
+import MyRestaurant from "./MyRestaurant"
 
 export default function RestaurantsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight mb-1">Restaurants</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-1">Restaurant</h1>
         <p className="text-[var(--muted)]">
-          Create and manage restaurant outlets linked to your branches. Each restaurant has its own menu, categories, and tables.
+          Your restaurant profile. Add branches to create physical outlet locations with their own menus, tables, and staff.
         </p>
       </div>
-      <RestaurantManager />
+      <MyRestaurant />
     </div>
   )
 }

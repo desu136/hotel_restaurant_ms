@@ -27,6 +27,12 @@ interface Restaurant {
   logo_url?: string | null
   branch_id?: string | null
   parent_id?: string | null
+  branches?: Array<{
+    id: string
+    name: string
+    address?: string | null
+    phone?: string | null
+  }> | null
   branch?: {
     name: string
   } | null
@@ -287,36 +293,36 @@ export default function MiniAppHomePage() {
     const topLevel = appConfig.restaurants.filter(r => !r.parent_id);
 
     return topLevel.map(rest => {
-      // Find branch child outlets
-      const children = appConfig.restaurants.filter(r => r.parent_id === rest.id);
+      // Find branch child outlets (via rest.branches)
+      const branches = rest.branches || []
 
       let distance: number | undefined = undefined;
-      if (rest.branch_id) {
-        // Standalone outlet
-        const coords = RESTAURANT_COORDINATES[rest.name] || { latitude: 9.032, longitude: 38.742 }
-        if (userCoords) {
-          distance = calculateDistance(userCoords.latitude, userCoords.longitude, coords.latitude, coords.longitude)
-        }
-      } else if (children.length > 0) {
-        // Brand parent: get min distance of children
-        const childDistances = children.map(c => {
-          const coords = RESTAURANT_COORDINATES[c.name] || { latitude: 9.032, longitude: 38.742 }
+      if (branches.length > 0) {
+        // Calculate min distance of its branches
+        const branchDistances = branches.map(b => {
+          const coords = RESTAURANT_COORDINATES[b.name] || RESTAURANT_COORDINATES[rest.name] || { latitude: 9.032, longitude: 38.742 }
           if (userCoords) {
             return calculateDistance(userCoords.latitude, userCoords.longitude, coords.latitude, coords.longitude)
           }
           return undefined;
         }).filter((d): d is number => d !== undefined);
-        
-        if (childDistances.length > 0) {
-          distance = Math.min(...childDistances);
+
+        if (branchDistances.length > 0) {
+          distance = Math.min(...branchDistances);
+        }
+      } else {
+        // Fallback for standalone outlet
+        const coords = RESTAURANT_COORDINATES[rest.name] || { latitude: 9.032, longitude: 38.742 }
+        if (userCoords) {
+          distance = calculateDistance(userCoords.latitude, userCoords.longitude, coords.latitude, coords.longitude)
         }
       }
 
       return {
         ...rest,
         distance,
-        childrenCount: children.length,
-        children
+        childrenCount: branches.length,
+        children: branches
       }
     }).sort((a, b) => {
       if (preferredId) {
@@ -355,7 +361,7 @@ export default function MiniAppHomePage() {
 
     if (serviceId === "dine-in" || serviceId === "takeaway") {
       const firstOutlet = sortedRestaurants[0]
-      const defaultRestaurantId = firstOutlet?.branch_id ? firstOutlet.id : firstOutlet?.children?.[0]?.id
+      const defaultRestaurantId = firstOutlet?.id
       if (defaultRestaurantId) {
         const orderType = serviceId.toUpperCase()
         localStorage.setItem("show_restaurants_popup", "true")
@@ -379,7 +385,7 @@ export default function MiniAppHomePage() {
 
     localStorage.setItem("customer_delivery_address", delivAddress.trim())
     const firstOutlet = sortedRestaurants[0]
-    const defaultRestaurantId = firstOutlet?.branch_id ? firstOutlet.id : firstOutlet?.children?.[0]?.id
+    const defaultRestaurantId = firstOutlet?.id
     if (defaultRestaurantId) {
       localStorage.setItem("show_restaurants_popup", "true")
       router.push(`/menu/${defaultRestaurantId}?orderType=DELIVERY&deliveryAddress=${encodeURIComponent(delivAddress)}`)
@@ -388,9 +394,12 @@ export default function MiniAppHomePage() {
     }
   }
 
-  const handleBranchSelect = (restaurantId: string) => {
+  const handleBranchSelect = (restaurantId: string, branchId?: string) => {
     const orderType = selectedService.toUpperCase() || "DINE_IN"
     let target = `/menu/${restaurantId}?orderType=${orderType}`
+    if (branchId) {
+      target += `&branchId=${branchId}`
+    }
     if (orderType === "DELIVERY") {
       target += `&deliveryAddress=${encodeURIComponent(delivAddress)}`
     }
@@ -400,7 +409,8 @@ export default function MiniAppHomePage() {
   }
 
   const firstOutlet = sortedRestaurants[0]
-  const activeBranch = firstOutlet?.branch_id ? firstOutlet : firstOutlet?.children?.[0]
+  const activeRestaurant = firstOutlet
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 text-gray-900 font-sans pb-24 flex justify-center">
@@ -516,14 +526,14 @@ export default function MiniAppHomePage() {
                   <div className="flex items-center gap-2 text-xs font-semibold text-gray-800">
                     <MapPin className="w-4 h-4 text-amber-600" />
                     <span>
-                      {activeBranch ? `Ordering from: ${activeBranch.name}` : "No branch selected"}
+                      {activeRestaurant ? `Ordering from: ${activeRestaurant.name}` : "No restaurant selected"}
                     </span>
                   </div>
                   <button 
                     onClick={() => handleServiceSelect("dine-in")}
                     className="text-[10px] font-black uppercase text-amber-700 hover:text-amber-800"
                   >
-                    {activeBranch ? "Switch" : "Select"}
+                    {activeRestaurant ? "Switch" : "Select"}
                   </button>
                 </div>
 
@@ -592,12 +602,13 @@ export default function MiniAppHomePage() {
                       </div>
                     ) : (
                       sortedRestaurants.map(rest => {
-                        const isBrand = !rest.branch_id && rest.children && rest.children.length > 0
+                        const isBrand = rest.children && rest.children.length > 1
+
                         const onClick = () => {
                           if (isBrand) {
                             setPickerBrand(rest)
                           } else {
-                            handleBranchSelect(rest.id)
+                            handleBranchSelect(rest.id, rest.children?.[0]?.id)
                           }
                         }
                         return (
@@ -807,12 +818,13 @@ export default function MiniAppHomePage() {
                 <div className="flex flex-col gap-3">
                   {orderHistory.slice(0, 2).map((order: any) => {
                     const restaurantName: string =
-                      order.branch?.restaurants?.[0]?.name ||
+                      order.branch?.restaurant?.name ||
                       order.branch?.name ||
                       appConfig.business_name ||
                       "Restaurant"
                     const restaurantId: string | null =
-                      order.branch?.restaurants?.[0]?.id || null
+                      order.branch?.restaurant?.id || null
+
                     const orderDate = new Date(order.created_at).toLocaleDateString([], { month: "short", day: "numeric" })
                     const orderTime = new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                     const totalNum = parseFloat((order.total_amount || 0).toString())
@@ -992,7 +1004,7 @@ export default function MiniAppHomePage() {
                       key={branch.id}
                       onClick={() => {
                         setPickerBrand(null)
-                        handleBranchSelect(branch.id)
+                        handleBranchSelect(pickerBrand.id, branch.id)
                       }}
                       className="flex items-center justify-between bg-gray-50 hover:bg-amber-50 border border-gray-100 hover:border-amber-200 rounded-2xl px-4 py-3.5 cursor-pointer transition-all active:scale-[0.98]"
                     >
@@ -1050,7 +1062,7 @@ export default function MiniAppHomePage() {
               }`}
             >
               <User className="w-5 h-5" />
-              <span className="text-[9px] font-extrabold">Account</span>
+              <span className="text-[9px] font-extrabold">MyOwn</span>
             </div>
           </div>
         </div>
