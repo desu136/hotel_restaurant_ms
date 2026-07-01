@@ -9,7 +9,7 @@ interface ProfileDropdownProps {
   avatarGradient?: string // tailwind gradient classes
 }
 
-export function ProfileDropdown({ settingsHref, avatarGradient = "from-violet-500 to-indigo-500" }: ProfileDropdownProps) {
+export function ProfileDropdown({ settingsHref }: ProfileDropdownProps) {
   const router = useRouter()
   const [open, setOpen] = React.useState(false)
   const [user, setUser] = React.useState<{ name: string; email: string; roles: string[] } | null>(null)
@@ -48,7 +48,7 @@ export function ProfileDropdown({ settingsHref, avatarGradient = "from-violet-50
         className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-[var(--surface-hover)] transition-colors"
         aria-label="Open profile menu"
       >
-        <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${avatarGradient} border-2 border-[var(--surface)] shadow-sm flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+        <div className={`w-8 h-8 rounded-full border-2 border-[var(--surface)] shadow-lg flex items-center justify-center text-xs font-bold shrink-0`}>
           {initials}
         </div>
         <ChevronDown className={`w-3.5 h-3.5 text-[var(--muted)] transition-transform ${open ? "rotate-180" : ""}`} />
@@ -59,7 +59,7 @@ export function ProfileDropdown({ settingsHref, avatarGradient = "from-violet-50
           {/* User info header */}
           <div className="px-4 py-3 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/40">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${avatarGradient} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
+              <div className={`w-10 h-10 rounded-full bg-gradient-to-tr flex items-center justify-center  text-sm font-bold shrink-0`}>
                 {initials}
               </div>
               <div className="min-w-0">

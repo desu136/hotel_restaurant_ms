@@ -191,9 +191,11 @@ function QRScanner({ onScan, onError }: QRScannerProps) {
 }
 
 export default function WaiterDashboard() {
-  const [me, setMe] = React.useState<{ id: string; name: string; email: string } | null>(null)
+  const [me, setMe] = React.useState<{ id: string; name: string; email: string; branchId?: string | null; roles?: string[] } | null>(null)
   const [restaurants, setRestaurants] = React.useState<{ id: string; name: string }[]>([])
   const [selectedRestId, setSelectedRestId] = React.useState("")
+  const [branches, setBranches] = React.useState<{ id: string; name: string; restaurant_id: string }[]>([])
+  const [selectedBranchId, setSelectedBranchId] = React.useState("")
   const [tables, setTables] = React.useState<Table[]>([])
   const [menuItems, setMenuItems] = React.useState<MenuItem[]>([])
   const [categories, setCategories] = React.useState<Category[]>([])
@@ -304,34 +306,57 @@ export default function WaiterDashboard() {
     }
   }, [])
 
-  // Fetch initial auth user info
-  React.useEffect(() => {
-    fetch("/api/auth/me")
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data?.success && data?.user) {
-          setMe({
-            id: data.user.id,
-            name: data.user.name,
-            email: data.user.email
-          })
-        }
-      })
-      .catch(() => {})
-  }, [])
-
   // Fetch restaurants, menu items, and tables
   const loadStationData = React.useCallback(async () => {
     try {
       setLoading(true)
-      const restRes = await fetch("/api/restaurant/list")
+      const [meRes, restRes, branchRes] = await Promise.all([
+        fetch("/api/auth/me"),
+        fetch("/api/restaurant/list"),
+        fetch("/api/branches")
+      ])
+
+      const meData = meRes.ok ? await meRes.json() : null
+      const loggedInUser = meData?.success && meData?.user ? meData.user : null
+
       const restData = restRes.ok ? await restRes.json() : []
       setRestaurants(restData)
 
-      if (restData.length > 0) {
-        const rId = restData[0].id
-        setSelectedRestId(rId)
-        await fetchRestaurantData(rId)
+      const branchData = branchRes.ok ? await branchRes.json() : []
+      setBranches(branchData)
+
+      let finalMe = null
+      if (loggedInUser) {
+        finalMe = {
+          id: loggedInUser.id,
+          name: loggedInUser.name,
+          email: loggedInUser.email,
+          branchId: loggedInUser.branchId,
+          roles: loggedInUser.roles || []
+        }
+        setMe(finalMe)
+      }
+
+      let activeRestId = ""
+      let activeBranchId = ""
+
+      if (finalMe?.branchId) {
+        // Look up restaurant for this branch
+        const myBranch = branchData.find((b: any) => b.id === finalMe.branchId)
+        activeBranchId = finalMe.branchId
+        activeRestId = myBranch?.restaurant_id || restData[0]?.id || ""
+      } else {
+        // Owner or unassigned
+        activeRestId = restData[0]?.id || ""
+        const restaurantBranches = branchData.filter((b: any) => b.restaurant_id === activeRestId)
+        activeBranchId = restaurantBranches[0]?.id || ""
+      }
+
+      setSelectedRestId(activeRestId)
+      setSelectedBranchId(activeBranchId)
+
+      if (activeRestId) {
+        await fetchRestaurantData(activeRestId, activeBranchId)
       }
     } catch (err) {
       console.error(err)
@@ -340,12 +365,26 @@ export default function WaiterDashboard() {
     }
   }, [])
 
-  const fetchRestaurantData = async (rId: string) => {
+  const fetchRestaurantData = async (rId: string, bId: string) => {
     try {
+      let tablesUrl = "/api/restaurant/tables"
+      let catsUrl = "/api/restaurant/categories"
+      let menuUrl = "/api/restaurant/menu"
+
+      if (bId) {
+        tablesUrl += `?branch_id=${bId}`
+        catsUrl += `?branch_id=${bId}`
+        menuUrl += `?branch_id=${bId}`
+      } else if (rId) {
+        tablesUrl += `?restaurant_id=${rId}`
+        catsUrl += `?restaurant_id=${rId}`
+        menuUrl += `?restaurant_id=${rId}`
+      }
+
       const [tableRes, catRes, menuRes] = await Promise.all([
-        fetch("/api/restaurant/tables"),
-        fetch(`/api/restaurant/categories?restaurant_id=${rId}`),
-        fetch(`/api/restaurant/menu?restaurant_id=${rId}`)
+        fetch(tablesUrl),
+        fetch(catsUrl),
+        fetch(menuUrl)
       ])
       const tbls = tableRes.ok ? await tableRes.json() : []
       const cats: Category[] = catRes.ok ? await catRes.json() : []
@@ -373,14 +412,24 @@ export default function WaiterDashboard() {
 
   const handleRestaurantChange = async (rId: string) => {
     setSelectedRestId(rId)
+    const restaurantBranches = branches.filter((b: any) => b.restaurant_id === rId)
+    const bId = restaurantBranches[0]?.id || ""
+    setSelectedBranchId(bId)
     if (rId) {
-      await fetchRestaurantData(rId)
+      await fetchRestaurantData(rId, bId)
     } else {
       setTables([])
       setCategories([])
       setMenuItems([])
       setActiveParentId("")
       setActiveSubCatId("all")
+    }
+  }
+
+  const handleBranchChange = async (bId: string) => {
+    setSelectedBranchId(bId)
+    if (selectedRestId) {
+      await fetchRestaurantData(selectedRestId, bId)
     }
   }
 
@@ -698,16 +747,37 @@ export default function WaiterDashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            {restaurants.length > 0 && (
-              <select
-                value={selectedRestId}
-                onChange={e => handleRestaurantChange(e.target.value)}
-                className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
-              >
-                {restaurants.map(r => (
-                  <option key={r.id} value={r.id} className="text-black dark:text-white bg-[var(--surface)]">{r.name}</option>
-                ))}
-              </select>
+            {!me?.branchId ? (
+              <>
+                {restaurants.length > 1 && (
+                  <select
+                    value={selectedRestId}
+                    onChange={e => handleRestaurantChange(e.target.value)}
+                    className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    {restaurants.map(r => (
+                      <option key={r.id} value={r.id} className="text-black dark:text-white bg-[var(--surface)]">{r.name}</option>
+                    ))}
+                  </select>
+                )}
+                <select
+                  value={selectedBranchId}
+                  onChange={e => handleBranchChange(e.target.value)}
+                  className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="" className="text-black dark:text-white bg-[var(--surface)]">— Select Branch —</option>
+                  {branches
+                    .filter(b => b.restaurant_id === selectedRestId)
+                    .map(b => (
+                      <option key={b.id} value={b.id} className="text-black dark:text-white bg-[var(--surface)]">{b.name}</option>
+                    ))
+                  }
+                </select>
+              </>
+            ) : (
+              <span className="text-xs font-bold text-[var(--muted)] bg-[var(--surface-hover)] border border-[var(--surface-border)] px-3 py-1.5 rounded-lg">
+                📍 {branches.find(b => b.id === me.branchId)?.name || "Assigned Branch"}
+              </span>
             )}
           </div>
         </div>

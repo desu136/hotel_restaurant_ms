@@ -6,7 +6,16 @@ import {
 } from "lucide-react"
 
 interface Restaurant { id: string; name: string }
-interface TableItem { id: string; table_number: string; capacity: number; restaurant_id: string }
+interface TableItem {
+  id: string
+  table_number: string
+  capacity: number
+  branch_id: string
+  branch?: {
+    id: string
+    name: string
+  }
+}
 interface QRItem {
   id: string
   table_id: string
@@ -43,7 +52,7 @@ function QRPageContent() {
       ])
       const tablesData = tablesRes.ok ? await tablesRes.json() : []
       const qrData = qrRes.ok ? await qrRes.json() : { data: [] }
-      setTables(tablesData.filter((t: TableItem) => t.restaurant_id === restaurantId))
+      setTables(tablesData)
       setQrCodes(qrData.data || [])
     } catch (e) {
       console.error(e)

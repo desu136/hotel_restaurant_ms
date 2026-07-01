@@ -21,6 +21,7 @@ import {
   Table2,
   QrCode,
   Bell,
+  GitBranchIcon,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/ui/profile-dropdown"
 
@@ -86,6 +87,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   const operationsNav: NavItem[] = []
   if (isOwner || isManager) {
     operationsNav.push(
+      { href: "/dashboard/manager/branches", label: "Branches", icon: GitBranchIcon, exact: false },
       { href: "/dashboard/manager/category", label: "Category", icon: Tag, exact: false },
       { href: "/dashboard/manager/menu", label: "Menu", icon: UtensilsCrossed, exact: false },
       { href: "/dashboard/manager/tables", label: "Tables", icon: Table2, exact: false },
@@ -94,13 +96,13 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
     )
   }
   if (isOwner || isWaiter) {
-    operationsNav.push({ href: "/dashboard/waiter", label: "Waiter Station", icon: Utensils })
+    operationsNav.push({ href: "/dashboard/waiter", label: "Waiter", icon: Utensils })
   }
   if (isOwner || isManager) {
-    operationsNav.push({ href: "/dashboard/waiter-screen", label: "Waiter Screen", icon: Bell })
+    operationsNav.push({ href: "/dashboard/waiter-screen", label: "Display Screen", icon: Bell })
   }
   if (isOwner || isChef) {
-    operationsNav.push({ href: "/dashboard/kitchen", label: "Kitchen KDS", icon: ChefHat })
+    operationsNav.push({ href: "/dashboard/kitchen", label: "Kitchen Display", icon: ChefHat })
   }
   if (isOwner || isCashier) {
     operationsNav.push({ href: "/dashboard/cashier", label: "Cashier Counter", icon: Receipt })
@@ -115,8 +117,8 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
     >
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[var(--surface-border)] shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-600)] flex items-center justify-center mr-3 shadow-sm">
-          <Hotel className="w-4 h-4 text-[var(--btn-fg)]" />
+        <div className="w-8 h-8 rounded-lg  flex items-center justify-center mr-3 ">
+          <Hotel className="w-5 h-5 " />
         </div>
         <span className="font-bold text-lg tracking-tight">
           Hospitality<span className="opacity-60">Hub</span>
@@ -149,12 +151,12 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
                       href={item.href}
                       onClick={() => setSidebarOpen(false)}
                       className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${active
-                        ? "bg-[var(--color-primary-600)] text-[var(--btn-fg)] shadow-sm"
+                        ? "bg-[var(--foreground)] text-[var(--btn-fg)] shadow-sm"
                         : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
                         }`}
                     >
                       <item.icon
-                      className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-[var(--btn-fg)]" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"}`}
+                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-[var(--btn-fg)]" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"}`}
                       />
                       {item.label}
                     </Link>
@@ -176,12 +178,12 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
                       href={item.href}
                       onClick={() => setSidebarOpen(false)}
                       className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${active
-                        ? "bg-[var(--color-primary-600)] text-[var(--btn-fg)] shadow-sm"
+                        ? "bg-[var(--foreground)] text-[var(--btn-fg)] shadow-sm"
                         : "text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
                         }`}
                     >
                       <item.icon
-                      className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-[var(--btn-fg)]" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"}`}
+                        className={`w-4 h-4 mr-3 shrink-0 transition-colors ${active ? "text-[var(--btn-fg)]" : "text-[var(--muted)] group-hover:text-[var(--foreground)]"}`}
                       />
                       {item.label}
                     </Link>
@@ -197,7 +199,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
       <div className="p-4 border-t border-[var(--surface-border)] shrink-0 flex flex-col gap-3">
         {user && (
           <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-[var(--surface-hover)] border border-[var(--surface-border)]/40">
-            <div className="w-8 h-8 rounded-full bg-[var(--color-primary-600)] flex items-center justify-center text-[var(--btn-fg)] font-bold text-sm shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[var(--foreground)] flex items-center justify-center text-[var(--btn-fg)] font-bold text-sm shrink-0">
               {user.name.charAt(0)}
             </div>
             <div className="min-w-0">

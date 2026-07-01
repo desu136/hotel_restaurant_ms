@@ -1,268 +1,449 @@
 "use client"
 import * as React from "react"
 import {
-  Loader2, Plus, Trash2, QrCode, Users, Table2, AlertCircle
+  Store, Pencil, Loader2, Check, X, AlertCircle,
+  GitBranch, UtensilsCrossed, Table2, Calendar,
+  MapPin, Phone, Plus, Trash2, Utensils, Tag, Layers, Users
 } from "lucide-react"
 
-interface Restaurant { id: string; name: string }
+interface Restaurant {
+  id: string
+  name: string
+  logo_url?: string | null
+  banner_url?: string | null
+  created_at: string
+}
+
+interface Branch {
+  id: string
+  name: string
+  address?: string | null
+  phone?: string | null
+  created_at: string
+  _count?: {
+    categories: number
+    menuItems: number
+    restaurantTables: number
+  }
+}
+
+interface MasterCategory {
+  id: string
+  name: string
+  parent_id?: string | null
+  created_at: string
+}
+
+interface Category {
+  id: string
+  name: string
+  branch_id: string
+  master_category_id?: string | null
+  parent_id?: string | null
+  created_at: string
+  branch: {
+    id: string
+    name: string
+  }
+}
+
+interface MasterMenuItem {
+  id: string
+  display_name: string
+  description?: string | null
+  price: string | number
+  master_category_id?: string | null
+  availability: boolean
+  customizations?: any
+  image_url?: string | null
+  created_at: string
+  category?: { id: string; name: string } | null
+}
+
+interface MenuItem {
+  id: string
+  display_name: string
+  description?: string | null
+  price: string | number
+  category_id?: string | null
+  master_menu_item_id?: string | null
+  availability: boolean
+  customizations?: any
+  image_url?: string | null
+  branch_id: string
+  created_at: string
+  branch: {
+    id: string;
+    name: string
+  }
+  category?: { id: string; name: string } | null
+}
+
 interface RestaurantTable {
   id: string
   table_number: string
   capacity: number
   branch_id: string
-  status?: string
+  branch: {
+    id: string
+    name: string
+  }
 }
 
+type BranchFormData = { name: string; address: string; phone: string }
+const emptyBranchForm: BranchFormData = { name: "", address: "", phone: "" }
+
+
 export default function TablesPage() {
-  const [currentUser, setCurrentUser] = React.useState<{ id: string; email: string; roles: string[] } | null>(null)
-  const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
-  const [selectedRestaurantId, setSelectedRestaurantId] = React.useState("")
-  const [tables, setTables] = React.useState<RestaurantTable[]>([])
+  const [restaurant, setRestaurant] = React.useState<Restaurant | null>(null)
+  const [branches, setBranches] = React.useState<Branch[]>([])
+  const [masterCategories, setMasterCategories] = React.useState<MasterCategory[]>([])
+  const [branchCategories, setBranchCategories] = React.useState<Category[]>([])
+  const [masterMenuItems, setMasterMenuItems] = React.useState<MasterMenuItem[]>([])
+  const [branchMenuItems, setBranchMenuItems] = React.useState<MenuItem[]>([])
+
   const [loading, setLoading] = React.useState(true)
-  const [submitting, setSubmitting] = React.useState(false)
-  const [deletingId, setDeletingId] = React.useState<string | null>(null)
-  const [error, setError] = React.useState("")
-  const [form, setForm] = React.useState({ table_number: "", capacity: "2" })
-  const [showForm, setShowForm] = React.useState(false)
+  const [tables, setTables] = React.useState<RestaurantTable[]>([])
+  const [activeTab, setActiveTab] = React.useState<"branches" | "categories" | "menu" | "tables">("branches")
 
-  const fetchRestaurants = async () => {
+
+
+  // Tables CRUD Modal State
+  const [showTableModal, setShowTableModal] = React.useState(false)
+  const [tableForm, setTableForm] = React.useState({
+    tableNumber: "",
+    capacity: "4",
+    branchScope: "single" as "single" | "multiple" | "all",
+    branchId: "",
+    selectedBranchIds: [] as string[]
+  })
+  const [tableSubmitting, setTableSubmitting] = React.useState(false)
+  const [tableError, setTableError] = React.useState("")
+  const [deletingTableId, setDeletingTableId] = React.useState<string | null>(null)
+
+  const loadData = React.useCallback(async () => {
+    setLoading(true)
     try {
-      // Fetch current user
-      const meRes = await fetch("/api/auth/me")
-      const meData = meRes.ok ? await meRes.json() : null
-      if (meData && meData.success && meData.user) {
-        setCurrentUser(meData.user)
-      }
+      const myRes = await fetch("/api/restaurant/my")
+      const myData = myRes.ok ? await myRes.json() : null
+      setRestaurant(myData)
 
-      const res = await fetch("/api/restaurant/list")
-      const data = res.ok ? await res.json() : []
-      setRestaurants(data)
-      if (data.length > 0) {
-        setSelectedRestaurantId(data[0].id)
-        await fetchTables(data[0].id)
+      if (myData) {
+        const [branchRes, masterCatRes, branchCatRes, masterMenuRes, branchMenuRes, tablesRes] = await Promise.all([
+          fetch("/api/branches"),
+          fetch("/api/restaurant/categories?is_master=true"),
+          fetch("/api/restaurant/categories"),
+          fetch("/api/restaurant/menu?is_master=true"),
+          fetch("/api/restaurant/menu"),
+          fetch(`/api/restaurant/tables?restaurant_id=${myData.id}`)
+        ])
+
+        const branchData = branchRes.ok ? await branchRes.json() : []
+        const masterCatData = masterCatRes.ok ? await masterCatRes.json() : []
+        const branchCatData = branchCatRes.ok ? await branchCatRes.json() : []
+        const masterMenuData = masterMenuRes.ok ? await masterMenuRes.json() : []
+        const branchMenuData = branchMenuRes.ok ? await branchMenuRes.json() : []
+        const tablesData = tablesRes.ok ? await tablesRes.json() : []
+
+        setBranches(branchData)
+        setMasterCategories(masterCatData)
+        setBranchCategories(branchCatData)
+        setMasterMenuItems(masterMenuData)
+        setBranchMenuItems(branchMenuData)
+        setTables(tablesData)
+
+        // Initialize default branch in form
+        if (branchData.length > 0) {
+          setTableForm(prev => ({
+            ...prev,
+            branchId: branchData[0].id,
+            selectedBranchIds: [branchData[0].id]
+          }))
+        }
       }
     } catch (err) {
       console.error(err)
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  React.useEffect(() => { loadData() }, [loadData])
+
+  // Tables CRUD Handlers
+  const openTableCreate = () => {
+    setTableForm({
+      tableNumber: "",
+      capacity: "4",
+      branchScope: "single",
+      branchId: branches[0]?.id ?? "",
+      selectedBranchIds: branches.map(b => b.id)
+    })
+    setTableError("")
+    setShowTableModal(true)
   }
 
-  const fetchTables = async (restaurantId: string) => {
-    const res = await fetch(`/api/restaurant/tables?restaurant_id=${restaurantId}`)
-    const data = res.ok ? await res.json() : []
-    setTables(data)
-  }
-
-  React.useEffect(() => { fetchRestaurants() }, [])
-
-  const handleRestaurantChange = async (id: string) => {
-    setSelectedRestaurantId(id)
-    setTables([])
-    if (id) await fetchTables(id)
-  }
-
-  const handleAddTable = async (e: React.FormEvent) => {
+  const handleTableSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.table_number.trim()) { setError("Table number is required"); return }
-    if (!selectedRestaurantId) { setError("Select a restaurant first"); return }
-    setSubmitting(true)
-    setError("")
+    if (!tableForm.tableNumber.trim()) { setTableError("Table name/number is required."); return }
+    if (!restaurant) { setTableError("Restaurant brand required."); return }
+
+    setTableSubmitting(true)
+    setTableError("")
+
     try {
+      const payload: any = {
+        restaurant_id: restaurant.id,
+        table_number: tableForm.tableNumber.trim(),
+        capacity: parseInt(tableForm.capacity) || 4
+      }
+
+      if (tableForm.branchScope === "all") {
+        payload.all_branches = true
+      } else if (tableForm.branchScope === "multiple") {
+        if (tableForm.selectedBranchIds.length === 0) {
+          setTableError("Please select at least one branch.")
+          setTableSubmitting(false)
+          return
+        }
+        payload.branch_ids = tableForm.selectedBranchIds
+      } else {
+        if (!tableForm.branchId) {
+          setTableError("Branch selection is required.")
+          setTableSubmitting(false)
+          return
+        }
+        payload.branch_id = tableForm.branchId
+      }
+
       const res = await fetch("/api/restaurant/tables", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          restaurant_id: selectedRestaurantId,
-          table_number: form.table_number.trim(),
-          capacity: parseInt(form.capacity) || 2
-        })
+        body: JSON.stringify(payload)
       })
+
       const data = await res.json()
-      if (!res.ok) { setError(data.error ?? "Failed to create table"); return }
-      setTables(prev => [...prev, data])
-      setForm({ table_number: "", capacity: "2" })
-      setShowForm(false)
+      if (!res.ok) { setTableError(data.error ?? "Failed to create table"); return }
+
+      // Reload tables list
+      const tablesRes = await fetch(`/api/restaurant/tables?restaurant_id=${restaurant.id}`)
+      const tablesData = tablesRes.ok ? await tablesRes.json() : []
+      setTables(tablesData)
+      setShowTableModal(false)
     } catch {
-      setError("Network error. Please try again.")
+      setTableError("Network error. Please try again.")
     } finally {
-      setSubmitting(false)
+      setTableSubmitting(false)
     }
   }
 
-  const handleDeleteTable = async (id: string) => {
-    if (!confirm("Delete this table? Any linked QR codes will also be deleted.")) return
-    setDeletingId(id)
+  const handleTableDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this table? All associated QR codes will be deleted.")) return
+    setDeletingTableId(id)
     try {
       const res = await fetch(`/api/restaurant/tables/${id}`, { method: "DELETE" })
-      if (res.ok) setTables(prev => prev.filter(t => t.id !== id))
-    } catch { /* ignore */ } finally {
-      setDeletingId(null)
+      if (res.ok) {
+        setTables(prev => prev.filter(t => t.id !== id))
+      }
+    } finally {
+      setDeletingTableId(null)
     }
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-600)]" />
-    </div>
-  )
-
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-600)]" />
+      </div>
+    )
+  }
   return (
-    <div className="space-y-6 pb-12">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight mb-1">Table Registration 🪑</h1>
-        <p className="text-[var(--muted)]">Register tables for your restaurant. Each table can have its own QR code for customer self-ordering.</p>
+    <>
+      {/* Tab Contents: Tables */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg font-black tracking-tight text-[var(--foreground)]">Manage Restaurant Tables</h3>
+          <button
+            onClick={openTableCreate}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-primary-600)] text-[var(--background)] text-sm font-semibold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" /> Add Table
+          </button>
+        </div>
+
+        {tables.length === 0 ? (
+          <div className="rounded-2xl border border-[var(--surface-border)] py-16 bg-[var(--surface)] text-center">
+            <Table2 className="w-12 h-12 mx-auto text-[var(--muted)] mb-3 opacity-35" />
+            <h4 className="font-bold text-base mb-1">No Tables Registered</h4>
+            <p className="text-xs text-[var(--muted)] max-w-sm mx-auto">
+              Create tables for a single branch, selected branches, or broadcast across all branches of your restaurant brand.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {tables.map(table => (
+              <div
+                key={table.id}
+                className="group relative rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 flex flex-col justify-between hover:border-[var(--color-primary-500)]/45 hover:shadow-md transition-all duration-300"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+                        <Table2 className="w-5.5 h-5.5 text-[var(--foreground)]" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-extrabold text-base tracking-tight truncate text-[var(--foreground)]">{table.table_number}</h4>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded  inline-block mt-0.5">
+                          {table.branch?.name || "All Branches"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center gap-4 text-xs text-[var(--muted)] font-medium">
+                    <div className="flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-[var(--muted)]" />
+                      <span>{table.capacity} Seats capacity</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute top-3 right-3">
+                  <button
+                    onClick={() => handleTableDelete(table.id)}
+                    disabled={deletingTableId === table.id}
+                    className="p-2 rounded-lg text-[var(--muted)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  >
+                    {deletingTableId === table.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Restaurant Selector */}
-      {restaurants.length > 0 && (
-        <div className="flex items-center gap-3 bg-[var(--surface-hover)]/30 p-4 rounded-xl border border-[var(--surface-border)]">
-          <label className="text-sm font-semibold text-[var(--muted)]">Active Restaurant:</label>
-          {currentUser?.roles.includes('HOTEL_OWNER') ? (
-            <select
-              value={selectedRestaurantId}
-              onChange={e => handleRestaurantChange(e.target.value)}
-              className="bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
-            >
-              {restaurants.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-          ) : (
-            <span className="text-sm font-bold text-[var(--foreground)]">
-              {restaurants.find(r => r.id === selectedRestaurantId)?.name || 'Loading outlet details...'}
-            </span>
-          )}
-        </div>
-      )}
-
-      {restaurants.length === 0 && (
-        <div className="py-12 text-center border-2 border-dashed rounded-xl text-[var(--muted)]">
-          <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">No restaurants found. Create one first under Restaurants.</p>
-        </div>
-      )}
-
-      {restaurants.length > 0 && (
-        <>
-          {/* Stats Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <Table2 className="w-5 h-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-black">{tables.length}</p>
-                <p className="text-xs text-[var(--muted)]">Total Tables</p>
-              </div>
+      {/* ─── Add Table Modal ─── */}
+      {showTableModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowTableModal(false)} />
+          <div className="relative w-full max-w-md bg-[var(--surface)] border border-[var(--surface-border)] rounded-2xl shadow-2xl p-6 z-10 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Table2 className="w-5 h-5 text-[var(--color-primary-600)]" />
+                Add Restaurant Table
+              </h2>
+              <button onClick={() => setShowTableModal(false)} className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] transition-colors">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <Users className="w-5 h-5 text-emerald-500" />
-              </div>
+
+            <form onSubmit={handleTableSubmit} className="space-y-4">
               <div>
-                <p className="text-2xl font-black">{tables.reduce((s, t) => s + t.capacity, 0)}</p>
-                <p className="text-xs text-[var(--muted)]">Total Capacity</p>
+                <label className="block text-sm font-semibold mb-1.5 text-[var(--foreground)]">Table Number / Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  placeholder="e.g. T-1, VIP-2"
+                  value={tableForm.tableNumber}
+                  onChange={e => setTableForm(f => ({ ...f, tableNumber: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
+                  autoFocus
+                />
               </div>
-            </div>
-          </div>
 
-          {/* Table list header */}
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">Tables</h2>
-            <button
-              onClick={() => { setShowForm(true); setError("") }}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary-600)] text-white text-sm font-semibold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> Add Table
-            </button>
-          </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5 text-[var(--foreground)]">Seating Capacity</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={tableForm.capacity}
+                  onChange={e => setTableForm(f => ({ ...f, capacity: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
+                />
+              </div>
 
-          {/* Add Table inline form */}
-          {showForm && (
-            <div className="rounded-xl border border-[var(--color-primary-500)]/30 bg-[var(--surface)] p-5 shadow-sm space-y-3">
-              <h3 className="text-sm font-bold">Register New Table</h3>
-              <form onSubmit={handleAddTable} className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold text-[var(--muted)] mb-1">Table Number / Name *</label>
-                  <input
-                    placeholder="e.g. T1, A-01, VIP-1"
-                    value={form.table_number}
-                    onChange={e => setForm(f => ({ ...f, table_number: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
-                    autoFocus
-                  />
+              <div>
+                <label className="block text-sm font-semibold mb-1.5 text-[var(--foreground)]">Branch Distribution Scope</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["single", "multiple", "all"] as const).map(scope => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setTableForm(f => ({ ...f, branchScope: scope }))}
+                      className={`px-3 py-2 text-xs font-bold rounded-lg border capitalize transition-all ${tableForm.branchScope === scope
+                        ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)]/5 text-[var(--color-primary-600)]"
+                        : "border-[var(--surface-border)] hover:bg-[var(--surface-hover)]"
+                        }`}
+                    >
+                      {scope === "all" ? "All Branches" : scope === "multiple" ? "Select Some" : "Single Branch"}
+                    </button>
+                  ))}
                 </div>
-                <div className="w-32">
-                  <label className="block text-xs font-semibold text-[var(--muted)] mb-1">Capacity</label>
-                  <input
-                    type="number" min="1" max="50"
-                    value={form.capacity}
-                    onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <button
-                    type="submit" disabled={submitting}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary-600)] text-white text-sm font-semibold rounded-lg hover:bg-[var(--color-primary-500)] disabled:opacity-60 transition-colors"
+              </div>
+
+              {tableForm.branchScope === "single" && (
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5 text-[var(--foreground)]">Target Branch Outlet <span className="text-red-500">*</span></label>
+                  <select
+                    value={tableForm.branchId}
+                    onChange={e => setTableForm(f => ({ ...f, branchId: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
                   >
-                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    Save
-                  </button>
-                  <button type="button" onClick={() => setShowForm(false)} className="px-3 py-2 text-sm border border-[var(--surface-border)] rounded-lg hover:bg-[var(--surface-hover)] transition-colors">
-                    Cancel
-                  </button>
+                    <option value="" disabled>Select Branch</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
-              </form>
-              {error && (
-                <p className="text-sm text-red-500 flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4" /> {error}
-                </p>
               )}
-            </div>
-          )}
 
-          {/* Tables Grid */}
-          {tables.length === 0 && !showForm ? (
-            <div className="py-16 text-center border-2 border-dashed rounded-xl text-[var(--muted)]">
-              <Table2 className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">No tables registered yet</p>
-              <p className="text-xs mt-1">Click "Add Table" to register your first table</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {tables.map(table => (
-                <div
-                  key={table.id}
-                  className="group relative rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 flex flex-col items-center gap-2 hover:border-[var(--color-primary-500)]/40 hover:shadow-sm transition-all"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-[var(--color-primary-600)]/10 flex items-center justify-center">
-                    <Table2 className="w-6 h-6 text-[var(--color-primary-600)]" />
+              {tableForm.branchScope === "multiple" && (
+                <div className="space-y-2 border border-[var(--surface-border)] rounded-xl p-3 bg-[var(--surface-hover)]/30">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[var(--muted)]">Choose Branches <span className="text-red-500">*</span></label>
+                  <div className="max-h-[160px] overflow-y-auto space-y-2 pr-1">
+                    {branches.map(b => {
+                      const checked = tableForm.selectedBranchIds.includes(b.id)
+                      return (
+                        <label key={b.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[var(--surface-hover)] cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setTableForm(f => {
+                                const exists = f.selectedBranchIds.includes(b.id)
+                                return {
+                                  ...f,
+                                  selectedBranchIds: exists
+                                    ? f.selectedBranchIds.filter(id => id !== b.id)
+                                    : [...f.selectedBranchIds, b.id]
+                                }
+                              })
+                            }}
+                            className="w-4 h-4 rounded text-[var(--color-primary-600)]"
+                          />
+                          <span className="text-xs font-semibold">{b.name}</span>
+                        </label>
+                      )
+                    })}
                   </div>
-                  <p className="font-black text-sm">{table.table_number}</p>
-                  <p className="text-[10px] text-[var(--muted)] flex items-center gap-1">
-                    <Users className="w-3 h-3" /> {table.capacity} seats
-                  </p>
-                  <a
-                    href={`/dashboard/manager/qr?restaurant_id=${selectedRestaurantId}&table_id=${table.id}`}
-                    className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-[var(--color-primary-600)]/10 text-[var(--color-primary-600)] hover:bg-[var(--color-primary-600)] hover:text-white transition-colors font-semibold"
-                  >
-                    <QrCode className="w-3 h-3" /> QR Code
-                  </a>
-                  <button
-                    onClick={() => handleDeleteTable(table.id)}
-                    disabled={deletingId === table.id}
-                    className="absolute top-2 right-2 p-1 rounded text-[var(--muted)] hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    {deletingId === table.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                  </button>
                 </div>
-              ))}
-            </div>
-          )}
-        </>
+              )}
+
+              {tableError && <p className="text-sm text-red-500">{tableError}</p>}
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowTableModal(false)} className="flex-1 px-4 py-2.5 border rounded-xl text-sm font-semibold hover:bg-[var(--surface-hover)]">Cancel</button>
+                <button type="submit" disabled={tableSubmitting} className="flex-1 px-4 py-2.5 bg-[var(--color-primary-600)] text-white rounded-xl text-sm font-semibold hover:bg-[var(--color-primary-500)] disabled:opacity-60 flex items-center justify-center gap-1.5">
+                  {tableSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Save Table
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   )
 }
