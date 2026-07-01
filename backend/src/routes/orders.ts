@@ -7,7 +7,7 @@ const router = Router();
 // POST /api/orders/public - Customer self-ordering from a table QR code
 router.post('/public', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { restaurant_id, branch_id, table_id, items, notes, order_type = 'DINE_IN', delivery_address } = req.body;
+    const { restaurant_id, branch_id, table_id, items, notes, order_type = 'DINE_IN', delivery_address, userId, userName, userEmail } = req.body;
 
     if (!restaurant_id) {
       res.status(400).json({ error: 'restaurant_id is required' });
@@ -68,14 +68,54 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
 
     const branchId = resolvedBranchId;
 
-    // Get or create walk-in customer for this tenant
-    let walkInCustomer = await prisma.customer.findFirst({
-      where: { full_name: 'QR Customer', phone: `qrcustomer-${tenantId}` },
-    });
-    if (!walkInCustomer) {
-      walkInCustomer = await prisma.customer.create({
-        data: { full_name: 'QR Customer', phone: `qrcustomer-${tenantId}`, source: 'WEB' },
+    let customerId: string;
+    if (userId) {
+      const identity = await prisma.customerIdentity.findFirst({
+        where: {
+          external_user_id: userId,
+          provider: 'ECHAT',
+        },
+        include: { customer: true },
       });
+
+      if (identity) {
+        customerId = identity.customer_id;
+        if (userName || userEmail) {
+          await prisma.customer.update({
+            where: { id: customerId },
+            data: {
+              ...(userName ? { full_name: userName } : {}),
+              ...(userEmail ? { email: userEmail } : {}),
+            },
+          });
+        }
+      } else {
+        const newCustomer = await prisma.customer.create({
+          data: {
+            full_name: userName || 'Mini-App Customer',
+            email: userEmail || null,
+            source: 'MINI_APP',
+            identities: {
+              create: {
+                external_user_id: userId,
+                provider: 'ECHAT',
+              },
+            },
+          },
+        });
+        customerId = newCustomer.id;
+      }
+    } else {
+      // Get or create walk-in customer for this tenant
+      let walkInCustomer = await prisma.customer.findFirst({
+        where: { full_name: 'QR Customer', phone: `qrcustomer-${tenantId}` },
+      });
+      if (!walkInCustomer) {
+        walkInCustomer = await prisma.customer.create({
+          data: { full_name: 'QR Customer', phone: `qrcustomer-${tenantId}`, source: 'WEB' },
+        });
+      }
+      customerId = walkInCustomer.id;
     }
 
     // Calculate total amount and prepare items
@@ -137,7 +177,7 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
     const orderData: any = {
       tenant_id: tenantId,
       branch_id: branchId,
-      customer_id: walkInCustomer.id,
+      customer_id: customerId,
       table_id: table_id || null,
       order_type: order_type as any,
       status: 'PENDING',
@@ -175,26 +215,51 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// GET /api/orders/public/:id - Customer self-ordering status check
-router.get('/public/:id', async (req: Request, res: Response): Promise<void> => {
+// ── Specific public routes FIRST (must come before the wildcard /public/:id) ──
+
+// GET /api/orders/public/history - Customer order history by userId or orderIds
+router.get('/public/history', async (req: Request, res: Response): Promise<void> => {
   try {
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.id as string },
-      include: {
-        items: { include: { menu_item: true } },
-        table: true,
-      },
-    });
-    if (!order) {
-      res.status(404).json({ error: 'Order not found' });
+    const { userId, orderIds } = req.query;
+
+    const fetchOrders = async (where: object) =>
+      prisma.order.findMany({
+        where,
+        include: {
+          items: { include: { menu_item: true } },
+          branch: { include: { restaurant: true } },
+          table: true,
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+
+    // Fallback: fetch by known localStorage order IDs
+    if (!userId && orderIds) {
+      const ids = (orderIds as string).split(',').filter(Boolean);
+      if (ids.length === 0) { res.json([]); return; }
+      res.json(await fetchOrders({ id: { in: ids } }));
       return;
     }
-    res.json(order);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Failed to fetch order details' });
+
+    if (!userId) {
+      res.status(400).json({ error: 'userId or orderIds is required' });
+      return;
+    }
+
+    const identity = await prisma.customerIdentity.findFirst({
+      where: { external_user_id: userId as string, provider: 'ECHAT' },
+    });
+    if (!identity) { res.json([]); return; }
+
+    res.json(await fetchOrders({ customer_id: identity.customer_id }));
+
+  } catch (e: any) {
+    console.error('[history] Failed:', e?.message, e?.code);
+    res.status(500).json({ error: 'Failed to fetch order history', detail: e?.message });
   }
 });
+
 // GET /api/orders/public/ready/:restaurantId - Unified waiter screen (no auth, publicly pollable)
 router.get('/public/ready/:restaurantId', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -229,6 +294,35 @@ router.get('/public/ready/:restaurantId', async (req: Request, res: Response): P
     res.status(500).json({ error: 'Failed to fetch ready orders' });
   }
 });
+
+// GET /api/orders/public/:id - Single order status (wildcard — MUST be last among public routes)
+router.get('/public/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(id)) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: id as string },
+
+      select: {
+        id: true,
+        status: true,
+        order_type: true,
+        total_amount: true,
+        created_at: true,
+      },
+    });
+    if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
+    res.json(order);
+  } catch (e: any) {
+    console.error('[order/:id] Failed:', e?.message);
+    res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
 
 router.use(authenticate);
 
