@@ -57,9 +57,9 @@ function buildTicketHTML(order: KitchenOrder): string {
   const itemRows = order.items.map(it => {
     const custLines = it.customizations
       ? Object.entries(it.customizations)
-          .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : !!v))
-          .map(([k, v]) => `<div style="margin-left:28px;color:#555;font-size:11px;">&#8627; ${k}: ${Array.isArray(v) ? v.join(", ") : v}</div>`)
-          .join("")
+        .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : !!v))
+        .map(([k, v]) => `<div style="margin-left:28px;color:#555;font-size:11px;">&#8627; ${k}: ${Array.isArray(v) ? v.join(", ") : v}</div>`)
+        .join("")
       : ""
     return `
       <div style="margin-bottom:6px;">
@@ -240,11 +240,10 @@ export default function KitchenDashboard() {
     const isUpdating = updatingId === order.id
 
     return (
-      <Card className={`overflow-hidden transition-all border ${
-        isLate
-          ? "border-red-500/30 bg-red-500/5"
-          : "border-[var(--surface-border)] glass hover:border-[var(--color-primary-500)]/30"
-      }`}>
+      <Card className={`overflow-hidden transition-all border ${isLate
+        ? "border-red-500/30 bg-red-500/5"
+        : "border-[var(--surface-border)] glass hover:border-[var(--color-primary-500)]/30"
+        }`}>
         <CardContent className="p-0 flex flex-col h-full">
           {/* Header */}
           <div className="flex justify-between items-start px-4 py-3 border-b border-[var(--surface-border)]">
@@ -318,11 +317,11 @@ export default function KitchenDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between shrink-0 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-600/10 flex items-center justify-center text-orange-500">
+          {/* <div className="w-10 h-10 rounded-xl bg-orange-600/10 flex items-center justify-center text-orange-500">
             <Flame className="w-6 h-6" />
-          </div>
+          </div> */}
           <div>
-            <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
+            <h1 className="text-xl font-black tracking-tight text-[var(--foreground)] flex items-center gap-2">
               Kitchen Display System
               <span className={`w-2 h-2 rounded-full ${online ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
             </h1>
@@ -332,25 +331,24 @@ export default function KitchenDashboard() {
 
         <div className="flex items-center gap-3">
           {/* Live status */}
-          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-            online
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-              : "bg-red-500/10 text-red-400 border-red-500/20"
-          }`}>
-            {online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg text-[20px] text-bold  flex items-center gap-1.5 ${online
+            ? " text-emerald-400 "
+            : " text-red-400 "
+            }`}>
+            {online ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
             {online ? "LIVE" : "OFFLINE"}
           </span>
 
-          <span className="text-xs text-[var(--muted)] font-semibold bg-[var(--surface-hover)] border border-[var(--surface-border)] px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+          <span className="text-xs text-[var(--foreground)] font-semibold text-[20px] border border-[var(--surface-border)] px-3 py-1.5 rounded-lg flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" /> Active: {orders.length}
           </span>
-          <span className="text-xs text-red-400 font-semibold bg-red-500/10 border border-red-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+          <span className="text-xs text-[20px] text-red-400 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />
             Late (&gt;15m): {orders.filter(o => getElapsedMins(o.created_at) >= 15).length}
           </span>
           <button
             onClick={() => fetchOrders()}
-            className="p-2 rounded-lg bg-[var(--surface-hover)] border border-[var(--surface-border)] hover:border-[var(--color-primary-500)]/40 transition-colors"
+            className="p-2 rounded-lg bg-[var(--foreground)] text-[var(--background)]  hover:bg-gray-500 hover:cursor-pointer  transition-colors"
             title="Refresh now"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -374,9 +372,9 @@ export default function KitchenDashboard() {
             <div className="px-5 py-3.5 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/30 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-                <h2 className="font-bold text-sm uppercase tracking-wider text-white">New Orders</h2>
+                <h2 className="font-bold text-sm uppercase tracking-wider text-[var(--foreground)] ">New Orders</h2>
               </div>
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-md border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+              <span className="text-[15px] font-bold font-black px-2 py-0.5 rounded-md  text-[var(--foreground)] ">
                 {pendingOrders.length}
               </span>
             </div>
@@ -408,9 +406,9 @@ export default function KitchenDashboard() {
             <div className="px-5 py-3.5 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/30 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-                <h2 className="font-bold text-sm uppercase tracking-wider text-white">Preparing</h2>
+                <h2 className="font-bold text-sm uppercase tracking-wider text-[var(--foreground)]">Preparing</h2>
               </div>
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-md border bg-blue-500/10 text-blue-400 border-blue-500/20">
+              <span className="text-[15px] font-bold font-black px-2 py-0.5 rounded-md  text-[var(--foreground)] ">
                 {preparingOrders.length}
               </span>
             </div>
@@ -442,9 +440,9 @@ export default function KitchenDashboard() {
             <div className="px-5 py-3.5 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/30 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                <h2 className="font-bold text-sm uppercase tracking-wider text-white">Ready / Pickup</h2>
+                <h2 className="font-bold text-sm uppercase tracking-wider text-[var(--foreground)]">Ready / Pickup</h2>
               </div>
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-md border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+              <span className="text-[15px] font-bold font-black px-2 py-0.5 rounded-md  text-[var(--foreground)] ">
                 {readyOrders.length}
               </span>
             </div>

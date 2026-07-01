@@ -264,11 +264,20 @@ router.get('/public/history', async (req: Request, res: Response): Promise<void>
 router.get('/public/ready/:restaurantId', async (req: Request, res: Response): Promise<void> => {
   try {
     const restaurantId = req.params.restaurantId as string;
+    const { branch_id } = req.query;
+
+    const whereClause: any = {
+      status: 'READY',
+    };
+
+    if (branch_id) {
+      whereClause.branch_id = branch_id as string;
+    } else {
+      whereClause.branch = { restaurant_id: restaurantId };
+    }
+
     const orders = await prisma.order.findMany({
-      where: {
-        status: 'READY',
-        table: { branch: { restaurant_id: restaurantId } },
-      },
+      where: whereClause,
       include: {
         items: { include: { menu_item: { select: { display_name: true } } } },
         table: {
@@ -348,6 +357,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.user!.tenantId;
     const { status, limit = '50' } = req.query;
 
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const branchId = req.user!.branchId;
     const isWaiter = req.user!.roles.includes('WAITER') &&
       !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
 
@@ -356,8 +367,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       ...(status ? { status: status as any } : {}),
     };
 
+    if (!isOwner && branchId) {
+      whereClause.branch_id = branchId;
+    }
+
     if (isWaiter) {
-      whereClause.branch_id = req.user!.branchId;
       whereClause.OR = [
         { waiter_id: req.user!.userId },
         { table: { waiter_id: req.user!.userId } },
@@ -432,8 +446,19 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
       res.status(400).json({ error: 'At least one item is required' });
       return;
     }
-    if (!branchId) {
-      res.status(400).json({ error: 'Waiter must be assigned to a branch' });
+    let resolvedBranchId = branchId;
+    if (!resolvedBranchId && req.user!.roles.includes('HOTEL_OWNER')) {
+      if (table_id) {
+        const table = await prisma.restaurantTable.findUnique({
+          where: { id: table_id },
+          select: { branch_id: true }
+        });
+        resolvedBranchId = table?.branch_id ?? null;
+      }
+    }
+
+    if (!resolvedBranchId) {
+      res.status(400).json({ error: 'Branch assignment required' });
       return;
     }
 
@@ -477,7 +502,7 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
     const order = await prisma.order.create({
       data: {
         tenant_id: tenantId!,
-        branch_id: branchId,
+        branch_id: resolvedBranchId,
         customer_id: walkInCustomer.id,
         table_id: table_id || null,
         waiter_id: waiterId,

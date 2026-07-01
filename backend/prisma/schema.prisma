@@ -416,6 +416,7 @@ model MasterMenuItem {
   display_name       String
   description        String?
   image_url          String?
+  image_urls         Json?
   customizations     Json?
 
   price              Decimal  @default(0) @db.Decimal(10, 2)
@@ -431,6 +432,7 @@ model MasterMenuItem {
 
   menuItems          MenuItem[]
 }
+
 model MenuItem {
   id String @id @default(uuid()) @db.Uuid
 
@@ -449,6 +451,8 @@ model MenuItem {
   description String?
 
   image_url String?
+
+  image_urls Json?
 
   customizations Json?
 

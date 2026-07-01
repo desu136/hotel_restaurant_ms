@@ -9,9 +9,9 @@ import { PasswordInput } from "@/components/ui/password-input"
 // ]
 
 const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
-  ACTIVE: { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", dot: "bg-emerald-500" },
-  INACTIVE: { label: "Inactive", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400", dot: "bg-slate-400" },
-  SUSPENDED: { label: "Suspended", cls: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400", dot: "bg-red-500" },
+  ACTIVE: { label: "Active", cls: "", dot: "bg-emerald-500" },
+  INACTIVE: { label: "Inactive", cls: "", dot: "bg-slate-400" },
+  SUSPENDED: { label: "Suspended", cls: "", dot: "bg-red-500" },
 }
 
 interface Branch { id: string; name: string }
@@ -48,7 +48,7 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
     fetch("/api/restaurant/tables")
       .then(res => res.ok ? res.json() : [])
       .then(data => { if (Array.isArray(data)) setAllTables(data) })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   const openCreate = () => {
@@ -167,7 +167,7 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
         </select>
         <button
           onClick={openCreate}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-[var(--color-primary-600)] text-white text-sm font-semibold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors shadow-sm shrink-0"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-[var(--color-primary-600)] text-[var(--background)] text-sm font-semibold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors shadow-sm shrink-0"
         >
           <Plus className="w-4 h-4" />
           Add Employee
@@ -229,9 +229,9 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
                     {/* Employee name + avatar */}
                     <td className="border border-[var(--surface-border)] px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--color-primary-500)] to-purple-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                        {/* <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0">
                           {emp.fullName.charAt(0).toUpperCase()}
-                        </div>
+                        </div> */}
                         <span className="font-semibold text-[var(--foreground)] text-sm">{emp.fullName}</span>
                       </div>
                     </td>
@@ -255,9 +255,9 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
                     <td className="border border-[var(--surface-border)] px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         {emp.roles?.length === 0 || !emp.roles
-                          ? <span className="text-[var(--muted)] opacity-40 text-xs italic">—</span>
+                          ? <span className=" opacity-40 text-xs italic">—</span>
                           : emp.roles.map(r => (
-                            <span key={r.id} className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-semibold bg-[var(--color-primary-600)]/10 text-[var(--color-primary-600)]">
+                            <span key={r.id} className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-semibold text-bold]">
                               {r.code}
                             </span>
                           ))
@@ -443,11 +443,10 @@ export default function EmployeeManager({ initialEmployees, branches, roles }: P
                                   : [...f.tableIds, table.id]
                               }))
                             }}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold select-none transition-all text-left ${
-                              isChecked
-                                ? "bg-[var(--color-primary-600)] text-white border-[var(--color-primary-600)] shadow-sm"
-                                : "border-[var(--surface-border)] bg-[var(--surface)] text-[var(--muted)] hover:text-white hover:border-[var(--color-primary-500)]/40"
-                            }`}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold select-none transition-all text-left ${isChecked
+                              ? "bg-[var(--color-primary-600)] text-white border-[var(--color-primary-600)] shadow-sm"
+                              : "border-[var(--surface-border)] bg-[var(--surface)] text-[var(--muted)] hover:text-white hover:border-[var(--color-primary-500)]/40"
+                              }`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
                             Table {table.table_number}

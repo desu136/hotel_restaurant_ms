@@ -36,25 +36,68 @@ interface Restaurant {
 }
 
 export default function WaiterScreenPage() {
+  const [me, setMe] = React.useState<{ id: string; name: string; branchId?: string | null } | null>(null)
   const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
   const [selectedRestId, setSelectedRestId] = React.useState("")
+  const [branches, setBranches] = React.useState<{ id: string; name: string; restaurant_id: string }[]>([])
+  const [selectedBranchId, setSelectedBranchId] = React.useState("")
   const [orders, setOrders] = React.useState<ReadyOrder[]>([])
   const [loading, setLoading] = React.useState(true)
   const [online, setOnline] = React.useState(true)
   const [time, setTime] = React.useState(new Date())
 
-  // Fetch restaurants first
+  // Fetch initial auth user info, restaurants and branches
   React.useEffect(() => {
-    fetch("/api/restaurant/list")
-      .then(res => res.ok ? res.json() : [])
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setRestaurants(data)
-          setSelectedRestId(data[0].id)
+    const init = async () => {
+      try {
+        setLoading(true)
+        const [meRes, restRes, branchRes] = await Promise.all([
+          fetch("/api/auth/me"),
+          fetch("/api/restaurant/list"),
+          fetch("/api/branches")
+        ])
+
+        const meData = meRes.ok ? await meRes.json() : null
+        const loggedInUser = meData?.success && meData?.user ? meData.user : null
+
+        const restData = restRes.ok ? await restRes.json() : []
+        setRestaurants(restData)
+
+        const branchData = branchRes.ok ? await branchRes.json() : []
+        setBranches(branchData)
+
+        let finalMe = null
+        if (loggedInUser) {
+          finalMe = {
+            id: loggedInUser.id,
+            name: loggedInUser.name,
+            branchId: loggedInUser.branchId
+          }
+          setMe(finalMe)
         }
+
+        let activeRestId = ""
+        let activeBranchId = ""
+
+        if (finalMe?.branchId) {
+          const myBranch = branchData.find((b: any) => b.id === finalMe.branchId)
+          activeBranchId = finalMe.branchId
+          activeRestId = myBranch?.restaurant_id || restData[0]?.id || ""
+        } else {
+          activeRestId = restData[0]?.id || ""
+          const restaurantBranches = branchData.filter((b: any) => b.restaurant_id === activeRestId)
+          activeBranchId = restaurantBranches[0]?.id || ""
+        }
+
+        setSelectedRestId(activeRestId)
+        setSelectedBranchId(activeBranchId)
+      } catch (err) {
+        console.error(err)
+      } finally {
         setLoading(false)
-      })
-      .catch(() => setLoading(false))
+      }
+    }
+    init()
   }, [])
 
   // Poll ready orders
@@ -62,7 +105,11 @@ export default function WaiterScreenPage() {
     if (!selectedRestId) return
     if (!silent) setLoading(true)
     try {
-      const res = await fetch(`/api/orders/public/ready/${selectedRestId}`)
+      let url = `/api/orders/public/ready/${selectedRestId}`
+      if (selectedBranchId) {
+        url += `?branch_id=${selectedBranchId}`
+      }
+      const res = await fetch(url)
       if (!res.ok) throw new Error()
       const data = await res.json()
       setOrders(data)
@@ -72,13 +119,23 @@ export default function WaiterScreenPage() {
     } finally {
       setLoading(false)
     }
-  }, [selectedRestId])
+  }, [selectedRestId, selectedBranchId])
 
   React.useEffect(() => {
     fetchReadyOrders()
     const timer = setInterval(() => fetchReadyOrders(true), 5000)
     return () => clearInterval(timer)
   }, [fetchReadyOrders])
+
+  const handleRestaurantChange = (rId: string) => {
+    setSelectedRestId(rId)
+    const restaurantBranches = branches.filter(b => b.restaurant_id === rId)
+    setSelectedBranchId(restaurantBranches[0]?.id || "")
+  }
+
+  const handleBranchChange = (bId: string) => {
+    setSelectedBranchId(bId)
+  }
 
   // Clock ticker
   React.useEffect(() => {
@@ -116,17 +173,37 @@ export default function WaiterScreenPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Restaurant Selector */}
-          {restaurants.length > 0 && (
-            <select
-              value={selectedRestId}
-              onChange={e => setSelectedRestId(e.target.value)}
-              className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              {restaurants.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
+          {!me?.branchId ? (
+            <>
+              {restaurants.length > 1 && (
+                <select
+                  value={selectedRestId}
+                  onChange={e => handleRestaurantChange(e.target.value)}
+                  className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  {restaurants.map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              )}
+              <select
+                value={selectedBranchId}
+                onChange={e => handleBranchChange(e.target.value)}
+                className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="">— Select Branch —</option>
+                {branches
+                  .filter(b => b.restaurant_id === selectedRestId)
+                  .map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))
+                }
+              </select>
+            </>
+          ) : (
+            <span className="text-xs font-bold px-3 py-1.5 rounded-lg border bg-orange-500/10 text-orange-400 border-orange-500/20">
+              📍 {branches.find(b => b.id === me.branchId)?.name || "Assigned Branch"}
+            </span>
           )}
 
           <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${

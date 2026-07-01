@@ -31,8 +31,6 @@ export default async function DashboardOverviewPage() {
       icon: GitBranch,
       href: "/dashboard/branches",
       gradient: "from-blue-500 to-cyan-500",
-      bg: "bg-blue-50 dark:bg-blue-950/30",
-      text: "text-blue-600 dark:text-blue-400",
     },
     {
       label: "Total Employees",
@@ -40,8 +38,6 @@ export default async function DashboardOverviewPage() {
       icon: Users2,
       href: "/dashboard/employees",
       gradient: "from-violet-500 to-purple-500",
-      bg: "bg-violet-50 dark:bg-violet-950/30",
-      text: "text-violet-600 dark:text-violet-400",
     },
     {
       label: "Active Roles",
@@ -49,8 +45,6 @@ export default async function DashboardOverviewPage() {
       icon: ShieldCheck,
       href: "/dashboard/roles",
       gradient: "from-emerald-500 to-teal-500",
-      bg: "bg-emerald-50 dark:bg-emerald-950/30",
-      text: "text-emerald-600 dark:text-emerald-400",
     },
   ]
 
@@ -64,7 +58,7 @@ export default async function DashboardOverviewPage() {
     <div className="space-y-8">
       {/* Greeting */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight mb-1">Welcome back 👋</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-1">Welcome back </h1>
         <p className="text-[var(--muted)]">Here's an overview of your organization.</p>
       </div>
 
@@ -74,8 +68,8 @@ export default async function DashboardOverviewPage() {
           <Link key={stat.label} href={stat.href}>
             <Card className="hover:border-[var(--color-primary-500)]/50 transition-all hover:shadow-md cursor-pointer group">
               <CardContent className="p-6 flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center shrink-0`}>
-                  <stat.icon className={`w-6 h-6 ${stat.text}`} />
+                <div className={`w-12 h-12 rounded-xl  flex items-center justify-center shrink-0`}>
+                  <stat.icon className={`w-6 h-6 `} />
                 </div>
                 <div>
                   <p className="text-sm text-[var(--muted)] font-medium">{stat.label}</p>
@@ -100,8 +94,8 @@ export default async function DashboardOverviewPage() {
             <Link key={ql.href} href={ql.href}>
               <Card className="h-full hover:border-[var(--color-primary-500)]/50 transition-all hover:shadow-md cursor-pointer group">
                 <CardHeader className="pb-2">
-                  <div className="w-9 h-9 rounded-lg bg-[var(--color-primary-600)]/10 flex items-center justify-center mb-2">
-                    <ql.icon className="w-5 h-5 text-[var(--color-primary-600)]" />
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2">
+                    <ql.icon className="w-5 h-5 " />
                   </div>
                   <CardTitle className="text-base group-hover:text-[var(--color-primary-600)] transition-colors">
                     {ql.label}

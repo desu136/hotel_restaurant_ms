@@ -1,878 +1,794 @@
 "use client"
 
 import * as React from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
-  Plus, Pencil, Trash2, Users2, Shield, Mail, Phone, Loader2, Tag, Coffee,
-  ChevronDown, ChevronRight, Folder, FolderOpen
+  Plus, Pencil, Trash2, Loader2, Tag,
+  ChevronDown, ChevronRight, Folder, FolderOpen,
+  Layers, GitBranch, X, Check
 } from "lucide-react"
-import { PasswordInput } from "@/components/ui/password-input"
-
-interface Category {
-  id: string
-  name: string
-  restaurant_id: string
-  parent_id?: string | null
-}
 
 interface Restaurant {
   id: string
   name: string
-  branch_id?: string | null
-  parent_id?: string | null
+  logo_url?: string | null
+  banner_url?: string | null
+  created_at: string
 }
 
-interface EmployeeRole {
+interface Branch {
   id: string
-  code: string
   name: string
-}
-
-interface Employee {
-  id: string
-  fullName: string
-  email: string
+  address?: string | null
   phone?: string | null
-  branchId?: string | null
-  branchName: string
-  status: string
-  roles: EmployeeRole[]
+  created_at: string
 }
 
-interface RestaurantTable {
+interface MasterCategory {
   id: string
-  table_number: string
-  capacity: number
-  waiter_id?: string | null
+  name: string
+  parent_id?: string | null
+  created_at: string
+}
+
+interface Category {
+  id: string
+  name: string
+  branch_id: string
+  master_category_id?: string | null
+  parent_id?: string | null
+  created_at: string
+  branch: {
+    id: string
+    name: string
+  }
 }
 
 export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "both" }) {
-  // Common states
-  const [currentUser, setCurrentUser] = React.useState<{ id: string; email: string; roles: string[] } | null>(null)
-  const [restaurants, setRestaurants] = React.useState<Restaurant[]>([])
-  const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<string>("")
+
+  const [restaurant, setRestaurant] = React.useState<Restaurant | null>(null)
+  const [branches, setBranches] = React.useState<Branch[]>([])
+  const [masterCategories, setMasterCategories] = React.useState<MasterCategory[]>([])
+  const [branchCategories, setBranchCategories] = React.useState<Category[]>([])
+
   const [loading, setLoading] = React.useState(true)
 
-  // Categories states
-  const [categories, setCategories] = React.useState<Category[]>([])
-  const [newCatName, setNewCatName] = React.useState("")
-  const [newCatParentId, setNewCatParentId] = React.useState("")
+  // ── Main "Add / Edit" modal state ──
+  const [showCatModal, setShowCatModal] = React.useState(false)
+  const [editCatTarget, setEditCatTarget] = React.useState<any | null>(null)
+  const [catForm, setCatForm] = React.useState({
+    name: "",
+    isMaster: true,
+    branchId: "",
+    parentId: ""
+  })
+  const [catSubmitting, setCatSubmitting] = React.useState(false)
   const [catError, setCatError] = React.useState("")
-  const [catAdding, setCatAdding] = React.useState(false)
-  const [editingCatId, setEditingCatId] = React.useState<string | null>(null)
-  const [editingCatName, setEditingCatName] = React.useState("")
-  const [editingCatParentId, setEditingCatParentId] = React.useState("")
+  const [deletingCatId, setDeletingCatId] = React.useState<string | null>(null)
 
-  // Collapsible & inline subcategories states
+  // ── Hierarchy / tree UI state ──
   const [expandedCategoryIds, setExpandedCategoryIds] = React.useState<Record<string, boolean>>({})
   const [addingSubcatParentId, setAddingSubcatParentId] = React.useState<string | null>(null)
   const [newSubcatName, setNewSubcatName] = React.useState("")
+  const [subcatAdding, setSubcatAdding] = React.useState(false)
   const [editingSubcatId, setEditingSubcatId] = React.useState<string | null>(null)
   const [editingSubcatName, setEditingSubcatName] = React.useState("")
 
-  // Staff states
-  const [tables, setTables] = React.useState<RestaurantTable[]>([])
-  const [staff, setStaff] = React.useState<Employee[]>([])
-  const [showStaffModal, setShowStaffModal] = React.useState(false)
-  const [staffForm, setStaffForm] = React.useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    password: "",
-    role: "WAITER", // default
-    tableIds: [] as string[],
-  })
-  const [staffError, setStaffError] = React.useState("")
-  const [staffSubmitting, setStaffSubmitting] = React.useState(false)
-
-  // Fetch initial data
-  const fetchData = React.useCallback(async () => {
+  const loadData = React.useCallback(async () => {
+    setLoading(true)
     try {
-      setLoading(true)
+      const myRes = await fetch("/api/restaurant/my")
+      const myData = myRes.ok ? await myRes.json() : null
+      setRestaurant(myData)
 
-      // Fetch current user
-      const meRes = await fetch("/api/auth/me")
-      const meData = meRes.ok ? await meRes.json() : null
-      if (meData && meData.success && meData.user) {
-        setCurrentUser(meData.user)
-      }
+      if (myData) {
+        const [branchRes, masterCatRes, branchCatRes] = await Promise.all([
+          fetch("/api/branches"),
+          fetch("/api/restaurant/categories?is_master=true"),
+          fetch("/api/restaurant/categories"),
+        ])
+        const branchData = branchRes.ok ? await branchRes.json() : []
+        setBranches(branchData)
+        setMasterCategories(masterCatRes.ok ? await masterCatRes.json() : [])
+        setBranchCategories(branchCatRes.ok ? await branchCatRes.json() : [])
 
-      // Fetch restaurants
-      const restRes = await fetch("/api/restaurant/list")
-      const restData = restRes.ok ? await restRes.json() : []
-      setRestaurants(restData)
-
-      let rId = ""
-      const firstSelectable = restData.find((r: any) => r.branch_id !== null)
-      if (firstSelectable) {
-        rId = firstSelectable.id
-        setSelectedRestaurantId(rId)
-      }
-
-      // Fetch employees
-      const empRes = await fetch("/api/employees")
-      const empData: Employee[] = empRes.ok ? await empRes.json() : []
-      // Filter out HOTEL_OWNER role
-      const filteredStaff = empData.filter(
-        emp => !emp.roles.some(r => r.code === "HOTEL_OWNER")
-      )
-      setStaff(filteredStaff)
-
-      // Fetch categories for the selected restaurant
-      if (rId) {
-        const catRes = await fetch(`/api/restaurant/categories?restaurant_id=${rId}`)
-        if (catRes.ok) {
-          const catData = await catRes.json()
-          console.log("[CategoryTab] Initial categories loaded:", catData.length, catData.map((c: any) => c.name))
-          setCategories(catData)
-        } else {
-          console.error("[CategoryTab] Failed to load categories:", catRes.status, await catRes.text())
-        }
-
-        const tableRes = await fetch(`/api/restaurant/tables?restaurant_id=${rId}`)
-        if (tableRes.ok) {
-          setTables(await tableRes.json())
+        // Initialize default branch in form
+        if (branchData.length > 0) {
+          setCatForm(prev => ({
+            ...prev,
+            branchId: branchData[0].id
+          }))
         }
       }
     } catch (err) {
-      console.error("Failed to load category/staff data", err)
+      console.error(err)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  React.useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  React.useEffect(() => { loadData() }, [loadData])
 
-  // Fetch categories when restaurant selection changes
-  const handleRestaurantChange = async (id: string) => {
-    setSelectedRestaurantId(id)
-    if (!id) {
-      setCategories([])
-      setTables([])
-      return
-    }
-    try {
-      const catRes = await fetch(`/api/restaurant/categories?restaurant_id=${id}`)
-      const catData = catRes.ok ? await catRes.json() : []
-      setCategories(catData)
-
-      const tableRes = await fetch(`/api/restaurant/tables?restaurant_id=${id}`)
-      const tableData = tableRes.ok ? await tableRes.json() : []
-      setTables(tableData)
-    } catch (err) {
-      console.error(err)
-    }
+  const reloadCategories = async () => {
+    const [masterCatRes, branchCatRes] = await Promise.all([
+      fetch("/api/restaurant/categories?is_master=true"),
+      fetch("/api/restaurant/categories"),
+    ])
+    setMasterCategories(masterCatRes.ok ? await masterCatRes.json() : [])
+    setBranchCategories(branchCatRes.ok ? await branchCatRes.json() : [])
   }
 
-
-  // Fetch categories for the currently selected restaurant
-  const fetchCategories = React.useCallback(async (rId: string) => {
-    if (!rId) return
-    try {
-      const catRes = await fetch(`/api/restaurant/categories?restaurant_id=${rId}`)
-      const catData = catRes.ok ? await catRes.json() : []
-      setCategories(catData)
-    } catch (err) {
-      console.error("Failed to fetch categories", err)
-    }
-  }, [])
-
-  // Categories CRUD
-  const handleAddCategory = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newCatName.trim() || !selectedRestaurantId) return
+  // ── Main modal open/close ──
+  const openCatCreate = () => {
+    setEditCatTarget(null)
+    setCatForm({ name: "", isMaster: true, branchId: branches[0]?.id ?? "", parentId: "" })
     setCatError("")
-    setCatAdding(true)
-    try {
-      const res = await fetch("/api/restaurant/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCatName.trim(), restaurant_id: selectedRestaurantId, parent_id: newCatParentId || null })
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setNewCatName("")
-        setNewCatParentId("")
-        // Re-fetch from server to get consistent data (including _count etc.)
-        await fetchCategories(selectedRestaurantId)
-      } else {
-        setCatError(data.error ?? `Failed to add category (${res.status})`)
-      }
-    } catch (err) {
-      setCatError("Network error — please try again.")
-      console.error("Failed to add category", err)
-    } finally {
-      setCatAdding(false)
-    }
+    setShowCatModal(true)
   }
 
-  const handleUpdateCategory = async (id: string) => {
-    if (!editingCatName.trim()) return
-    try {
-      const res = await fetch(`/api/restaurant/categories/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editingCatName.trim(), parent_id: editingCatParentId || null })
-      })
-      if (res.ok) {
-        setCategories(prev => prev.map(c => c.id === id ? { ...c, name: editingCatName.trim(), parent_id: editingCatParentId || null } : c))
-        setEditingCatId(null)
-        setEditingCatName("")
-        setEditingCatParentId("")
-      }
-    } catch (err) {
-      console.error(err)
-    }
+  const openCatEdit = (cat: any, isMaster: boolean) => {
+    setEditCatTarget(cat)
+    setCatForm({
+      name: cat.name,
+      isMaster,
+      branchId: isMaster ? "" : cat.branch_id,
+      parentId: cat.parent_id ?? ""
+    })
+    setCatError("")
+    setShowCatModal(true)
   }
 
-  const handleDeleteCategory = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this category?")) return
-    try {
-      const res = await fetch(`/api/restaurant/categories/${id}`, {
-        method: "DELETE"
-      })
-      if (res.ok) {
-        setCategories(prev => prev.filter(c => c.id !== id))
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  const handleAddSubcategory = async (parentId: string, subcatName: string) => {
-    if (!subcatName.trim() || !selectedRestaurantId) return
-    try {
-      const res = await fetch("/api/restaurant/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: subcatName.trim(), restaurant_id: selectedRestaurantId, parent_id: parentId })
-      })
-      if (res.ok) {
-        await fetchCategories(selectedRestaurantId)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  const handleUpdateSubcategory = async (id: string, newName: string, parentId: string) => {
-    if (!newName.trim()) return
-    try {
-      const res = await fetch(`/api/restaurant/categories/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), parent_id: parentId })
-      })
-      if (res.ok) {
-        setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName.trim() } : c))
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  // Staff CRUD
-  const handleCreateStaff = async (e: React.FormEvent) => {
+  const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!staffForm.fullName.trim() || !staffForm.email.trim() || !staffForm.password.trim()) {
-      setStaffError("Please fill out all required fields")
-      return
-    }
-    setStaffSubmitting(true)
-    setStaffError("")
+    if (!catForm.name.trim()) { setCatError("Category name is required."); return }
+    if (!catForm.isMaster && !catForm.branchId) { setCatError("Branch is required for branch-specific category."); return }
+    if (!restaurant) { setCatError("Restaurant brand required."); return }
 
+    setCatSubmitting(true)
+    setCatError("")
     try {
-      // Find branch associated with the current restaurant to assign to the staff
-      const selectedRest = restaurants.find(r => r.id === selectedRestaurantId)
-      const branchId = selectedRest ? selectedRest.branch_id : null
+      const isEdit = !!editCatTarget
+      const payload = isEdit
+        ? { name: catForm.name.trim(), parent_id: catForm.parentId || null }
+        : {
+          name: catForm.name.trim(),
+          parent_id: catForm.parentId || null,
+          restaurant_id: restaurant.id,
+          branch_id: catForm.isMaster ? null : catForm.branchId,
+          is_master: catForm.isMaster
+        }
 
-      const res = await fetch("/api/employees", {
+      const res = await fetch(
+        isEdit ? `/api/restaurant/categories/${editCatTarget!.id}` : "/api/restaurant/categories",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok) { setCatError(data.error ?? "Something went wrong"); return }
+
+      await reloadCategories()
+      setShowCatModal(false)
+    } catch {
+      setCatError("Network error submitting category.")
+    } finally {
+      setCatSubmitting(false)
+    }
+  }
+
+  const handleCatDelete = async (id: string) => {
+    if (!confirm("Are you sure? Deleting a category will also delete all subcategories and menu items attached to it!")) return
+    setDeletingCatId(id)
+    try {
+      const res = await fetch(`/api/restaurant/categories/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        await reloadCategories()
+      }
+    } finally {
+      setDeletingCatId(null)
+    }
+  }
+
+  // ── Subcategory (hierarchy) handlers ──
+  const handleAddSubcategory = async (parentId: string, isMaster: boolean, branchId?: string | null) => {
+    if (!newSubcatName.trim() || !restaurant) return
+    setSubcatAdding(true)
+    try {
+      const res = await fetch("/api/restaurant/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName: staffForm.fullName.trim(),
-          email: staffForm.email.trim(),
-          phone: staffForm.phone.trim() || null,
-          password: staffForm.password,
-          branchId,
-          roles: [staffForm.role],
-          tableIds: staffForm.role === "WAITER" ? staffForm.tableIds : []
-        })
+          name: newSubcatName.trim(),
+          restaurant_id: restaurant.id,
+          parent_id: parentId,
+          is_master: isMaster,
+          branch_id: isMaster ? null : branchId,
+        }),
       })
-
-      const data = await res.json()
-      if (!res.ok) {
-        setStaffError(data.error ?? "Failed to create staff account")
-        return
+      if (res.ok) {
+        setNewSubcatName("")
+        setAddingSubcatParentId(null)
+        await reloadCategories()
       }
-
-      setStaff(prev => [...prev, data])
-      setShowStaffModal(false)
-      setStaffForm({ fullName: "", email: "", phone: "", password: "", role: "WAITER", tableIds: [] })
     } catch (err) {
-      setStaffError("Network error. Please try again.")
+      console.error("Failed to add subcategory", err)
     } finally {
-      setStaffSubmitting(false)
+      setSubcatAdding(false)
     }
   }
 
-  const handleDeleteStaff = async (id: string) => {
-    if (!confirm("Are you sure you want to remove this staff member?")) return
+  const handleUpdateSubcategory = async (id: string, parentId: string) => {
+    if (!editingSubcatName.trim()) return
     try {
-      const res = await fetch(`/api/employees/${id}`, { method: "DELETE" })
+      const res = await fetch(`/api/restaurant/categories/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editingSubcatName.trim(), parent_id: parentId }),
+      })
       if (res.ok) {
-        setStaff(prev => prev.filter(s => s.id !== id))
+        await reloadCategories()
+        setEditingSubcatId(null)
+        setEditingSubcatName("")
       }
     } catch (err) {
       console.error(err)
     }
   }
 
+  // Split master categories into roots and children
+  const rootMasterCats = masterCategories.filter(c => !c.parent_id)
+  const subMasterCats = masterCategories.filter(c => !!c.parent_id)
+
+  // Split branch categories into non-master branch categories
+  const nonMasterBranchCats = branchCategories.filter(c => !c.master_category_id)
+
+  // Check if current editing target is already a parent category
+  const isAlreadyParent = React.useMemo(() => {
+    if (!editCatTarget) return false
+    if (catForm.isMaster) {
+      return subMasterCats.some(c => c.parent_id === editCatTarget.id)
+    } else {
+      const branchCats = nonMasterBranchCats.filter(c => c.branch_id === catForm.branchId)
+      return branchCats.some(c => c.parent_id === editCatTarget.id)
+    }
+  }, [editCatTarget, catForm.isMaster, catForm.branchId, subMasterCats, nonMasterBranchCats])
+
   if (loading) {
     return (
-      <div className="py-20 flex flex-col items-center justify-center space-y-4">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary-600)]" />
-        <p className="text-sm text-[var(--muted)]">Loading categories and staff list...</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Restaurant Selector */}
-      {restaurants.length > 0 && (
-        <div className="flex items-center gap-3 bg-[var(--surface-hover)]/30 p-4 rounded-xl border border-[var(--surface-border)]">
-          <label className="text-sm font-semibold text-[var(--muted)]">Active Restaurant:</label>
-          {currentUser?.roles.includes('HOTEL_OWNER') ? (
-            <select
-              value={selectedRestaurantId}
-              onChange={e => handleRestaurantChange(e.target.value)}
-              className="bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
-            >
-              <option value="">— Select Active Restaurant —</option>
-              {(() => {
-                const brandParents = restaurants.filter(r => !r.parent_id && !r.branch_id);
-                const standalones = restaurants.filter(r => !r.parent_id && r.branch_id);
-                return (
-                  <>
-                    {brandParents.map(brand => {
-                      const children = restaurants.filter(r => r.parent_id === brand.id && r.branch_id);
-                      if (children.length === 0) return null;
-                      return (
-                        <optgroup key={brand.id} label={`${brand.name} (Chain)`}>
-                          {children.map(child => (
-                            <option key={child.id} value={child.id}>
-                              {child.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      );
-                    })}
-                    {standalones.length > 0 && (
-                      <optgroup label="Standalone Outlets">
-                        {standalones.map(r => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </>
-                );
-              })()}
-            </select>
-          ) : (
-            <span className="text-sm font-bold text-[var(--foreground)]">
-              {restaurants.find(r => r.id === selectedRestaurantId)?.name || 'Loading outlet details...'}
-            </span>
-          )}
+    <>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg">Manage Broadcasted Master Categories &amp; Branch Categories</h3>
+          <button
+            onClick={openCatCreate}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-primary-600)] text-[var(--background)] text-sm font-semibold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" /> Add Category
+          </button>
         </div>
-      )}
 
-      {/* Grid: Category Left, Staff Right */}
-      <div className={mode === "both" ? "grid grid-cols-1 lg:grid-cols-2 gap-6" : "grid grid-cols-1 gap-6"}>
+        <div className="grid grid-cols-1 gap-4">
 
-        {/* Categories Card */}
-        {(mode === "both" || mode === "category") && (
-          <Card className="glass">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <Tag className="w-5 h-5 text-[var(--color-primary-600)]" />
-                    Menu Categories
-                  </CardTitle>
-                  <CardDescription>Create and arrange categories for your restaurant meals.</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Add Category Form */}
-              <form onSubmit={handleAddCategory} className="flex gap-2 flex-wrap sm:flex-nowrap">
-                <Input
-                  placeholder="Category name (e.g. Desserts, Drinks)"
-                  value={newCatName}
-                  onChange={e => { setNewCatName(e.target.value); setCatError("") }}
-                  disabled={!selectedRestaurantId || catAdding}
-                  className="bg-[var(--surface)] text-sm flex-1"
-                />
-                {/* <select
-                  value={newCatParentId}
-                  onChange={e => setNewCatParentId(e.target.value)}
-                  disabled={!selectedRestaurantId || catAdding}
-                  className="bg-[var(--surface)] border border-[var(--border)] text-sm rounded-md px-3 py-2 text-gray-300 outline-none focus:ring-1 focus:ring-[var(--color-primary-500)] h-10 min-w-[170px]"
-                >
-                  <option value="">None (Main Category)</option>
-                  {categories.filter(c => !c.parent_id).map(mc => (
-                    <option key={mc.id} value={mc.id}>Parent: {mc.name}</option>
-                  ))}
-                </select> */}
-                <Button
-                  type="submit"
-                  disabled={!selectedRestaurantId || !newCatName.trim() || catAdding}
-                  className="bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white shrink-0 h-10"
-                >
-                  {catAdding
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <><Plus className="w-4 h-4 mr-1" /> Add</>
-                  }
-                </Button>
-              </form>
+          {/* ── Master Categories — hierarchical tree ── */}
+          <div className="border border-[var(--surface-border)] rounded-xl p-5 bg-[var(--surface)] space-y-3">
+            <h4 className="font-black text-sm text-[var(--color-primary-600)] uppercase tracking-wider flex items-center gap-2">
+              <Layers className="w-4 h-4" /> Broadcasted Master Categories
+            </h4>
 
-              {/* Error display */}
-              {catError && (
-                <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 px-3 py-2 rounded-lg">
-                  ⚠️ {catError}
-                </div>
-              )}
-
-              {/* No restaurant warning */}
-              {restaurants.length === 0 && (
-                <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-3 py-2 rounded-lg">
-                  ⚠️ No restaurant found for your account. Ask the owner to create a restaurant first.
-                </div>
-              )}
-
-              {/* Categories List */}
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                {categories.filter(c => !c.parent_id).map(mainCat => {
-                  const subCategories = categories.filter(c => c.parent_id === mainCat.id)
+            {rootMasterCats.length === 0 ? (
+              <p className="text-xs text-[var(--muted)] italic">
+                No master categories registered. Master categories are broadcasted to all branches.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {rootMasterCats.map(mainCat => {
+                  const children = subMasterCats.filter(c => c.parent_id === mainCat.id)
                   const isExpanded = !!expandedCategoryIds[mainCat.id]
 
                   return (
-                    <div key={mainCat.id} className="space-y-2">
-                      {editingCatId === mainCat.id ? (
-                        <div className="flex items-center justify-between p-3 rounded-lg border bg-[var(--surface)] border-[var(--color-primary-500)]">
-                          <div className="flex-1 flex gap-2 mr-2 flex-wrap items-center">
-                            <Input
-                              value={editingCatName}
-                              onChange={e => setEditingCatName(e.target.value)}
-                              className="h-9 text-sm flex-1 min-w-[150px]"
-                              autoFocus
-                            />
-                            <Button
-                              size="sm"
-                              onClick={() => handleUpdateCategory(mainCat.id)}
-                              className="bg-emerald-600 hover:bg-emerald-500 text-white h-9"
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setEditingCatId(null)}
-                              className="h-9"
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between p-3 rounded-lg border bg-[var(--surface)] hover:border-[var(--color-primary-500)]/40 transition-colors">
-                          <div
-                            className="flex items-center gap-2 cursor-pointer select-none flex-1 py-1"
-                            onClick={() => setExpandedCategoryIds(prev => ({ ...prev, [mainCat.id]: !prev[mainCat.id] }))}
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 text-amber-500 shrink-0" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-[var(--muted)] shrink-0" />
-                            )}
-                            {isExpanded ? (
-                              <FolderOpen className="w-4 h-4 text-amber-500 shrink-0" />
-                            ) : (
-                              <Folder className="w-4 h-4 text-[var(--muted)] shrink-0" />
-                            )}
-                            <span className="font-bold text-sm text-[var(--foreground)]">{mainCat.name}</span>
-                            <span className="text-[10px] text-amber-500 font-extrabold px-2 py-0.5 bg-amber-500/10 rounded-full border border-amber-500/25">
-                              {subCategories.length} {subCategories.length === 1 ? "subcategory" : "subcategories"}
+                    <div key={mainCat.id} className="space-y-1.5">
+                      {/* ── Root category row ── */}
+                      <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-hover)] hover:border-[var(--color-primary-600)]/30 transition-colors">
+                        {/* Expand toggle + icon + name */}
+                        <div
+                          className="flex items-center gap-2 cursor-pointer select-none flex-1 py-0.5"
+                          onClick={() =>
+                            setExpandedCategoryIds(prev => ({ ...prev, [mainCat.id]: !prev[mainCat.id] }))
+                          }
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="w-4 h-4 text-[var(--color-primary-600)] shrink-0" />
+                            : <ChevronRight className="w-4 h-4 text-[var(--muted)] shrink-0" />
+                          }
+                          {isExpanded
+                            ? <FolderOpen className="w-4 h-4 text-[var(--color-primary-600)] shrink-0" />
+                            : <Folder className="w-4 h-4 text-[var(--muted)] shrink-0" />
+                          }
+                          <span className="font-bold text-sm">{mainCat.name}</span>
+                          {children.length > 0 && (
+                            <span className="text-[10px] text-[var(--color-primary-600)] font-extrabold px-2 py-0.5 bg-[var(--color-primary-600)]/10 rounded-full border border-[var(--color-primary-600)]/20">
+                              {children.length} sub
                             </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {/* Add subcategory button */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setExpandedCategoryIds(prev => ({ ...prev, [mainCat.id]: true }))
-                                setAddingSubcatParentId(addingSubcatParentId === mainCat.id ? null : mainCat.id)
-                                setNewSubcatName("")
-                              }}
-                              className="h-8 text-xs text-amber-500 hover:bg-amber-500/10 hover:text-amber-500 gap-1 px-2.5 font-bold"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Add Sub</span>
-                            </Button>
-
-                            {/* Edit main category */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setEditingCatId(mainCat.id)
-                                setEditingCatName(mainCat.name)
-                                setEditingCatParentId("")
-                              }}
-                              className="w-8 h-8 p-0 text-[var(--muted)] hover:text-[var(--foreground)]"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-
-                            {/* Delete main category */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteCategory(mainCat.id)}
-                              className="w-8 h-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
+                          )}
                         </div>
-                      )}
 
-                      {/* Expanded Subcategories block */}
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Add Subcategory */}
+                          <button
+                            onClick={() => {
+                              setExpandedCategoryIds(prev => ({ ...prev, [mainCat.id]: true }))
+                              setAddingSubcatParentId(addingSubcatParentId === mainCat.id ? null : mainCat.id)
+                              setNewSubcatName("")
+                            }}
+                            className="flex items-center gap-1 h-7 px-2.5 text-xs font-bold text-[var(--color-primary-600)] hover:bg-[var(--color-primary-600)]/10 rounded-md transition-colors"
+                            title="Add subcategory"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Sub</span>
+                          </button>
+                          <button
+                            onClick={() => openCatEdit(mainCat, true)}
+                            className="p-1.5 rounded text-[var(--muted)] hover:text-[var(--color-primary-600)] transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleCatDelete(mainCat.id)}
+                            disabled={deletingCatId === mainCat.id}
+                            className="p-1.5 rounded text-[var(--muted)] hover:text-red-500 transition-colors"
+                          >
+                            {deletingCatId === mainCat.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Trash2 className="w-3.5 h-3.5" />
+                            }
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ── Expanded children block ── */}
                       {isExpanded && (
-                        <div className="pl-6 pr-1 py-1 space-y-2 border-l-2 border-amber-500/20 ml-5 mt-1 mb-3">
-                          {/* Inline Subcategory adding form */}
+                        <div className="pl-7 space-y-1.5 border-l-2 border-[var(--color-primary-600)]/15 ml-5">
+
+                          {/* Inline add-subcategory form */}
                           {addingSubcatParentId === mainCat.id && (
                             <form
-                              onSubmit={(e) => {
-                                e.preventDefault()
-                                handleAddSubcategory(mainCat.id, newSubcatName)
-                                setNewSubcatName("")
-                                setAddingSubcatParentId(null)
-                              }}
-                              className="flex gap-2 items-center bg-[var(--surface-hover)]/20 p-2 rounded-lg border border-[var(--surface-border)]"
+                              onSubmit={e => { e.preventDefault(); handleAddSubcategory(mainCat.id, true, null) }}
+                              className="flex gap-2 items-center p-2 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-hover)]/40"
                             >
-                              <Input
-                                placeholder="Subcategory name (e.g. Cold Drinks)"
+                              <input
+                                autoFocus
+                                placeholder="Subcategory name…"
                                 value={newSubcatName}
                                 onChange={e => setNewSubcatName(e.target.value)}
-                                className="h-8 text-xs flex-1 bg-[var(--surface)]"
-                                autoFocus
+                                className="flex-1 h-8 px-3 text-xs bg-[var(--surface)] border border-[var(--surface-border)] rounded-md focus:outline-none"
                               />
-                              <Button
+                              <button
                                 type="submit"
-                                size="sm"
-                                disabled={!newSubcatName.trim()}
-                                className="bg-amber-500 hover:bg-amber-600 text-black text-xs h-8 px-3 font-bold"
+                                disabled={!newSubcatName.trim() || subcatAdding}
+                                className="h-8 px-3 text-xs font-bold bg-[var(--color-primary-600)] text-[var(--background)] rounded-md hover:bg-[var(--color-primary-500)] disabled:opacity-50 transition-colors flex items-center gap-1"
                               >
+                                {subcatAdding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                                 Save
-                              </Button>
-                              <Button
+                              </button>
+                              <button
                                 type="button"
-                                size="sm"
-                                variant="ghost"
                                 onClick={() => setAddingSubcatParentId(null)}
-                                className="text-xs h-8 px-2"
+                                className="h-8 px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] rounded-md border border-[var(--surface-border)] transition-colors"
                               >
                                 Cancel
-                              </Button>
+                              </button>
                             </form>
                           )}
 
-                          {/* Existing Subcategories */}
-                          {subCategories.map(sub => {
-                            const isEditingThisSub = editingSubcatId === sub.id
-                            return (
-                              <div
-                                key={sub.id}
-                                className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--surface-hover)]/20 border border-[var(--surface-border)] hover:border-[var(--color-primary-500)]/30 transition-colors"
-                              >
-                                {isEditingThisSub ? (
-                                  <div className="flex-1 flex gap-2 items-center">
-                                    <Input
-                                      value={editingSubcatName}
-                                      onChange={e => setEditingSubcatName(e.target.value)}
-                                      className="h-8 text-xs flex-1 bg-[var(--surface)]"
-                                      autoFocus
-                                    />
-                                    <Button
-                                      size="sm"
-                                      onClick={() => {
-                                        handleUpdateSubcategory(sub.id, editingSubcatName, mainCat.id)
-                                        setEditingSubcatId(null)
-                                        setEditingSubcatName("")
-                                      }}
-                                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-8 px-3"
+                          {/* Existing subcategories */}
+                          {children.map(sub => (
+                            <div
+                              key={sub.id}
+                              className="flex items-center justify-between p-2.5 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-hover)]/20 hover:border-[var(--color-primary-600)]/20 transition-colors"
+                            >
+                              {editingSubcatId === sub.id ? (
+                                <div className="flex-1 flex gap-2 items-center">
+                                  <input
+                                    autoFocus
+                                    value={editingSubcatName}
+                                    onChange={e => setEditingSubcatName(e.target.value)}
+                                    className="flex-1 h-7 px-2 text-xs bg-[var(--surface)] border border-[var(--surface-border)] rounded focus:outline-none"
+                                  />
+                                  <button
+                                    onClick={() => handleUpdateSubcategory(sub.id, mainCat.id)}
+                                    className="h-7 px-3 text-xs font-bold bg-[var(--color-primary-600)] text-[var(--background)] rounded hover:bg-[var(--color-primary-500)] transition-colors"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingSubcatId(null)}
+                                    className="h-7 px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] rounded border border-[var(--surface-border)] transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-xs font-semibold">{sub.name}</span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => { setEditingSubcatId(sub.id); setEditingSubcatName(sub.name) }}
+                                      className="p-1 rounded text-[var(--muted)] hover:text-[var(--color-primary-600)] transition-colors"
                                     >
-                                      Save
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => setEditingSubcatId(null)}
-                                      className="text-xs h-8 px-2"
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleCatDelete(sub.id)}
+                                      disabled={deletingCatId === sub.id}
+                                      className="p-1 rounded text-[var(--muted)] hover:text-red-500 transition-colors"
                                     >
-                                      Cancel
-                                    </Button>
+                                      {deletingCatId === sub.id
+                                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                                        : <Trash2 className="w-3 h-3" />
+                                      }
+                                    </button>
                                   </div>
-                                ) : (
-                                  <>
-                                    <span className="text-xs font-semibold text-[var(--foreground)]">{sub.name}</span>
-                                    <div className="flex items-center gap-1">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => {
-                                          setEditingSubcatId(sub.id)
-                                          setEditingSubcatName(sub.name)
-                                        }}
-                                        className="w-7 h-7 p-0 text-[var(--muted)] hover:text-[var(--foreground)]"
-                                      >
-                                        <Pencil className="w-3 h-3" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => handleDeleteCategory(sub.id)}
-                                        className="w-7 h-7 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                      </Button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )
-                          })}
+                                </>
+                              )}
+                            </div>
+                          ))}
 
-                          {subCategories.length === 0 && !addingSubcatParentId && (
-                            <p className="text-[10px] text-[var(--muted)] italic pl-2 py-1">No subcategories created yet.</p>
+                          {children.length === 0 && addingSubcatParentId !== mainCat.id && (
+                            <p className="text-[10px] text-[var(--muted)] italic pl-2 py-1">No subcategories yet.</p>
                           )}
                         </div>
                       )}
                     </div>
                   )
                 })}
-
-                {categories.length === 0 && (
-                  <div className="py-12 text-center text-[var(--muted)] text-sm border-2 border-dashed rounded-xl">
-                    No categories found. Start by creating one above!
-                  </div>
-                )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </div>
 
-        {/* Staff Card */}
-        {(mode === "both" || mode === "staff") && (
-          <Card className="glass">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <Users2 className="w-5 h-5 text-purple-500" />
-                    Staff Members
-                  </CardTitle>
-                  <CardDescription>Manage chefs, waiters, and cashiers for your branch.</CardDescription>
-                </div>
-                <Button
-                  onClick={() => {
-                    setStaffError("")
-                    setShowStaffModal(true)
-                  }}
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> Add Staff
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Staff List */}
-              <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
-                {staff.map(emp => (
-                  <div
-                    key={emp.id}
-                    className="p-3 rounded-lg border bg-[var(--surface)] hover:border-purple-500/30 transition-colors flex items-center justify-between"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm">{emp.fullName}</span>
-                        <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full font-bold uppercase">
-                          {emp.roles.map(r => r.code).join(", ")}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
-                        <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {emp.email}</span>
-                        {emp.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {emp.phone}</span>}
-                      </div>
+          {/* ── Branch Specific Categories — hierarchical tree per branch ── */}
+          <div className="border border-[var(--surface-border)] rounded-xl p-5 bg-[var(--surface)] space-y-4">
+            <h4 className="font-black text-sm text-[var(--muted)] uppercase tracking-wider flex items-center gap-2">
+              <GitBranch className="w-4 h-4" /> Branch Specific Categories
+            </h4>
+
+            {branches.length === 0 ? (
+              <p className="text-xs text-[var(--muted)] italic">No branches registered. Please create a branch first.</p>
+            ) : (
+              <div className="space-y-4">
+                {branches.map(branch => {
+                  const branchCats = nonMasterBranchCats.filter(c => c.branch_id === branch.id)
+                  const rootBranchCats = branchCats.filter(c => !c.parent_id)
+                  const subBranchCats = branchCats.filter(c => !!c.parent_id)
+
+                  return (
+                    <div key={branch.id} className="border border-[var(--surface-border)] rounded-xl p-4 bg-[var(--surface-hover)]/30 space-y-3">
+                      <h5 className="font-bold text-sm text-[var(--foreground)] flex items-center gap-1.5 border-b border-[var(--surface-border)] pb-2">
+                        <GitBranch className="w-4 h-4 text-[var(--color-primary-600)]" />
+                        {branch.name}
+                      </h5>
+
+                      {rootBranchCats.length === 0 ? (
+                        <p className="text-xs text-[var(--muted)] italic pl-2 py-1">No branch-specific categories created yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {rootBranchCats.map(mainCat => {
+                            const children = subBranchCats.filter(c => c.parent_id === mainCat.id)
+                            const isExpanded = !!expandedCategoryIds[mainCat.id]
+
+                            return (
+                              <div key={mainCat.id} className="space-y-1.5">
+                                {/* ── Branch category row ── */}
+                                <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] hover:border-[var(--color-primary-600)]/30 transition-colors">
+                                  {/* Expand toggle + icon + name */}
+                                  <div
+                                    className="flex items-center gap-2 cursor-pointer select-none flex-1 py-0.5"
+                                    onClick={() =>
+                                      setExpandedCategoryIds(prev => ({ ...prev, [mainCat.id]: !prev[mainCat.id] }))
+                                    }
+                                  >
+                                    {isExpanded
+                                      ? <ChevronDown className="w-4 h-4 text-[var(--color-primary-600)] shrink-0" />
+                                      : <ChevronRight className="w-4 h-4 text-[var(--muted)] shrink-0" />
+                                    }
+                                    {isExpanded
+                                      ? <FolderOpen className="w-4 h-4 text-[var(--color-primary-600)] shrink-0" />
+                                      : <Folder className="w-4 h-4 text-[var(--muted)] shrink-0" />
+                                    }
+                                    <span className="font-bold text-sm">{mainCat.name}</span>
+                                    {children.length > 0 && (
+                                      <span className="text-[10px] text-[var(--color-primary-600)] font-extrabold px-2 py-0.5 bg-[var(--color-primary-600)]/10 rounded-full border border-[var(--color-primary-600)]/20">
+                                        {children.length} sub
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {/* Add Subcategory */}
+                                    <button
+                                      onClick={() => {
+                                        setExpandedCategoryIds(prev => ({ ...prev, [mainCat.id]: true }))
+                                        setAddingSubcatParentId(addingSubcatParentId === mainCat.id ? null : mainCat.id)
+                                        setNewSubcatName("")
+                                      }}
+                                      className="flex items-center gap-1 h-7 px-2.5 text-xs font-bold text-[var(--color-primary-600)] hover:bg-[var(--color-primary-600)]/10 rounded-md transition-colors"
+                                      title="Add subcategory"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Sub</span>
+                                    </button>
+                                    <button
+                                      onClick={() => openCatEdit(mainCat, false)}
+                                      className="p-1.5 rounded text-[var(--muted)] hover:text-[var(--color-primary-600)] transition-colors"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleCatDelete(mainCat.id)}
+                                      disabled={deletingCatId === mainCat.id}
+                                      className="p-1.5 rounded text-[var(--muted)] hover:text-red-500 transition-colors"
+                                    >
+                                      {deletingCatId === mainCat.id
+                                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        : <Trash2 className="w-3.5 h-3.5" />
+                                      }
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* ── Expanded branch subcategories ── */}
+                                {isExpanded && (
+                                  <div className="pl-7 space-y-1.5 border-l-2 border-[var(--color-primary-600)]/15 ml-5">
+                                    {/* Inline add-subcategory form */}
+                                    {addingSubcatParentId === mainCat.id && (
+                                      <form
+                                        onSubmit={e => { e.preventDefault(); handleAddSubcategory(mainCat.id, false, branch.id) }}
+                                        className="flex gap-2 items-center p-2 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-hover)]/40"
+                                      >
+                                        <input
+                                          autoFocus
+                                          placeholder="Subcategory name…"
+                                          value={newSubcatName}
+                                          onChange={e => setNewSubcatName(e.target.value)}
+                                          className="flex-1 h-8 px-3 text-xs bg-[var(--surface)] border border-[var(--surface-border)] rounded-md focus:outline-none"
+                                        />
+                                        <button
+                                          type="submit"
+                                          disabled={!newSubcatName.trim() || subcatAdding}
+                                          className="h-8 px-3 text-xs font-bold bg-[var(--color-primary-600)] text-[var(--background)] rounded-md hover:bg-[var(--color-primary-500)] disabled:opacity-50 transition-colors flex items-center gap-1"
+                                        >
+                                          {subcatAdding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                          Save
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setAddingSubcatParentId(null)}
+                                          className="h-8 px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] rounded-md border border-[var(--surface-border)] transition-colors"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </form>
+                                    )}
+
+                                    {/* Existing subcategories */}
+                                    {children.map(sub => (
+                                      <div
+                                        key={sub.id}
+                                        className="flex items-center justify-between p-2.5 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] hover:border-[var(--color-primary-600)]/20 transition-colors"
+                                      >
+                                        {editingSubcatId === sub.id ? (
+                                          <div className="flex-1 flex gap-2 items-center">
+                                            <input
+                                              autoFocus
+                                              value={editingSubcatName}
+                                              onChange={e => setEditingSubcatName(e.target.value)}
+                                              className="flex-1 h-7 px-2 text-xs bg-[var(--surface)] border border-[var(--surface-border)] rounded focus:outline-none"
+                                            />
+                                            <button
+                                              onClick={() => handleUpdateSubcategory(sub.id, mainCat.id)}
+                                              className="h-7 px-3 text-xs font-bold bg-[var(--color-primary-600)] text-[var(--background)] rounded hover:bg-[var(--color-primary-500)] transition-colors"
+                                            >
+                                              Save
+                                            </button>
+                                            <button
+                                              onClick={() => setEditingSubcatId(null)}
+                                              className="h-7 px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] rounded border border-[var(--surface-border)] transition-colors"
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <span className="text-xs font-semibold">{sub.name}</span>
+                                            <div className="flex items-center gap-1">
+                                              <button
+                                                onClick={() => { setEditingSubcatId(sub.id); setEditingSubcatName(sub.name) }}
+                                                className="p-1 rounded text-[var(--muted)] hover:text-[var(--color-primary-600)] transition-colors"
+                                              >
+                                                <Pencil className="w-3 h-3" />
+                                              </button>
+                                              <button
+                                                onClick={() => handleCatDelete(sub.id)}
+                                                disabled={deletingCatId === sub.id}
+                                                className="p-1 rounded text-[var(--muted)] hover:text-red-500 transition-colors"
+                                              >
+                                                {deletingCatId === sub.id
+                                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                  : <Trash2 className="w-3.5 h-3.5" />
+                                                }
+                                              </button>
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+
+                                    {children.length === 0 && addingSubcatParentId !== mainCat.id && (
+                                      <p className="text-[10px] text-[var(--muted)] italic pl-2 py-1">No subcategories yet.</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDeleteStaff(emp.id)}
-                      className="w-8 h-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                ))}
-
-                {staff.length === 0 && (
-                  <div className="py-12 text-center text-[var(--muted)] text-sm border-2 border-dashed rounded-xl">
-                    No staff members managed here. Add one above!
-                  </div>
-                )}
+                  )
+                })}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </div>
 
+        </div>
       </div>
 
-      {/* Staff Modal */}
-      {showStaffModal && (
+      {/* ─── Add / Edit Category Modal ─── */}
+      {showCatModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowStaffModal(false)} />
-          <div className="relative w-full max-w-md bg-[var(--surface)] border border-[var(--surface-border)] rounded-2xl shadow-2xl z-10 p-6">
-            <h3 className="text-lg font-bold mb-4">Add Staff Member</h3>
-            <form onSubmit={handleCreateStaff} className="space-y-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowCatModal(false)} />
+          <div className="relative w-full max-w-md bg-[var(--surface)] border border-[var(--surface-border)] rounded-2xl shadow-2xl p-6 z-10">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Tag className="w-5 h-5" />
+                {editCatTarget ? "Edit Category" : "Add Category"}
+              </h2>
+              <button
+                onClick={() => setShowCatModal(false)}
+                className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCatSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Full Name *</label>
-                <Input
-                  required
-                  placeholder="e.g. John Doe"
-                  value={staffForm.fullName}
-                  onChange={e => setStaffForm(prev => ({ ...prev, fullName: e.target.value }))}
+                <label className="block text-sm font-medium mb-1.5">
+                  Category Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={catForm.name}
+                  onChange={e => setCatForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm"
+                  autoFocus
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Email *</label>
-                <Input
-                  required
-                  type="email"
-                  placeholder="john@example.com"
-                  value={staffForm.email}
-                  onChange={e => setStaffForm(prev => ({ ...prev, email: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Phone</label>
-                <Input
-                  placeholder="+251 912 345 678"
-                  value={staffForm.phone}
-                  onChange={e => setStaffForm(prev => ({ ...prev, phone: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Password *</label>
-                <PasswordInput
-                  required
-                  placeholder="Minimum 8 characters"
-                  value={staffForm.password}
-                  onChange={e => setStaffForm(prev => ({ ...prev, password: e.target.value }))}
-                  className="w-full bg-[var(--surface)] text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">Role *</label>
-                <select
-                  value={staffForm.role}
-                  onChange={e => setStaffForm(prev => ({ ...prev, role: e.target.value, tableIds: [] }))}
-                  className="w-full h-10 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]"
-                >
-                  <option value="WAITER">Waiter</option>
-                  <option value="CHEF">Chef</option>
-                  <option value="CASHIER">Cashier</option>
-                </select>
-              </div>
-
-              {staffForm.role === "WAITER" && (
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1">
-                    Assign Tables
+              {!editCatTarget && (
+                <div className="flex items-center gap-2 py-1">
+                  <input
+                    type="checkbox"
+                    id="isMasterCat"
+                    checked={catForm.isMaster}
+                    onChange={e => setCatForm(f => ({ ...f, isMaster: e.target.checked, parentId: "" }))}
+                    className="w-4 h-4 rounded text-[var(--color-primary-600)]"
+                  />
+                  <label htmlFor="isMasterCat" className="text-sm font-semibold cursor-pointer select-none">
+                    Broadcast as Master Category to all branches
                   </label>
-                  {tables.length === 0 ? (
-                    <p className="text-xs text-[var(--muted)]">No tables found. Create tables first in Tables tab.</p>
-                  ) : (
-                    <div className="max-h-36 overflow-y-auto border border-[var(--surface-border)] rounded-lg p-3 space-y-2 bg-[var(--surface-hover)]/10">
-                      {tables.map(table => {
-                        const isChecked = staffForm.tableIds.includes(table.id)
-                        return (
-                          <label key={table.id} className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                setStaffForm(prev => {
-                                  const tableIds = prev.tableIds.includes(table.id)
-                                    ? prev.tableIds.filter(id => id !== table.id)
-                                    : [...prev.tableIds, table.id]
-                                  return { ...prev, tableIds }
-                                })
-                              }}
-                              className="rounded border-[var(--surface-border)] bg-[var(--surface)] text-[var(--color-primary-600)] focus:ring-[var(--color-primary-500)]"
-                            />
-                            <span className="text-white font-medium text-xs">Table {table.table_number}</span>
-                            <span className="text-[10px] text-[var(--muted)]">({table.capacity} seats)</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  )}
                 </div>
               )}
 
-              {staffError && (
-                <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-2.5 rounded-lg">
-                  {staffError}
+              {/* Target branch (only for non-master on create/edit) */}
+              {!catForm.isMaster && !editCatTarget && (
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">
+                    Target Branch <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={catForm.branchId}
+                    onChange={e => setCatForm(f => ({ ...f, branchId: e.target.value, parentId: "" }))}
+                    className="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none"
+                  >
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
               )}
+
+              {/* Parent category (conditional based on Master vs Branch Category) */}
+              {!isAlreadyParent && (
+                catForm.isMaster ? (
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      Parent Category
+                      <span className="ml-1 text-xs text-[var(--muted)] font-normal">(optional — creates a subcategory)</span>
+                    </label>
+                    <select
+                      value={catForm.parentId}
+                      onChange={e => setCatForm(f => ({ ...f, parentId: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none"
+                    >
+                      <option value="">None — Top-level category</option>
+                      {rootMasterCats
+                        .filter(c => !editCatTarget || c.id !== editCatTarget.id)
+                        .map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      Parent Category
+                      <span className="ml-1 text-xs text-[var(--muted)] font-normal">(optional — creates a subcategory)</span>
+                    </label>
+                    <select
+                      value={catForm.parentId}
+                      onChange={e => setCatForm(f => ({ ...f, parentId: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none"
+                    >
+                      <option value="">None — Top-level category</option>
+                      {nonMasterBranchCats
+                        .filter(c => c.branch_id === catForm.branchId && !c.parent_id)
+                        .filter(c => !editCatTarget || c.id !== editCatTarget.id)
+                        .map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                )
+              )}
+
+              {catError && <p className="text-sm text-red-500">{catError}</p>}
 
               <div className="flex gap-3 pt-2">
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  onClick={() => setShowStaffModal(false)}
-                  className="flex-1"
+                  onClick={() => setShowCatModal(false)}
+                  className="flex-1 px-4 py-2.5 border hover:bg-[var(--surface-hover)] hover:cursor-pointer rounded-lg text-sm"
                 >
                   Cancel
-                </Button>
-                <Button
+                </button>
+                <button
                   type="submit"
-                  disabled={staffSubmitting}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                  disabled={catSubmitting}
+                  className="flex-1 px-4 py-2.5 bg-[var(--color-primary-600)] hover:cursor-pointer hover:bg-[var(--color-primary-500)] text-[var(--background)] rounded-lg text-sm flex items-center justify-center gap-1"
                 >
-                  {staffSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Account"}
-                </Button>
+                  {catSubmitting
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Check className="w-4 h-4" />
+                  }
+                  Save
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
