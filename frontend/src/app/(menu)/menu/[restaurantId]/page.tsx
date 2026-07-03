@@ -58,6 +58,7 @@ interface CartItem {
 
 interface OrderHistoryItem {
   id: string
+  order_number?: string | null
   status: string
   total_amount: number | string
   created_at: string

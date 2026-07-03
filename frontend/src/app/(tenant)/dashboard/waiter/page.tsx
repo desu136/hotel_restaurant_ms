@@ -59,6 +59,7 @@ interface OrderItem {
 
 interface Order {
   id: string
+  order_number?: string | null
   status: string
   order_type: string
   total_amount: string | number
@@ -1093,7 +1094,7 @@ export default function WaiterDashboard() {
                       {/* Title row */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-black text-[var(--foreground)] text-xs uppercase tracking-wider">
-                          #{order.id.slice(-6).toUpperCase()}
+                          {order.order_number ? `#${order.order_number} (${order.id.slice(-6).toUpperCase()})` : `#${order.id.slice(-6).toUpperCase()}`}
                         </span>
                         
                         {order.table ? (

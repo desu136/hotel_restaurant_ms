@@ -23,6 +23,7 @@ interface OrderItem {
 
 interface KitchenOrder {
   id: string
+  order_number?: string | null
   status: string
   order_type: string
   total_amount: string | number
@@ -52,7 +53,7 @@ function getOrderTypeLabel(order: KitchenOrder): string {
 function buildTicketHTML(order: KitchenOrder): string {
   const tableLabel = getOrderTypeLabel(order)
   const timeStr = new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  const orderNum = order.id.slice(-6).toUpperCase()
+  const orderNum = order.order_number ? `${order.order_number} (${order.id.slice(-6).toUpperCase()})` : order.id.slice(-6).toUpperCase()
 
   const itemRows = order.items.map(it => {
     const custLines = it.customizations
@@ -236,7 +237,7 @@ export default function KitchenDashboard() {
     const elapsed = getElapsedMins(order.created_at)
     const isLate = elapsed >= 15
     const tableLabel = getOrderTypeLabel(order)
-    const orderNum = order.id.slice(-6).toUpperCase()
+    const orderNum = order.order_number ? `${order.order_number} (${order.id.slice(-6).toUpperCase()})` : order.id.slice(-6).toUpperCase()
     const isUpdating = updatingId === order.id
 
     return (

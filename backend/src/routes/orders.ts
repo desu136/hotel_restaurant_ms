@@ -4,6 +4,15 @@ import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
 
+async function generateOrderNumber(branchId: string): Promise<string> {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const count = await prisma.order.count({
+    where: { branch_id: branchId, created_at: { gte: startOfToday } },
+  });
+  return String(count + 1).padStart(2, '0');
+}
+
 // POST /api/orders/public - Customer self-ordering from a table QR code
 router.post('/public', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -177,6 +186,7 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
     const orderData: any = {
       tenant_id: tenantId,
       branch_id: branchId,
+      order_number: await generateOrderNumber(branchId),
       customer_id: customerId,
       table_id: table_id || null,
       order_type: order_type as any,
@@ -299,7 +309,7 @@ router.get('/public/ready/:restaurantId', async (req: Request, res: Response): P
 router.get('/public/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!UUID_REGEX.test(id)) {
+  if (!UUID_REGEX.test(id as string)) {
     res.status(404).json({ error: 'Not found' });
     return;
   }
@@ -309,6 +319,7 @@ router.get('/public/:id', async (req: Request, res: Response): Promise<void> => 
 
       select: {
         id: true,
+        order_number: true,
         status: true,
         order_type: true,
         total_amount: true,
@@ -503,6 +514,7 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
       data: {
         tenant_id: tenantId!,
         branch_id: resolvedBranchId,
+        order_number: await generateOrderNumber(resolvedBranchId),
         customer_id: walkInCustomer.id,
         table_id: table_id || null,
         waiter_id: waiterId,
