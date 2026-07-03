@@ -512,6 +512,7 @@ model Order {
   table_id        String?          @db.Uuid
   room_id         String?          @db.Uuid
   waiter_id       String?          @db.Uuid
+  order_number    String?
   order_type      OrderType
   status          OrderStatus      @default(PENDING)
   total_amount    Decimal          @db.Decimal(10, 2)

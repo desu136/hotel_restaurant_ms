@@ -58,6 +58,7 @@ interface CartItem {
 
 interface OrderHistoryItem {
   id: string
+  order_number?: string | null
   status: string
   total_amount: number | string
   created_at: string
@@ -610,6 +611,7 @@ export default function CustomerMenuPage() {
 
         {showPayment && (
           <PaymentScreen
+            theme={theme}
             total={cartTotal}
             restaurantId={activeRestaurantId}
             tableId={tableId}
@@ -910,116 +912,119 @@ export default function CustomerMenuPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col justify-between">
-                <div className="space-y-3 overflow-y-auto max-h-[50vh] pr-1">
-                  {cart.map((item, idx) => (
-                    <div key={idx} className={`flex gap-3 ${themeCard} rounded-xl p-3 border`}>
-                      <div className="w-14 h-14 rounded-lg bg-gray-200 dark:bg-gray-900 overflow-hidden shrink-0 border border-white/5 flex items-center justify-center">
-                        {item.menuItem.image_url ? (
-                          <img src={item.menuItem.image_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xl">🍽️</span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-bold text-sm ${themeTextTitle} leading-tight`}>{item.menuItem.display_name}</p>
-                        {Object.entries(item.selectedCustomizations).map(([k, v]) => (
-                          <p key={k} className="text-[10px] text-amber-500 mt-0.5 font-semibold">
-                            • {k}: {Array.isArray(v) ? v.join(", ") : v}
-                          </p>
-                        ))}
-                        {item.notes && (
-                          <p className={`text-[10px] ${themeTextMuted} italic mt-1 bg-white/5 px-2 py-0.5 rounded border-l-2 border-amber-500/40`}>
-                            "{item.notes}"
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end justify-between shrink-0">
-                        <span className="text-amber-500 font-extrabold text-sm">
-                          ${(getCustomizedItemPrice(item.menuItem, item.selectedCustomizations) * item.quantity).toFixed(2)}
-                        </span>
-                        <div className={`flex items-center gap-2 ${theme === "dark" ? "bg-gray-800" : "bg-gray-200"} rounded-lg px-2 py-0.5`}>
-                          <button
-                            onClick={() => updateCartQty(idx, -1)}
-                            className="font-bold text-xs w-4 h-4 flex items-center justify-center"
-                          >
-                            −
-                          </button>
-                          <span className="font-bold text-xs min-w-[12px] text-center">{item.quantity}</span>
-                          <button
-                            onClick={() => updateCartQty(idx, 1)}
-                            className="font-bold text-xs w-4 h-4 flex items-center justify-center"
-                          >
-                            +
-                          </button>
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1 pb-32 scrollbar-none">
+                  {/* Cart Items */}
+                  <div className="space-y-3">
+                    {cart.map((item, idx) => (
+                      <div key={idx} className={`flex gap-3 ${themeCard} rounded-xl p-3 border`}>
+                        <div className="w-14 h-14 rounded-lg bg-gray-200 dark:bg-gray-900 overflow-hidden shrink-0 border border-white/5 flex items-center justify-center">
+                          {item.menuItem.image_url ? (
+                            <img src={item.menuItem.image_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xl">🍽️</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-bold text-sm ${themeTextTitle} leading-tight`}>{item.menuItem.display_name}</p>
+                          {Object.entries(item.selectedCustomizations).map(([k, v]) => (
+                            <p key={k} className="text-[10px] text-amber-500 mt-0.5 font-semibold">
+                              • {k}: {Array.isArray(v) ? v.join(", ") : v}
+                            </p>
+                          ))}
+                          {item.notes && (
+                            <p className={`text-[10px] ${themeTextMuted} italic mt-1 bg-white/5 px-2 py-0.5 rounded border-l-2 border-amber-500/40`}>
+                              "{item.notes}"
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end justify-between shrink-0">
+                          <span className="text-amber-500 font-extrabold text-sm">
+                            ${(getCustomizedItemPrice(item.menuItem, item.selectedCustomizations) * item.quantity).toFixed(2)}
+                          </span>
+                          <div className={`flex items-center gap-2 ${theme === "dark" ? "bg-gray-800" : "bg-gray-200"} rounded-lg px-2 py-0.5`}>
+                            <button
+                              onClick={() => updateCartQty(idx, -1)}
+                              className="font-bold text-xs w-4 h-4 flex items-center justify-center"
+                            >
+                              −
+                            </button>
+                            <span className="font-bold text-xs min-w-[12px] text-center">{item.quantity}</span>
+                            <button
+                              onClick={() => updateCartQty(idx, 1)}
+                              className="font-bold text-xs w-4 h-4 flex items-center justify-center"
+                            >
+                              +
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                <div className={`border-t ${themeBorder} pt-4 mt-4 space-y-4`}>
-                  {!tableId && (
-                    <div className="space-y-2">
-                      <label className={`block text-xs font-black uppercase tracking-wider ${themeTextMuted}`}>Order Option</label>
-                      <div className={`grid grid-cols-3 gap-2 p-1 rounded-xl ${theme === "dark" ? "bg-white/5 border border-white/10" : "bg-gray-100 border border-gray-200"}`}>
-                        {(["DINE_IN", "TAKEAWAY", "DELIVERY"] as const).map(type => {
-                          const isActive = orderType === type;
-                          const label = type === "DINE_IN" ? "Dine-In" : type === "TAKEAWAY" ? "Takeaway" : "Delivery";
-                          return (
-                            <button
-                              key={type}
-                              type="button"
-                              onClick={() => setOrderType(type)}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${isActive
-                                ? "bg-amber-500 text-black shadow-md"
-                                : `${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-black"}`
-                                }`}
-                            >
-                              {label}
-                            </button>
-                          );
-                        })}
+                  {/* Checkout Options and notes */}
+                  <div className={`border-t ${themeBorder} pt-4 space-y-4`}>
+                    {!tableId && (
+                      <div className="space-y-2">
+                        <label className={`block text-xs font-black uppercase tracking-wider ${themeTextMuted}`}>Order Option</label>
+                        <div className={`grid grid-cols-3 gap-2 p-1 rounded-xl ${theme === "dark" ? "bg-white/5 border border-white/10" : "bg-gray-100 border border-gray-200"}`}>
+                          {(["DINE_IN", "TAKEAWAY", "DELIVERY"] as const).map(type => {
+                            const isActive = orderType === type;
+                            const label = type === "DINE_IN" ? "Dine-In" : type === "TAKEAWAY" ? "Takeaway" : "Delivery";
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                onClick={() => setOrderType(type)}
+                                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${isActive
+                                  ? "bg-amber-500 text-black shadow-md"
+                                  : `${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-black"}`
+                                  }`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {orderType === "DELIVERY" && (
-                    <div className="space-y-1.5 animate-fadeIn">
-                      <label className={`block text-xs font-black uppercase tracking-wider ${themeTextMuted}`}>Delivery Address</label>
-                      <input
-                        type="text"
-                        placeholder="Enter your complete delivery address..."
-                        value={deliveryAddress}
-                        onChange={e => setDeliveryAddress(e.target.value)}
-                        className={`w-full ${theme === "dark" ? "bg-[#0b0f19]" : "bg-white"} border ${themeBorder} rounded-xl px-3.5 py-2.5 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
-                        required
+                    {orderType === "DELIVERY" && (
+                      <div className="space-y-1.5 animate-fadeIn">
+                        <label className={`block text-xs font-black uppercase tracking-wider ${themeTextMuted}`}>Delivery Address</label>
+                        <input
+                          type="text"
+                          placeholder="Enter your complete delivery address..."
+                          value={deliveryAddress}
+                          onChange={e => setDeliveryAddress(e.target.value)}
+                          className={`w-full ${theme === "dark" ? "bg-[#0b0f19] text-white" : "bg-white text-gray-900"} border ${themeBorder} rounded-xl px-3.5 py-2.5 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
+                          required
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className={`block text-xs font-semibold ${themeTextMuted} mb-1.5`}>Add Chef Instruction Notes</label>
+                      <textarea
+                        rows={2}
+                        placeholder="E.g., no onion, extra spicy, deliver order items together..."
+                        value={orderNotes}
+                        onChange={e => setOrderNotes(e.target.value)}
+                        className={`w-full ${theme === "dark" ? "bg-[#0b0f19] text-white" : "bg-white text-gray-900"} border ${themeBorder} rounded-xl px-3 py-2 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50 resize-none`}
                       />
                     </div>
-                  )}
 
-                  <div>
-                    <label className={`block text-xs font-semibold ${themeTextMuted} mb-1.5`}>Add Chef Instruction Notes</label>
-                    <textarea
-                      rows={2}
-                      placeholder="E.g., no onion, extra spicy, deliver order items together..."
-                      value={orderNotes}
-                      onChange={e => setOrderNotes(e.target.value)}
-                      className={`w-full ${theme === "dark" ? "bg-[#0b0f19]" : "bg-white"} border ${themeBorder} rounded-xl px-3 py-2 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50 resize-none`}
-                    />
-                  </div>
-
-                  <div className={`p-3 space-y-2 text-xs rounded-xl ${themeCard} border`}>
-                    <div className="flex justify-between opacity-75">
-                      <span>Subtotal</span>
-                      <span>${cartTotal.toFixed(2)}</span>
-                    </div>
-                    <div className={`flex justify-between font-bold text-sm pt-1 border-t ${themeBorder}`}>
-                      <span>Total Amount</span>
-                      <span className="text-amber-500 text-base font-extrabold">${cartTotal.toFixed(2)}</span>
+                    <div className={`p-3 space-y-2 text-xs rounded-xl ${themeCard} border`}>
+                      <div className="flex justify-between opacity-75">
+                        <span>Subtotal</span>
+                        <span>${cartTotal.toFixed(2)}</span>
+                      </div>
+                      <div className={`flex justify-between font-bold text-sm pt-1 border-t ${themeBorder}`}>
+                        <span>Total Amount</span>
+                        <span className="text-amber-500 text-base font-extrabold">${cartTotal.toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
-
                 </div>
               </div>
             )}
@@ -1287,7 +1292,7 @@ export default function CustomerMenuPage() {
 
         {/* Floating Bottom Cart Popup */}
         {cart.length > 0 && !showPayment && (
-          <div className="fixed bottom-16 left-4 right-4 z-40 bg-amber-500 text-black p-3.5 rounded-2xl flex items-center justify-between shadow-2xl transform transition-all duration-300">
+          <div className={`fixed ${activeTab === "home" ? "bottom-16" : "bottom-4"} left-4 right-4 z-40 bg-amber-500 text-black p-3.5 rounded-2xl flex items-center justify-between shadow-2xl transform transition-all duration-300`}>
             <div className="flex items-center gap-3">
               <div className="relative bg-black/10 p-2 rounded-xl">
                 <ShoppingCart className="w-5 h-5 text-black" />
@@ -1320,7 +1325,7 @@ export default function CustomerMenuPage() {
 
       {/* Floating "Change Restaurant" pill (when sheet is closed) */}
       <AnimatePresence>
-        {!popupVisible && (
+        {!popupVisible && activeTab === "home" && (
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

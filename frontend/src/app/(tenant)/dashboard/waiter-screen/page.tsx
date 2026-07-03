@@ -13,6 +13,7 @@ interface OrderItem {
 
 interface ReadyOrder {
   id: string
+  order_number?: string | null
   table_id: string | null
   waiter_id: string | null
   status: string
@@ -240,8 +241,8 @@ export default function WaiterScreenPage() {
                 <div className={`px-4 py-3 border-b flex justify-between items-start gap-2 ${isLate ? "bg-red-500/5 border-red-500/20" : "bg-[var(--surface-hover)]/30 border-[var(--surface-border)]"
                   }`}>
                   <div>
-                    <span className="text-[10px] font-mono ">ORDER #{order.id.slice(-6).toUpperCase()}</span>
-                    <h2 className="text-lg font-black  mt-0.5">
+                    <span className="text-[10px] font-mono text-[var(--muted)]">ORDER {order.order_number ? `#${order.order_number} (${order.id.slice(-6).toUpperCase()})` : `#${order.id.slice(-6).toUpperCase()}`}</span>
+                    <h2 className="text-lg font-black text-white mt-0.5">
                       {order.table ? `Table ${order.table.table_number}` : order.order_type === "DINE_IN" ? "Pre-order Dine-In" : order.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
                     </h2>
                   </div>
