@@ -22,6 +22,7 @@ import {
   QrCode,
   Bell,
   GitBranchIcon,
+  BarChart3,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/ui/profile-dropdown"
 
@@ -86,13 +87,18 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
 
   const operationsNav: NavItem[] = []
   if (isOwner || isManager) {
+    if (isOwner) {
+      operationsNav.push({ href: "/dashboard/manager/branches", label: "Branches", icon: GitBranchIcon, exact: false })
+    } else {
+      operationsNav.push({ href: "/dashboard/manager/branch-profile", label: "Branch Profile", icon: Store, exact: false })
+    }
     operationsNav.push(
-      { href: "/dashboard/manager/branches", label: "Branches", icon: GitBranchIcon, exact: false },
       { href: "/dashboard/manager/category", label: "Category", icon: Tag, exact: false },
       { href: "/dashboard/manager/menu", label: "Menu", icon: UtensilsCrossed, exact: false },
       { href: "/dashboard/manager/tables", label: "Tables", icon: Table2, exact: false },
       { href: "/dashboard/manager/qr", label: "QR Codes", icon: QrCode, exact: false },
-      { href: "/dashboard/manager/staff", label: "Staff", icon: Users2, exact: false }
+      { href: "/dashboard/manager/staff", label: "Staff", icon: Users2, exact: false },
+      { href: "/dashboard/manager/reports", label: "Reports", icon: BarChart3, exact: false }
     )
   }
   if (isOwner || isWaiter) {
@@ -204,9 +210,9 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold truncate">{user.name}</p>
-              <p className="text-[10px] text-[var(--muted)] truncate">
-                {user.roles.join(", ")}
-                {user.branchName && ` (${user.branchName})`}
+              <p className="text-[10px] flex flex-col truncate">
+                <span className="text-bold">{user.roles.join(", ")}</span>
+                <span>{user.branchName && ` (${user.branchName})`}</span>
               </p>
             </div>
           </div>
@@ -224,13 +230,13 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
 
   const currentNavTitle = allNavItems.find((n) => isActive(n))?.label ?? "Dashboard"
 
-  // Waiter-only users get no sidebar — full screen station experience
-  const isWaiterOnly = isWaiter && !isOwner && !isManager && !isChef && !isCashier
+  const isAdmin = user?.roles.includes('SUPER_ADMIN');
+  const showSidebar = !!(isOwner || isManager || isAdmin);
 
   return (
     <div className="tenant-theme h-screen overflow-hidden bg-[var(--background)] flex">
       {/* Mobile overlay */}
-      {sidebarOpen && (
+      {sidebarOpen && showSidebar && (
         <div
           className="fixed inset-0 z-20 bg-black/50 md:hidden"
           onClick={() => setSidebarOpen(false)}
@@ -238,14 +244,14 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
       )}
 
       {/* Mobile sidebar */}
-      {sidebarOpen && (
+      {sidebarOpen && showSidebar && (
         <div className="fixed inset-y-0 left-0 z-30 md:hidden h-full">
           <Sidebar mobile />
         </div>
       )}
 
-      {/* Desktop sidebar — hidden for waiter-only users */}
-      {!isWaiterOnly && (
+      {/* Desktop sidebar — hidden for non-admin/owner/manager users */}
+      {showSidebar && (
         <div className="hidden md:flex w-64 shrink-0 h-screen sticky top-0">
           <Sidebar />
         </div>
@@ -259,7 +265,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
           style={{ background: "color-mix(in srgb, var(--surface) 90%, transparent)", backdropFilter: "blur(12px)" }}
         >
           <div className="flex items-center gap-3">
-            {!isWaiterOnly && (
+            {showSidebar && (
               <button
                 className="md:hidden p-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
                 onClick={() => setSidebarOpen(true)}

@@ -54,6 +54,32 @@ export default function RolesManager({ initialRoles, allPermissions }: Props) {
     Object.fromEntries(Object.keys(PERMISSION_GROUPS).map(g => [g, true]))
   )
 
+  const [currentUser, setCurrentUser] = React.useState<any>(null)
+  React.useEffect(() => {
+    fetch("/api/auth/me")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.user) {
+          setCurrentUser(data.user)
+        }
+      })
+      .catch(console.error)
+  }, [])
+
+  const filteredRoles = React.useMemo(() => {
+    return roles.filter(role => {
+      if (currentUser?.tenant?.business_type === "RESTAURANT" && role.code === "RECEPTIONIST") return false;
+      return true;
+    });
+  }, [roles, currentUser]);
+
+  React.useEffect(() => {
+    if (filteredRoles.length > 0 && (!selectedRole || !filteredRoles.some(r => r.id === selectedRole.id))) {
+      setSelectedRole(filteredRoles[0]);
+      setDraft(filteredRoles[0].permissions);
+    }
+  }, [filteredRoles, selectedRole]);
+
   const isDirty = selectedRole
     ? JSON.stringify([...draft].sort()) !== JSON.stringify([...selectedRole.permissions].sort())
     : false
@@ -102,7 +128,7 @@ export default function RolesManager({ initialRoles, allPermissions }: Props) {
     <div className="flex flex-col lg:flex-row gap-6">
       {/* Role list sidebar */}
       <div className="lg:w-64 shrink-0 space-y-2">
-        {roles.map(role => {
+        {filteredRoles.map(role => {
           const active = selectedRole?.id === role.id
           return (
             <button

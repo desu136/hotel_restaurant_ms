@@ -13,10 +13,14 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const branchFilter = isOwner ? {} : { id: req.user!.branchId || '' };
+
     const branches = await prisma.branch.findMany({
       where: {
         tenant_id: tenantId,
         deleted_at: null,
+        ...branchFilter,
       },
       include: {
         restaurant: {
@@ -55,39 +59,13 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
-    // const { name, address, phone } = req.body;
-    // if (!name) {
-    //   res.status(400).json({ error: 'Branch name is required' });
-    //   return;
-    // }
 
-    // // Inherit logo/banner from the root restaurant (the brand) if it exists
-    // const rootRestaurant = await prisma.restaurant.findFirst({
-    //   where: { tenant_id: tenantId, branch_id: null, deleted_at: null },
-    //   select: { logo_url: true, banner_url: true },
-    // });
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner) {
+      res.status(403).json({ error: 'Forbidden: Only owners can create branches.' });
+      return;
+    }
 
-    // const branch = await prisma.branch.create({
-    //   data: { tenant_id: tenantId, name, address, phone },
-    // });
-
-    // // Auto-create the restaurant outlet for this branch
-    // const outlet = await prisma.restaurant.create({
-    //   data: {
-    //     tenant_id: tenantId,
-    //     branch_id: branch.id,
-    //     name: name, // outlet name defaults to branch name; editable later
-    //     logo_url: rootRestaurant?.logo_url ?? null,
-    //     banner_url: rootRestaurant?.banner_url ?? null,
-    //   },
-    //   select: {
-    //     id: true,
-    //     name: true,
-    //     _count: { select: { categories: true, menu_items: true, tables: true } },
-    //   },
-    // });
-    // 
-    // res.status(201).json({ ...branch, outlet });
     const { restaurant_id, name, address, phone } = req.body;
 
     if (!restaurant_id || !name) {
@@ -138,6 +116,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     });
 
     const categoryMap = new Map<string, string>();
+
+    // Pass 1 — create all branch categories without parent_id first
+    // (parent_id on Category is a FK to Category, not MasterCategory)
     for (const mc of masterCategories) {
       const cat = await prisma.category.create({
         data: {
@@ -145,10 +126,24 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
           tenant_id: tenantId,
           branch_id: branch.id,
           master_category_id: mc.id,
-          parent_id: mc.parent_id
+          // parent_id set in pass 2 after all IDs are known
         }
       });
       categoryMap.set(mc.id, cat.id);
+    }
+
+    // Pass 2 — wire up parent relationships using the translated Category IDs
+    for (const mc of masterCategories) {
+      if (mc.parent_id) {
+        const branchCatId = categoryMap.get(mc.id);
+        const branchParentId = categoryMap.get(mc.parent_id);
+        if (branchCatId && branchParentId) {
+          await prisma.category.update({
+            where: { id: branchCatId },
+            data: { parent_id: branchParentId }
+          });
+        }
+      }
     }
 
     // Broadcast all existing MasterMenuItem records to the new branch
@@ -199,6 +194,13 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
+
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner && req.params.id !== req.user!.branchId) {
+      res.status(403).json({ error: 'Forbidden: You do not have access to this branch.' });
+      return;
+    }
+
     const branch = await prisma.branch.findFirst({
       where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
       include: {
@@ -229,7 +231,14 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
-    const { name, address, phone } = req.body;
+
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner && req.params.id !== req.user!.branchId) {
+      res.status(403).json({ error: 'Forbidden: You do not have access to this branch.' });
+      return;
+    }
+
+    const { name, address, phone, logo_url, banner_url } = req.body;
 
     const existing = await prisma.branch.findFirst({
       where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
@@ -245,6 +254,8 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
         name: name ?? existing.name,
         address: address ?? existing.address,
         phone: phone ?? existing.phone,
+        logo_url: logo_url !== undefined ? logo_url : existing.logo_url,
+        banner_url: banner_url !== undefined ? banner_url : existing.banner_url,
       },
       include: {
         restaurant: true,
@@ -270,6 +281,13 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
+
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner) {
+      res.status(403).json({ error: 'Forbidden: Only owners can delete branches.' });
+      return;
+    }
+
     const existing = await prisma.branch.findFirst({
       where: { id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
     });
@@ -280,11 +298,6 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 
     const now = new Date();
 
-    // Soft-delete the linked restaurant outlet
-    // await prisma.restaurant.updateMany({
-    //   where: { branch_id: req.params.id as string, tenant_id: tenantId, deleted_at: null },
-    //   data: { deleted_at: now },
-    // });
     // Soft-delete the branch itself
     await prisma.branch.update({
       where: { id: req.params.id as string },

@@ -299,7 +299,7 @@ router.get('/public/ready/:restaurantId', async (req: Request, res: Response): P
 router.get('/public/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!UUID_REGEX.test(id)) {
+  if (typeof id !== 'string' || !UUID_REGEX.test(id)) {
     res.status(404).json({ error: 'Not found' });
     return;
   }
@@ -428,6 +428,13 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: 'Order not found' });
       return;
     }
+
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner && order.branch_id !== req.user!.branchId) {
+      res.status(403).json({ error: 'Forbidden: You do not have access to this order' });
+      return;
+    }
+
     res.json(order);
   } catch (e) {
     res.status(500).json({ error: 'Failed to fetch order' });
@@ -550,6 +557,12 @@ router.patch('/:id/status', async (req: Request, res: Response): Promise<void> =
 
     if (!existingOrder) {
       res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner && existingOrder.branch_id !== req.user!.branchId) {
+      res.status(403).json({ error: 'Forbidden: You cannot modify orders from another branch' });
       return;
     }
 

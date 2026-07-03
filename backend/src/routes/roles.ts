@@ -57,6 +57,12 @@ router.get('/:id/permissions', async (req: Request, res: Response): Promise<void
 // PUT /api/roles/:id/permissions  (replace all permissions for a role)
 router.put('/:id/permissions', async (req: Request, res: Response): Promise<void> => {
   try {
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner) {
+      res.status(403).json({ error: 'Forbidden: Only owners can update role permissions.' });
+      return;
+    }
+
     if (!isUuid(req.params.id as string)) {
       res.status(404).json({ error: 'Role not found' });
       return;

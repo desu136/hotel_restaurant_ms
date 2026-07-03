@@ -70,6 +70,18 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const isOwnerUser = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwnerUser) {
+      if (branchId !== req.user!.branchId) {
+        res.status(403).json({ error: 'Forbidden: You can only create employees for your own branch.' });
+        return;
+      }
+      if (roles && (roles.includes('HOTEL_OWNER') || roles.includes('SUPER_ADMIN'))) {
+        res.status(403).json({ error: 'Forbidden: You cannot assign owner or super admin roles.' });
+        return;
+      }
+    }
+
     // Validate branch belongs to tenant
     if (branchId) {
       const branch = await prisma.branch.findFirst({
@@ -208,6 +220,22 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const isOwnerUser = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwnerUser) {
+      if (employee.branch_id !== req.user!.branchId) {
+        res.status(403).json({ error: 'Forbidden: You can only update employees from your own branch.' });
+        return;
+      }
+      if (branchId !== undefined && branchId !== req.user!.branchId) {
+        res.status(403).json({ error: 'Forbidden: You can only assign employees to your own branch.' });
+        return;
+      }
+      if (roles !== undefined && (roles.includes('HOTEL_OWNER') || roles.includes('SUPER_ADMIN'))) {
+        res.status(403).json({ error: 'Forbidden: You cannot assign owner or super admin roles.' });
+        return;
+      }
+    }
+
     const updateData: any = {};
     if (fullName !== undefined) updateData.full_name = fullName;
     if (phone !== undefined) updateData.phone = phone;
@@ -338,6 +366,12 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     });
     if (!employee) {
       res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const isOwnerUser = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwnerUser && employee.branch_id !== req.user!.branchId) {
+      res.status(403).json({ error: 'Forbidden: You can only delete employees from your own branch.' });
       return;
     }
     await prisma.user.update({

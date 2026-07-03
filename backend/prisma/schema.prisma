@@ -132,6 +132,8 @@ model Branch {
   name    String
   address String?
   phone   String?
+  logo_url String?
+  banner_url String?
 
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt

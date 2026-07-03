@@ -1,7 +1,7 @@
 "use client"
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { User, KeyRound, Trash2, Camera, Loader2, AlertTriangle } from "lucide-react"
+import { User, KeyRound, Trash2, Camera, Loader2, AlertTriangle, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
@@ -168,9 +168,24 @@ export function ProfileSettings() {
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       {/* Title */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
-        <p className="text-sm text-[var(--muted)] mt-1">Manage your account information, security settings, and preferences.</p>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => {
+            if (window.history.length > 1) {
+              router.back()
+            } else {
+              router.push("/dashboard")
+            }
+          }}
+          className="p-2 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
+          title="Go Back"
+        >
+          <ArrowLeft className="w-5 h-5 text-[var(--foreground)]" />
+        </button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
+          <p className="text-sm text-[var(--muted)] mt-1">Manage your account information, security settings, and preferences.</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

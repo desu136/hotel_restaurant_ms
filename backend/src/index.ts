@@ -16,6 +16,7 @@ import orderRoutes from './routes/orders';
 import billingRoutes from './routes/billing';
 import uploadRoutes from './routes/upload';
 import qrRoutes from './routes/qr';
+import reportsRoutes from './routes/reports';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -52,6 +53,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/qr', qrRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // 404 handler
 app.use((_req, res) => {

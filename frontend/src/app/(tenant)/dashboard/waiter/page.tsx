@@ -96,7 +96,7 @@ function QRScanner({ onScan, onError }: QRScannerProps) {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" }
         });
-        
+
         if (!isMounted) {
           stream.getTracks().forEach(track => track.stop());
           return;
@@ -110,7 +110,7 @@ function QRScanner({ onScan, onError }: QRScannerProps) {
             console.error("Video play failed:", e);
           });
         }
-        
+
         animRef.current = requestAnimationFrame(scan);
       } catch (err: any) {
         console.error("Camera capture error:", err);
@@ -129,7 +129,7 @@ function QRScanner({ onScan, onError }: QRScannerProps) {
           canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          
+
           try {
             const code = jsQR(imageData.data, imageData.width, imageData.height, {
               inversionAttempts: "dontInvert"
@@ -168,7 +168,7 @@ function QRScanner({ onScan, onError }: QRScannerProps) {
         playsInline
       />
       <canvas ref={canvasRef} className="hidden" />
-      
+
       {/* Viewfinder Grid Overlay */}
       <div className="absolute inset-0 border-[30px] border-black/80 pointer-events-none z-10" />
       <div className="w-64 h-64 border-2 border-white/20 rounded-3xl relative flex items-center justify-center overflow-hidden z-20 pointer-events-none">
@@ -177,13 +177,13 @@ function QRScanner({ onScan, onError }: QRScannerProps) {
         <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-amber-500 rounded-tr-lg" />
         <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-amber-500 rounded-bl-lg" />
         <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-amber-500 rounded-br-lg" />
-        
+
         {/* Laser Animation */}
-        <div className="absolute left-0 right-0 h-1 bg-amber-500 opacity-80 shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-pulse" 
-             style={{
-               animation: "scanner-laser 2s ease-in-out infinite",
-               top: "0%"
-             }} 
+        <div className="absolute left-0 right-0 h-1 bg-amber-500 opacity-80 shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-pulse"
+          style={{
+            animation: "scanner-laser 2s ease-in-out infinite",
+            top: "0%"
+          }}
         />
       </div>
     </div>
@@ -231,7 +231,7 @@ export default function WaiterDashboard() {
         setShowOrderModal(true);
         setShowScannerModal(false);
         setScannerError(null);
-        
+
         // Add activity log
         setActivityLogs(prev => [
           {
@@ -245,7 +245,7 @@ export default function WaiterDashboard() {
         return;
       }
     }
-    
+
     alert(`Invalid QR code scanned: ${codeString}. No matching table found.`);
   }, [tables]);
   const [activityLogs, setActivityLogs] = React.useState<Array<{
@@ -331,7 +331,7 @@ export default function WaiterDashboard() {
           id: loggedInUser.id,
           name: loggedInUser.name,
           email: loggedInUser.email,
-          branchId: loggedInUser.branchId,
+          branchId: loggedInUser.branch_id,
           roles: loggedInUser.roles || []
         }
         setMe(finalMe)
@@ -439,15 +439,15 @@ export default function WaiterDashboard() {
       const res = await fetch("/api/orders?limit=100")
       if (!res.ok) throw new Error()
       const data: Order[] = await res.json()
-      
+
       // Filter active (non-completed) orders
       const active = data.filter(o => !["COMPLETED", "CANCELLED"].includes(o.status))
       setOrders(active)
 
       // Notify waiter about any newly READY orders belonging to their assigned tables
       if (me) {
-        const waiterReadyOrders = active.filter(o => 
-          o.status === "READY" && 
+        const waiterReadyOrders = active.filter(o =>
+          o.status === "READY" &&
           o.waiter_id === me.id
         )
         const currentReadyIds = waiterReadyOrders.map(o => o.id)
@@ -584,7 +584,7 @@ export default function WaiterDashboard() {
         })
       })
       if (!res.ok) { const d = await res.json(); setError(d.error ?? "Failed to place order"); return }
-      
+
       const tbl = tables.find(t => t.id === selectedTable)
       if (tbl) {
         setActivityLogs(prev => [
@@ -690,8 +690,8 @@ export default function WaiterDashboard() {
         </CardHeader>
         <CardContent className="space-y-4">
           {readyOrders.map(o => (
-            <div 
-              key={o.id} 
+            <div
+              key={o.id}
               className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-between"
             >
               <div className="space-y-1">
@@ -705,9 +705,9 @@ export default function WaiterDashboard() {
                   {o.items.length} items • click Serve to deliver.
                 </p>
               </div>
-              <Button 
-                onClick={() => handleMarkDelivered(o.id)} 
-                size="sm" 
+              <Button
+                onClick={() => handleMarkDelivered(o.id)}
+                size="sm"
                 className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 font-semibold"
               >
                 Serve
@@ -717,7 +717,7 @@ export default function WaiterDashboard() {
 
           {readyOrders.length === 0 && (
             <div className="py-12 text-center text-[var(--muted)] text-sm">
-              ✨ No active serve alerts. Nice job!
+              No active serve alerts. Nice job!
             </div>
           )}
         </CardContent>
@@ -735,14 +735,14 @@ export default function WaiterDashboard() {
   }
 
   return (
-    <div className="space-y-8 pb-24 md:pb-12">
+    <div className="space-y-8 pb-24 md:pb-12 bg-[var(--background)] text-[var(--foreground)]  ">
       {/* Header and Stats */}
       {activeTab === "home" && (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight mb-1">Waiter Station 🤵</h1>
+            <h1 className="text-3xl font-bold tracking-tight mb-1">Waiter Station</h1>
             <p className="text-[var(--muted)]">
-              Active User: <strong className="text-white">{me?.name || "Loading..."}</strong> • Manage your assigned tables and ready orders.
+              Active User: <strong className="">{me?.name || "Loading..."}</strong> • Manage your assigned tables and ready orders.
             </p>
           </div>
 
@@ -753,7 +753,7 @@ export default function WaiterDashboard() {
                   <select
                     value={selectedRestId}
                     onChange={e => handleRestaurantChange(e.target.value)}
-                    className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className=" border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold  focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
                     {restaurants.map(r => (
                       <option key={r.id} value={r.id} className="text-black dark:text-white bg-[var(--surface)]">{r.name}</option>
@@ -763,20 +763,20 @@ export default function WaiterDashboard() {
                 <select
                   value={selectedBranchId}
                   onChange={e => handleBranchChange(e.target.value)}
-                  className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className=" border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="" className="text-black dark:text-white bg-[var(--surface)]">— Select Branch —</option>
+                  <option value="" className="">— Select Branch —</option>
                   {branches
                     .filter(b => b.restaurant_id === selectedRestId)
                     .map(b => (
-                      <option key={b.id} value={b.id} className="text-black dark:text-white bg-[var(--surface)]">{b.name}</option>
+                      <option key={b.id} value={b.id} className="">{b.name}</option>
                     ))
                   }
                 </select>
               </>
             ) : (
-              <span className="text-xs font-bold text-[var(--muted)] bg-[var(--surface-hover)] border border-[var(--surface-border)] px-3 py-1.5 rounded-lg">
-                📍 {branches.find(b => b.id === me.branchId)?.name || "Assigned Branch"}
+              <span className="text-xs font-bold  border border-[var(--surface-border)] px-3 py-1.5 rounded-lg">
+                {branches.find(b => b.id === me.branchId)?.name || "Assigned Branch"}
               </span>
             )}
           </div>
@@ -785,7 +785,7 @@ export default function WaiterDashboard() {
 
       {/* Compact Status Bar */}
       {activeTab === "home" && (
-        <div className="bg-[var(--surface-hover)]/60 border border-[var(--surface-border)] backdrop-blur-md rounded-2xl p-4 flex items-center justify-between gap-4 text-xs font-semibold shadow-sm">
+        <div className=" border border-[var(--surface-border)] backdrop-blur-md rounded-2xl p-4 flex items-center justify-between gap-4 text-xs font-semibold shadow-sm">
           <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
             {/* Tables Status */}
             <div className="flex items-center gap-2">
@@ -796,7 +796,7 @@ export default function WaiterDashboard() {
               </span>
             </div>
 
-            <span className="text-[var(--surface-border)] hidden sm:inline">|</span>
+            <span className=" hidden sm:inline">|</span>
 
             {/* Orders Status */}
             <div className="flex items-center gap-2">
@@ -807,19 +807,19 @@ export default function WaiterDashboard() {
               </span>
             </div>
 
-            <span className="text-[var(--surface-border)] hidden sm:inline">|</span>
+            <span className=" hidden sm:inline">|</span>
 
             {/* Ready to Serve Status */}
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[var(--muted)]">Ready:</span>
-              <span className="text-emerald-500 dark:text-emerald-400 font-bold">
+              <span className="">Ready:</span>
+              <span className=" font-bold">
                 {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length}
               </span>
             </div>
           </div>
 
-          <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold bg-[var(--surface-hover)] border border-[var(--surface-border)] px-2.5 py-1 rounded-full">
+          <div className="text-[10px]  uppercase tracking-wider font-bold  border border-[var(--surface-border)] px-2.5 py-1 rounded-full">
             Live Station
           </div>
         </div>
@@ -833,41 +833,37 @@ export default function WaiterDashboard() {
           <div className="hidden md:flex border-b border-[var(--surface-border)] overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveTab("home")}
-              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
-                activeTab === "home" 
-                  ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]" 
-                  : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
-              }`}
+              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${activeTab === "home"
+                ? "border-[var(--color-primary-600)] "
+                : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
             >
               Home
             </button>
             <button
               onClick={() => setActiveTab("tables")}
-              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
-                activeTab === "tables" 
-                  ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]" 
-                  : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
-              }`}
+              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${activeTab === "tables"
+                ? "border-[var(--color-primary-600)] "
+                : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
             >
               Tables Layout
             </button>
             <button
               onClick={() => setActiveTab("orders")}
-              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
-                activeTab === "orders" 
-                  ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]" 
-                  : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
-              }`}
+              className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${activeTab === "orders"
+                ? "border-[var(--color-primary-600)] "
+                : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
             >
               Active Orders ({orders.filter(filterMyOrUnassigned).length})
             </button>
             <button
               onClick={() => setActiveTab("alerts")}
-              className={`lg:hidden px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 flex items-center gap-2 ${
-                activeTab === "alerts" 
-                  ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]" 
-                  : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
-              }`}
+              className={`lg:hidden px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 flex items-center gap-2 ${activeTab === "alerts"
+                ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]"
+                : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
             >
               <span>Alerts</span>
               {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length > 0 && (
@@ -889,27 +885,27 @@ export default function WaiterDashboard() {
                   {/* SCAN QR CODE BUTTON - EXTREMELY PROMINENT */}
                   <button
                     onClick={() => setShowScannerModal(true)}
-                    className="flex items-center gap-4 bg-amber-500 hover:bg-amber-400 text-black p-5 rounded-2xl shadow-lg transition-all duration-200 active:scale-[0.98] group font-black text-left cursor-pointer"
+                    className="flex items-center gap-4  hover:bg-[var(--surface-hover)] p-5 rounded-2xl shadow-lg transition-all duration-200 active:scale-[0.98] group font-black text-left cursor-pointer"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-black/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-12 h-12 rounded-xl bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center group-hover:scale-110 transition-transform">
                       <QrCode className="w-6 h-6 animate-pulse" />
                     </div>
                     <div>
                       <h4 className="text-sm font-black">Scan Table QR</h4>
-                      <p className="text-[10px] text-black/75 font-normal mt-0.5">Scan a table QR to order immediately.</p>
+                      <p className="text-[10px]  font-normal mt-0.5">Scan a table QR to order immediately.</p>
                     </div>
                   </button>
 
                   <button
                     onClick={() => setActiveTab("tables")}
-                    className="flex items-center gap-4 bg-[var(--surface-hover)] border border-[var(--surface-border)] hover:bg-[var(--surface-hover)]/80 text-[var(--foreground)] p-5 rounded-2xl transition-all duration-200 active:scale-[0.98] group text-left cursor-pointer shadow-sm"
+                    className="flex items-center gap-4  bg-[var(--foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] text-[var(--background)] p-5 rounded-2xl transition-all duration-200 active:scale-[0.98] group text-left cursor-pointer shadow-sm"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-[var(--surface)] border border-[var(--surface-border)] flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Plus className="w-5 h-5 text-amber-500" />
+                    <div className="w-12 h-12 rounded-xl bg-[var(--background)] text-[var(--foreground)] border border-[var(--surface-border)] flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Plus className="w-5 h-5 " />
                     </div>
                     <div>
-                      <h4 className="text-sm font-black text-[var(--foreground)]">New Order</h4>
-                      <p className="text-[10px] text-[var(--muted)] mt-0.5">Select an assigned table to start order.</p>
+                      <h4 className="text-sm font-black ">New Order</h4>
+                      <p className="text-[10px]  mt-0.5">Select an assigned table to start order.</p>
                     </div>
                   </button>
                 </div>
@@ -927,13 +923,12 @@ export default function WaiterDashboard() {
                         {activityLogs.map((log) => (
                           <li key={log.id} className="flex items-center justify-between py-1 border-b border-[var(--surface-border)] last:border-0">
                             <div className="flex items-center gap-3">
-                              <span className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                                log.type === "serve_order" 
-                                  ? "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400" 
-                                  : log.type === "create_order" 
-                                  ? "bg-purple-500/10 text-purple-500 dark:text-purple-400" 
-                                  : "bg-blue-500/10 text-blue-500 dark:text-blue-400"
-                              }`}>
+                              <span className={`h-8 w-8 rounded-full flex items-center justify-center ${log.type === "serve_order"
+                                ? "bg-[var(--foreground)] text-[var(--background)]"
+                                : log.type === "create_order"
+                                  ? "bg-[var(--foreground)] text-[var(--background)]"
+                                  : "bg-[var(--foreground)] text-[var(--background)]"
+                                }`}>
                                 {log.type === "serve_order" ? (
                                   <Bell className="w-4 h-4" />
                                 ) : log.type === "create_order" ? (
@@ -963,7 +958,7 @@ export default function WaiterDashboard() {
                   <span className="w-2 h-2 rounded-full bg-blue-500" /> My Assigned Tables ({myTables.length})
                 </h3>
                 {myTables.length === 0 ? (
-                  <div className="p-8 border border-dashed border-[var(--surface-border)] rounded-2xl text-center text-[var(--muted)] text-xs">
+                  <div className="p-8 border border-dashed border-[var(--surface-border)] rounded-2xl text-center  text-xs">
                     No tables assigned to you by manager.
                   </div>
                 ) : (
@@ -972,39 +967,37 @@ export default function WaiterDashboard() {
                       const tableStatus = getTableStatus(table.id)
                       const tableReadyOrder = orders.find(o => o.table_id === table.id && o.status === "READY")
                       return (
-                        <Card 
-                          key={table.id} 
+                        <Card
+                          key={table.id}
                           onClick={() => {
                             setSelectedTable(table.id)
                             setOrderModalView("catalog")
                             setCart([])
                             setShowOrderModal(true)
                           }}
-                          className={`group relative overflow-hidden transition-all duration-300 border-[var(--surface-border)] hover:border-blue-500/40 cursor-pointer active:scale-[0.98] ${
-                            tableReadyOrder
-                              ? "bg-emerald-500/5 ring-1 ring-emerald-500/25 border-emerald-500/40"
-                              : tableStatus === "OCCUPIED" 
-                              ? "bg-blue-500/5" 
+                          className={`group relative overflow-hidden transition-all duration-300 border-[var(--surface-border)] hover:border-blue-500/40 cursor-pointer active:scale-[0.98] ${tableReadyOrder
+                            ? "bg-emerald-500/5 ring-1 ring-emerald-500/25 border-emerald-500/40"
+                            : tableStatus === "OCCUPIED"
+                              ? "bg-blue-500/5"
                               : "bg-emerald-500/5"
-                          }`}
+                            }`}
                         >
                           <CardContent className="p-3 sm:p-5 flex flex-col items-center justify-center text-center space-y-2 sm:space-y-3">
                             <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-[var(--surface-hover)]">
                               Table {table.table_number}
                             </span>
-                            
+
                             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[var(--surface)] flex items-center justify-center border shadow-inner">
                               <Users className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--muted)]" />
                             </div>
-                            
+
                             <div className="space-y-0.5 sm:space-y-1">
-                              <p className="text-[10px] sm:text-xs text-[var(--muted)]">{table.capacity} seats</p>
+                              <p className="text-[10px] sm:text-xs ">{table.capacity} seats</p>
                               {tableReadyOrder ? (
-                                <p className="text-[10px] sm:text-xs font-black text-emerald-400 animate-pulse uppercase">READY TO SERVE</p>
+                                <p className="text-[10px] sm:text-xs font-black animate-pulse uppercase">READY TO SERVE</p>
                               ) : (
-                                <p className={`text-[10px] sm:text-xs font-bold ${
-                                  tableStatus === "AVAILABLE" ? "text-emerald-500" : "text-blue-500"
-                                }`}>
+                                <p className={`text-[10px] sm:text-xs font-bold ${tableStatus === "AVAILABLE" ? "" : ""
+                                  }`}>
                                   {tableStatus}
                                 </p>
                               )}
@@ -1014,23 +1007,23 @@ export default function WaiterDashboard() {
                               {tableStatus === "OCCUPIED" && (
                                 <>
                                   {tableReadyOrder && (
-                                    <Button 
+                                    <Button
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         handleMarkDelivered(tableReadyOrder.id)
-                                      }} 
-                                      size="sm" 
+                                      }}
+                                      size="sm"
                                       className="w-full text-[9px] sm:text-[10px] h-6 sm:h-7 bg-emerald-600 hover:bg-emerald-500 text-white font-bold animate-pulse"
                                     >
                                       Serve Order
                                     </Button>
                                   )}
-                                  <Button 
+                                  <Button
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       handleClearTable(table.id)
-                                    }} 
-                                    size="sm" 
+                                    }}
+                                    size="sm"
                                     className="w-full text-[9px] sm:text-[10px] h-6 sm:h-7 bg-zinc-700 hover:bg-zinc-600 text-white font-bold"
                                   >
                                     Clear Table
@@ -1047,12 +1040,12 @@ export default function WaiterDashboard() {
               </div>
 
               {/* Other Tables section */}
-              <div className="space-y-3 pt-4 border-t border-[var(--surface-border)]">
-                <h3 className="text-sm font-black text-[var(--muted)] uppercase tracking-wider flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[var(--muted)]" /> Other Tables ({otherTables.length})
+              <div className="space-y-3 pt-4 bg-[var(--background)] text-[var(--foreground)] border-t border-[var(--surface-border)]">
+                <h3 className="text-sm font-black  uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full " /> Other Tables ({otherTables.length})
                 </h3>
                 {otherTables.length === 0 ? (
-                  <div className="p-8 border border-dashed border-[var(--surface-border)] rounded-2xl text-center text-[var(--muted)] text-xs">
+                  <div className="p-8 border border-dashed border-[var(--surface-border)] rounded-2xl text-center  text-xs">
                     No other tables registered.
                   </div>
                 ) : (
@@ -1060,18 +1053,17 @@ export default function WaiterDashboard() {
                     {otherTables.map(table => {
                       const tableStatus = getTableStatus(table.id)
                       return (
-                        <Card 
-                          key={table.id} 
-                          className={`group relative overflow-hidden transition-all duration-300 border-[var(--surface-border)] ${
-                            tableStatus === "OCCUPIED" ? "bg-blue-500/5" : "bg-zinc-800/10"
-                          }`}
+                        <Card
+                          key={table.id}
+                          className={`group relative overflow-hidden transition-all duration-300 border-[var(--surface-border)] ${tableStatus === "OCCUPIED" ? "bg-blue-500/5" : "bg-zinc-800/10"
+                            }`}
                         >
                           <CardContent className="p-3 sm:p-4 flex flex-col items-center justify-center text-center space-y-1.5 sm:space-y-2.5">
-                            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-[var(--surface-hover)]">
+                            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ">
                               Table {table.table_number}
                             </span>
-                            <p className="text-[9px] sm:text-[10px] text-[var(--muted)]">{table.capacity} seats</p>
-                            <p className="text-[9px] sm:text-[10px] text-[var(--muted)] font-semibold truncate max-w-full">
+                            <p className="text-[13px] sm:text-[15px] ">{table.capacity} seats</p>
+                            <p className="text-[13px] sm:text-[15px]  font-semibold truncate max-w-full">
                               {table.waiter?.full_name || "No waiter"}
                             </p>
                           </CardContent>
@@ -1095,7 +1087,7 @@ export default function WaiterDashboard() {
                         <span className="font-black text-[var(--foreground)] text-xs uppercase tracking-wider">
                           #{order.id.slice(-6).toUpperCase()}
                         </span>
-                        
+
                         {order.table ? (
                           <span className="bg-blue-500/10 text-blue-500 dark:text-blue-400 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
                             T{order.table.table_number}
@@ -1105,7 +1097,7 @@ export default function WaiterDashboard() {
                             {order.order_type === "DINE_IN" ? "Pre-order" : order.order_type === "DELIVERY" ? "Delivery" : "Takeaway"}
                           </span>
                         )}
-                        
+
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase ${getStatusBadge(order.status)}`}>
                           {order.status}
                         </span>
@@ -1156,9 +1148,9 @@ export default function WaiterDashboard() {
                         ${parseFloat(order.total_amount.toString()).toFixed(2)}
                       </span>
                       {order.status === "READY" && (
-                        <Button 
-                          onClick={() => handleMarkDelivered(order.id)} 
-                          size="sm" 
+                        <Button
+                          onClick={() => handleMarkDelivered(order.id)}
+                          size="sm"
                           className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] px-2.5 py-1 h-7 rounded-lg"
                         >
                           Serve
@@ -1192,27 +1184,24 @@ export default function WaiterDashboard() {
       <div className={`fixed bottom-0 left-0 right-0 z-40 bg-[#030712] border-t border-white/10 md:hidden flex items-center justify-around px-2 py-3 pb-safe shadow-2xl ${showOrderModal ? 'hidden' : ''}`}>
         <button
           onClick={() => setActiveTab("home")}
-          className={`flex flex-col items-center gap-1 transition-all ${
-            activeTab === "home" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
-          }`}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === "home" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
+            }`}
         >
           <Home className="w-5 h-5" />
           <span className="text-[10px] font-bold">Home</span>
         </button>
         <button
           onClick={() => setActiveTab("tables")}
-          className={`flex flex-col items-center gap-1 transition-all ${
-            activeTab === "tables" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
-          }`}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === "tables" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
+            }`}
         >
           <LayoutGrid className="w-5 h-5" />
           <span className="text-[10px] font-bold">Tables</span>
         </button>
         <button
           onClick={() => setActiveTab("orders")}
-          className={`flex flex-col items-center gap-1 transition-all relative ${
-            activeTab === "orders" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
-          }`}
+          className={`flex flex-col items-center gap-1 transition-all relative ${activeTab === "orders" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
+            }`}
         >
           <ClipboardList className="w-5 h-5" />
           <span className="text-[10px] font-bold">Orders</span>
@@ -1224,9 +1213,8 @@ export default function WaiterDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("alerts")}
-          className={`flex flex-col items-center gap-1 transition-all relative ${
-            activeTab === "alerts" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
-          }`}
+          className={`flex flex-col items-center gap-1 transition-all relative ${activeTab === "alerts" ? "text-amber-500 scale-110" : "text-gray-500 hover:text-white"
+            }`}
         >
           <Bell className="w-5 h-5" />
           <span className="text-[10px] font-bold">Alerts</span>
@@ -1241,41 +1229,41 @@ export default function WaiterDashboard() {
       {/* Place Order — Full Page Overlay (portal to body to escape overflow-y-auto) */}
       {showOrderModal && typeof window !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] bg-[var(--background)] text-[var(--foreground)] w-full h-full flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="p-4 border-b border-[var(--surface-border)] flex justify-between items-center bg-[var(--surface)]">
-              <div>
-                <h2 className="text-lg font-black text-[var(--foreground)]">
-                  {selectedTable ? `Order for Table ${myTables.find(t => t.id === selectedTable)?.table_number || ""}` : "New Table Order"}
-                </h2>
-                <p className="text-[10px] text-[var(--muted)]">Select items from categories and customize to add to ticket.</p>
-              </div>
-              <button 
-                onClick={() => {
-                  setShowOrderModal(false)
-                  setCart([])
-                  setOrderNotes("")
-                  setSelectedTable("")
-                }} 
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-              >
-                ✕
-              </button>
+          {/* Modal Header */}
+          <div className="p-4 border-b border-[var(--surface-border)] flex justify-between items-center bg-[var(--surface)]">
+            <div>
+              <h2 className="text-lg font-black text-[var(--foreground)]">
+                {selectedTable ? `Order for Table ${myTables.find(t => t.id === selectedTable)?.table_number || ""}` : "New Table Order"}
+              </h2>
+              <p className="text-[10px] text-[var(--muted)]">Select items from categories and customize to add to ticket.</p>
             </div>
+            <button
+              onClick={() => {
+                setShowOrderModal(false)
+                setCart([])
+                setOrderNotes("")
+                setSelectedTable("")
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+            >
+              ✕
+            </button>
+          </div>
 
-            {/* Modal Body */}
-            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {/* Modal Body */}
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
 
 
-              <div className="flex-1 flex overflow-hidden min-h-0">
-                {/* Left Side: Catalog Selector */}
-                <div className={`flex-1 flex flex-col min-h-0 bg-[var(--background)] ${orderModalView === "catalog" ? "" : "hidden"}`}>
-                
+            <div className="flex-1 flex overflow-hidden min-h-0">
+              {/* Left Side: Catalog Selector */}
+              <div className={`flex-1 flex flex-col min-h-0 bg-[var(--background)] ${orderModalView === "catalog" ? "" : "hidden"}`}>
+
                 {/* Search & Parent Categories Horizontal Scroll */}
                 <div className="p-4 border-b border-[var(--surface-border)] space-y-3 bg-[var(--surface-hover)]/30">
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-3 text-[var(--muted)]" />
-                    <Input 
-                      placeholder="Search menu items..." 
+                    <Input
+                      placeholder="Search menu items..."
                       className="pl-9 h-10 bg-[var(--surface-hover)] border-[var(--surface-border)] text-[var(--foreground)] placeholder-[var(--muted)] text-xs rounded-xl"
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
@@ -1294,11 +1282,10 @@ export default function WaiterDashboard() {
                             setActiveParentId(pc.id)
                             setActiveSubCatId("all")
                           }}
-                          className={`shrink-0 px-4 py-2 rounded-full text-[11px] font-bold transition-all ${
-                            isActive 
-                              ? "bg-amber-500 text-black shadow-md shadow-amber-500/10" 
-                              : "bg-[var(--surface-hover)] text-[var(--foreground)]/80 hover:bg-[var(--surface-hover)]/80"
-                          }`}
+                          className={`shrink-0 px-4 py-2 rounded-full text-[11px] font-bold transition-all ${isActive
+                            ? "bg-amber-500 text-black shadow-md shadow-amber-500/10"
+                            : "bg-[var(--surface-hover)] text-[var(--foreground)]/80 hover:bg-[var(--surface-hover)]/80"
+                            }`}
                         >
                           {pc.name}
                         </button>
@@ -1315,11 +1302,10 @@ export default function WaiterDashboard() {
                       <button
                         type="button"
                         onClick={() => setActiveSubCatId("all")}
-                        className={`w-full text-left px-3 py-3 text-[11px] font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${
-                          activeSubCatId === "all"
-                            ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
-                            : "text-[var(--muted)] border-transparent hover:bg-[var(--surface-hover)]"
-                        }`}
+                        className={`w-full text-left px-3 py-3 text-[11px] font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${activeSubCatId === "all"
+                          ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
+                          : "text-[var(--muted)] border-transparent hover:bg-[var(--surface-hover)]"
+                          }`}
                       >
                         All Items
                       </button>
@@ -1331,11 +1317,10 @@ export default function WaiterDashboard() {
                           key={sc.id}
                           type="button"
                           onClick={() => setActiveSubCatId(sc.id)}
-                          className={`w-full text-left px-3 py-3 text-[11px] font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${
-                            isActive
-                              ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
-                              : "text-[var(--muted)] border-transparent hover:bg-[var(--surface-hover)]"
-                          }`}
+                          className={`w-full text-left px-3 py-3 text-[11px] font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${isActive
+                            ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
+                            : "text-[var(--muted)] border-transparent hover:bg-[var(--surface-hover)]"
+                            }`}
                         >
                           {sc.name}
                         </button>
@@ -1383,8 +1368,8 @@ export default function WaiterDashboard() {
                           </div>
 
                           {/* Add / Qty Control */}
-                          <div 
-                            className="absolute bottom-3 right-3" 
+                          <div
+                            className="absolute bottom-3 right-3"
                             onClick={e => e.stopPropagation()}
                           >
                             {inCartCount > 0 ? (
@@ -1432,34 +1417,34 @@ export default function WaiterDashboard() {
                 </div>
               </div>
 
-            {/* Floating Cart Popup Button — overlays catalog */}
-            {orderModalView === "catalog" && cartCount > 0 && (
-              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10000] w-[calc(100%-2rem)] max-w-lg">
-                <button
-                  type="button"
-                  onClick={() => setOrderModalView("ticket")}
-                  className="w-full flex items-center justify-between gap-4 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-black px-5 py-4 rounded-2xl shadow-[0_8px_40px_rgba(245,158,11,0.45)] transition-all font-black"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-black/20 rounded-xl p-2">
-                      <ShoppingBag className="w-5 h-5 text-black" />
+              {/* Floating Cart Popup Button — overlays catalog */}
+              {orderModalView === "catalog" && cartCount > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10000] w-[calc(100%-2rem)] max-w-lg">
+                  <button
+                    type="button"
+                    onClick={() => setOrderModalView("ticket")}
+                    className="w-full flex items-center justify-between gap-4 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-black px-5 py-4 rounded-2xl shadow-[0_8px_40px_rgba(245,158,11,0.45)] transition-all font-black"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-black/20 rounded-xl p-2">
+                        <ShoppingBag className="w-5 h-5 text-black" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-black leading-none">${cartTotal.toFixed(2)}</p>
+                        <p className="text-[11px] font-semibold opacity-75 mt-0.5">A total of {cartCount} item{cartCount !== 1 ? "s" : ""}</p>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black leading-none">${cartTotal.toFixed(2)}</p>
-                      <p className="text-[11px] font-semibold opacity-75 mt-0.5">A total of {cartCount} item{cartCount !== 1 ? "s" : ""}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-black">Proceed to Order</span>
+                      <ArrowLeft className="w-4 h-4 rotate-180" />
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-black">Proceed to Order</span>
-                    <ArrowLeft className="w-4 h-4 rotate-180" />
-                  </div>
-                </button>
-              </div>
-            )}
+                  </button>
+                </div>
+              )}
 
-            {/* Right Side: Table Ticket details */}
-            <div className={`w-full flex-1 bg-[var(--surface)] p-5 md:p-8 flex flex-col min-h-0 shrink-0 ${orderModalView === "ticket" ? "flex" : "hidden"}`}>
-              <form onSubmit={handleCreateOrder} className="flex flex-col h-full min-h-0 gap-4">
+              {/* Right Side: Table Ticket details */}
+              <div className={`w-full flex-1 bg-[var(--surface)] p-5 md:p-8 flex flex-col min-h-0 shrink-0 ${orderModalView === "ticket" ? "flex" : "hidden"}`}>
+                <form onSubmit={handleCreateOrder} className="flex flex-col h-full min-h-0 gap-4">
                   {/* Back button */}
                   <Button
                     type="button"
@@ -1555,142 +1540,141 @@ export default function WaiterDashboard() {
                       Place Order · ${cartTotal.toFixed(2)}
                     </Button>
                   </div>
-              </form>
+                </form>
+              </div>
             </div>
           </div>
-        </div>
 
-            {/* FULL COVERED MENU ITEM DETAIL PAGE OVERLAY */}
-            {selectedItem && (
-              <div className="absolute inset-0 z-50 bg-[var(--background)] text-[var(--foreground)] flex flex-col w-full h-full overflow-y-auto">
-                <div className="absolute top-4 left-4 z-10">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedItem(null)}
-                    className="bg-black/60 hover:bg-black/80 text-white p-2 rounded-full border border-white/10 transition-all"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                </div>
+          {/* FULL COVERED MENU ITEM DETAIL PAGE OVERLAY */}
+          {selectedItem && (
+            <div className="absolute inset-0 z-50 bg-[var(--background)] text-[var(--foreground)] flex flex-col w-full h-full overflow-y-auto">
+              <div className="absolute top-4 left-4 z-10">
+                <button
+                  type="button"
+                  onClick={() => setSelectedItem(null)}
+                  className="bg-black/60 hover:bg-black/80 text-white p-2 rounded-full border border-white/10 transition-all"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              </div>
 
-                <div className="relative h-56 bg-gray-900 w-full shrink-0 flex items-center justify-center border-b border-[var(--surface-border)]">
-                  {selectedItem.image_url ? (
-                    <img src={selectedItem.image_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-5xl">🍽️</span>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                </div>
+              <div className="relative h-56 bg-gray-900 w-full shrink-0 flex items-center justify-center border-b border-[var(--surface-border)]">
+                {selectedItem.image_url ? (
+                  <img src={selectedItem.image_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-5xl">🍽️</span>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              </div>
 
-                <div className="flex-1 px-5 py-6 max-w-xl mx-auto w-full space-y-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-lg font-black">{selectedItem.display_name}</h2>
-                      <p className="text-[9px] text-amber-500 font-bold mt-0.5 uppercase tracking-wider">
-                        {categories.find(c => c.id === selectedItem.category_id)?.name || "Menu Item"}
-                      </p>
-                    </div>
-                    <span className="text-amber-500 font-extrabold text-lg shrink-0">
-                      ${parseFloat(selectedItem.price.toString()).toFixed(2)}
-                    </span>
-                  </div>
-
-                  {selectedItem.description && (
-                    <div className="space-y-1 bg-[var(--surface-hover)] rounded-xl p-3">
-                      <h4 className="text-[10px] font-bold uppercase tracking-wider opacity-60">Description</h4>
-                      <p className="text-xs leading-relaxed opacity-90">{selectedItem.description}</p>
-                    </div>
-                  )}
-
-                  {selectedItem.customizations && selectedItem.customizations.length > 0 && (
-                    <div className="space-y-4">
-                      <h3 className="text-[10px] font-bold uppercase tracking-wider opacity-60">Customizations</h3>
-                      {selectedItem.customizations.map(cust => (
-                        <div key={cust.key} className="space-y-2 bg-[var(--surface)] border border-[var(--surface-border)] rounded-xl p-3">
-                          <p className="text-xs font-bold flex items-center gap-1.5">
-                            <span>{cust.label}</span>
-                            {cust.multiple && (
-                              <span className="text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded-full font-bold">
-                                Multi-select
-                              </span>
-                            )}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {cust.values.map(val => {
-                              const valName = typeof val === "string" ? val : val.name
-                              const valPrice = typeof val === "string" ? 0 : val.extraPrice
-                              const selected = cust.multiple
-                                ? (itemCustomizations[cust.key] as string[] || []).includes(valName)
-                                : itemCustomizations[cust.key] === valName
-                              return (
-                                <button
-                                  key={valName}
-                                  type="button"
-                                  onClick={() => {
-                                    if (cust.multiple) {
-                                      const current = (itemCustomizations[cust.key] as string[] || [])
-                                      const updated = selected ? current.filter(v => v !== valName) : [...current, valName]
-                                      setItemCustomizations(prev => ({ ...prev, [cust.key]: updated }))
-                                    } else {
-                                      setItemCustomizations(prev => ({ ...prev, [cust.key]: selected ? "" : valName }))
-                                    }
-                                  }}
-                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                                    selected
-                                      ? "bg-amber-500 border-amber-500 text-black shadow-md"
-                                      : "bg-[var(--surface-hover)] border-[var(--surface-border)] text-[var(--foreground)] opacity-90 hover:bg-[var(--surface-hover)]/80"
-                                  }`}
-                                >
-                                  {valName} {valPrice > 0 ? `(+$${valPrice.toFixed(2)})` : ""}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
+              <div className="flex-1 px-5 py-6 max-w-xl mx-auto w-full space-y-5">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <label className="block text-[10px] font-semibold opacity-60 mb-1">Item Notes</label>
-                    <textarea
-                      rows={2}
-                      placeholder="e.g. no onions, extra cheese..."
-                      value={itemNotes}
-                      onChange={e => setItemNotes(e.target.value)}
-                      className="w-full bg-[var(--surface)] border border-[var(--surface-border)] text-[var(--foreground)] rounded-xl px-3 py-2 text-xs placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none animate-none"
-                    />
+                    <h2 className="text-lg font-black">{selectedItem.display_name}</h2>
+                    <p className="text-[9px] text-amber-500 font-bold mt-0.5 uppercase tracking-wider">
+                      {categories.find(c => c.id === selectedItem.category_id)?.name || "Menu Item"}
+                    </p>
                   </div>
+                  <span className="text-amber-500 font-extrabold text-lg shrink-0">
+                    ${parseFloat(selectedItem.price.toString()).toFixed(2)}
+                  </span>
+                </div>
 
-                  <div className="flex items-center gap-4 pt-2">
-                    <div className="flex items-center gap-3 bg-[var(--surface)] border border-[var(--surface-border)] rounded-xl px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => setItemQty(q => Math.max(1, q - 1))}
-                        className="font-bold text-base hover:text-amber-500"
-                      >
-                        −
-                      </button>
-                      <span className="font-extrabold text-sm w-4 text-[var(--foreground)] text-center">{itemQty}</span>
-                      <button
-                        type="button"
-                        onClick={() => setItemQty(q => q + 1)}
-                        className="font-bold text-base hover:text-amber-500"
-                      >
-                        +
-                      </button>
-                    </div>
+                {selectedItem.description && (
+                  <div className="space-y-1 bg-[var(--surface-hover)] rounded-xl p-3">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider opacity-60">Description</h4>
+                    <p className="text-xs leading-relaxed opacity-90">{selectedItem.description}</p>
+                  </div>
+                )}
+
+                {selectedItem.customizations && selectedItem.customizations.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-bold uppercase tracking-wider opacity-60">Customizations</h3>
+                    {selectedItem.customizations.map(cust => (
+                      <div key={cust.key} className="space-y-2 bg-[var(--surface)] border border-[var(--surface-border)] rounded-xl p-3">
+                        <p className="text-xs font-bold flex items-center gap-1.5">
+                          <span>{cust.label}</span>
+                          {cust.multiple && (
+                            <span className="text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded-full font-bold">
+                              Multi-select
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {cust.values.map(val => {
+                            const valName = typeof val === "string" ? val : val.name
+                            const valPrice = typeof val === "string" ? 0 : val.extraPrice
+                            const selected = cust.multiple
+                              ? (itemCustomizations[cust.key] as string[] || []).includes(valName)
+                              : itemCustomizations[cust.key] === valName
+                            return (
+                              <button
+                                key={valName}
+                                type="button"
+                                onClick={() => {
+                                  if (cust.multiple) {
+                                    const current = (itemCustomizations[cust.key] as string[] || [])
+                                    const updated = selected ? current.filter(v => v !== valName) : [...current, valName]
+                                    setItemCustomizations(prev => ({ ...prev, [cust.key]: updated }))
+                                  } else {
+                                    setItemCustomizations(prev => ({ ...prev, [cust.key]: selected ? "" : valName }))
+                                  }
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${selected
+                                  ? "bg-amber-500 border-amber-500 text-black shadow-md"
+                                  : "bg-[var(--surface-hover)] border-[var(--surface-border)] text-[var(--foreground)] opacity-90 hover:bg-[var(--surface-hover)]/80"
+                                  }`}
+                              >
+                                {valName} {valPrice > 0 ? `(+$${valPrice.toFixed(2)})` : ""}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-semibold opacity-60 mb-1">Item Notes</label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. no onions, extra cheese..."
+                    value={itemNotes}
+                    onChange={e => setItemNotes(e.target.value)}
+                    className="w-full bg-[var(--surface)] border border-[var(--surface-border)] text-[var(--foreground)] rounded-xl px-3 py-2 text-xs placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none animate-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-4 pt-2">
+                  <div className="flex items-center gap-3 bg-[var(--surface)] border border-[var(--surface-border)] rounded-xl px-3 py-2">
                     <button
                       type="button"
-                      onClick={addToCartFromDetail}
-                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl transition-all shadow-md text-xs sm:text-sm"
+                      onClick={() => setItemQty(q => Math.max(1, q - 1))}
+                      className="font-bold text-base hover:text-amber-500"
                     >
-                      Add to Cart — ${(getCustomizedPrice(selectedItem, itemCustomizations) * itemQty).toFixed(2)}
+                      −
+                    </button>
+                    <span className="font-extrabold text-sm w-4 text-[var(--foreground)] text-center">{itemQty}</span>
+                    <button
+                      type="button"
+                      onClick={() => setItemQty(q => q + 1)}
+                      className="font-bold text-base hover:text-amber-500"
+                    >
+                      +
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={addToCartFromDetail}
+                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl transition-all shadow-md text-xs sm:text-sm"
+                  >
+                    Add to Cart — ${(getCustomizedPrice(selectedItem, itemCustomizations) * itemQty).toFixed(2)}
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
         </div>,
         document.body
       )}
@@ -1749,7 +1733,7 @@ export default function WaiterDashboard() {
               <span className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider block">
                 Simulate Scanning Assigned Table QR Code
               </span>
-              
+
               {myTables.length === 0 ? (
                 <p className="text-[11px] text-[var(--muted)] text-center py-2">
                   No assigned tables available to scan. Assign tables first in layouts.
@@ -1765,7 +1749,7 @@ export default function WaiterDashboard() {
                         setCart([])
                         setShowOrderModal(true)
                         setShowScannerModal(false)
-                        
+
                         // Add activity log
                         setActivityLogs(prev => [
                           { id: Math.random().toString(), type: "create_order", message: `Scanned Table T${table.table_number} QR Code`, timestamp: "Just now" },

@@ -4,8 +4,8 @@ import * as React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { 
-  Receipt, CreditCard, DollarSign, Wallet, CheckCircle2, 
+import {
+  Receipt, CreditCard, DollarSign, Wallet, CheckCircle2,
   ArrowRight, Search, ClipboardList, ShieldCheck, Printer, Percent
 } from "lucide-react"
 
@@ -80,7 +80,7 @@ export default function CashierDashboard() {
   const [paidHistory, setPaidHistory] = React.useState(INITIAL_PAID_HISTORY)
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>(INITIAL_UNPAID_ORDERS[0]?.id || "")
   const [paymentMethod, setPaymentMethod] = React.useState<"cash" | "card" | "dexel">("card")
-  
+
   // Checkout details state
   const [discountPercent, setDiscountPercent] = React.useState<number>(0)
   const [receivedCash, setReceivedCash] = React.useState<string>("")
@@ -131,7 +131,7 @@ export default function CashierDashboard() {
     // Reset values
     setDiscountPercent(0)
     setReceivedCash("")
-    
+
     // Auto-select next unpaid order
     const remaining = unpaidOrders.filter(o => o.id !== selectedOrderId)
     if (remaining.length > 0) {
@@ -144,8 +144,8 @@ export default function CashierDashboard() {
     setShowReceiptModal(true)
   }
 
-  const filteredUnpaid = unpaidOrders.filter(o => 
-    o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredUnpaid = unpaidOrders.filter(o =>
+    o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
     o.tableNumber.includes(searchQuery)
   )
 
@@ -155,7 +155,7 @@ export default function CashierDashboard() {
     <div className="space-y-6 pb-12">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight mb-1">Cashier Station 💸</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-1">Cashier Station</h1>
         <p className="text-[var(--muted)]">Manage tickets checkout, register payments, and track sales metrics.</p>
       </div>
 
@@ -164,11 +164,8 @@ export default function CashierDashboard() {
         <Card className="glass">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-[var(--muted)] font-medium">Total Collected</p>
-              <p className="text-2xl font-extrabold mt-1 text-emerald-500">${totalCollected.toFixed(2)}</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-emerald-500" />
+              <p className="text-xs  font-medium">Total Collected</p>
+              <p className="text-2xl font-extrabold mt-1 ">${totalCollected.toFixed(2)}</p>
             </div>
           </CardContent>
         </Card>
@@ -176,23 +173,11 @@ export default function CashierDashboard() {
         <Card className="glass">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-[var(--muted)] font-medium">Unpaid Tickets</p>
-              <p className="text-2xl font-extrabold mt-1 text-amber-500">{unpaidOrders.length}</p>
+              <p className="text-xs  font-medium">Unpaid Tickets</p>
+              <p className="text-2xl font-extrabold mt-1">{unpaidOrders.length}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-              <ClipboardList className="w-5 h-5 text-amber-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-[var(--muted)] font-medium">Processed Today</p>
-              <p className="text-2xl font-extrabold mt-1 text-blue-500">{paidHistory.length}</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5 text-blue-500" />
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+              <ClipboardList className="w-5 h-5 " />
             </div>
           </CardContent>
         </Card>
@@ -200,11 +185,23 @@ export default function CashierDashboard() {
         <Card className="glass">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-[var(--muted)] font-medium">Dexel Sync status</p>
+              <p className="text-xs font-medium">Processed Today</p>
+              <p className="text-2xl font-extrabold mt-1 ">{paidHistory.length}</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5 " />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs  font-medium">Dexel Sync status</p>
               <p className="text-2xl font-extrabold mt-1 text-purple-500">Connected</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-purple-500" />
+            <div className="w-10 h-10 rounded-lg  flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5 " />
             </div>
           </CardContent>
         </Card>
@@ -222,8 +219,8 @@ export default function CashierDashboard() {
               </div>
               <div className="relative w-full sm:w-64">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-[var(--muted)]" />
-                <Input 
-                  placeholder="Search table or ticket..." 
+                <Input
+                  placeholder="Search table or ticket..."
                   className="pl-9 h-9 text-xs bg-[var(--surface)] border-[var(--surface-border)]"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
@@ -232,19 +229,18 @@ export default function CashierDashboard() {
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               {filteredUnpaid.map(order => (
-                <div 
-                  key={order.id} 
+                <div
+                  key={order.id}
                   onClick={() => setSelectedOrderId(order.id)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
-                    selectedOrderId === order.id 
-                      ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)]/5" 
-                      : "border-[var(--surface-border)] bg-[var(--surface-hover)]/20 hover:bg-[var(--surface-hover)]/40"
-                  }`}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${selectedOrderId === order.id
+                    ? "border-[var(--color-primary-600)] "
+                    : "border-[var(--surface-border)] hover:bg-[var(--surface-hover)]/40"
+                    }`}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-white">{order.orderNumber}</span>
-                      <span className="font-bold text-xs bg-[var(--surface)] text-[var(--muted)] px-2.5 py-0.5 rounded-full border">
+                      <span className="font-bold text-sm ">{order.orderNumber}</span>
+                      <span className="font-bold text-xs text-[var(--muted)] px-2.5 py-0.5 rounded-full border">
                         T-{order.tableNumber}
                       </span>
                     </div>
@@ -252,8 +248,8 @@ export default function CashierDashboard() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <span className="font-bold text-base text-white">${order.total.toFixed(2)}</span>
-                    <ArrowRight className="w-4 h-4 text-[var(--muted)] group-hover:text-white transition-colors" />
+                    <span className="font-bold text-base ">${order.total.toFixed(2)}</span>
+                    <ArrowRight className="w-4 h-4 text-white group-hover:text-[var(--muted)] transition-colors" />
                   </div>
                 </div>
               ))}
@@ -266,7 +262,7 @@ export default function CashierDashboard() {
 
           {/* Transaction History Card */}
           <Card className="glass">
-            <CardHeader className="pb-3 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/10 shrink-0">
+            <CardHeader className="pb-3 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/30 shrink-0">
               <CardTitle className="text-base font-bold">Recent Checkout History</CardTitle>
               <CardDescription className="text-xs">Successfully processed transactions today.</CardDescription>
             </CardHeader>
@@ -276,8 +272,8 @@ export default function CashierDashboard() {
                   <div key={hist.id} className="p-4 flex items-center justify-between text-xs">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white">{hist.orderNumber}</span>
-                        <span className="bg-zinc-800 border text-[var(--muted)] px-2 py-0.5 rounded-md font-bold">
+                        <span className="font-semibold">{hist.orderNumber}</span>
+                        <span className="bg-[var(--foreground)] border text-[var(--background)] px-2 py-0.5 rounded-md font-bold">
                           Table {hist.tableNumber}
                         </span>
                       </div>
@@ -296,7 +292,7 @@ export default function CashierDashboard() {
           <Card className="glass border-[var(--surface-border)]">
             <CardHeader className="pb-3 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/30 shrink-0">
               <CardTitle className="text-base font-bold flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-[var(--color-primary-600)]" />
+                <Receipt className="w-4 h-4" />
                 Checkout details
               </CardTitle>
               {selectedOrder ? (
@@ -305,12 +301,12 @@ export default function CashierDashboard() {
                 <CardDescription className="text-xs">No ticket selected</CardDescription>
               )}
             </CardHeader>
-            
+
             {selectedOrder ? (
               <CardContent className="p-6 space-y-6">
                 {/* Items Summary */}
                 <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
-                  <span className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider block">Ticket items</span>
+                  <span className="text-[10px] font-bold  uppercase tracking-wider block">Ticket items</span>
                   {selectedOrder.items.map((it, idx) => (
                     <div key={idx} className="flex justify-between items-center text-xs text-[var(--muted)]">
                       <span>{it.quantity}x {it.name}</span>
@@ -321,17 +317,17 @@ export default function CashierDashboard() {
 
                 {/* Discounts */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider block">Apply Discount</label>
-                  <div className="flex items-center gap-2 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-[var(--color-primary-500)]">
+                  <label className="text-[10px] font-bold uppercase tracking-wider block">Apply Discount</label>
+                  <div className="flex items-center gap-2 border border-[var(--surface-border)] rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-[var(--color-primary-500)]">
                     <Percent className="w-4 h-4 text-[var(--muted)]" />
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       min="0"
                       max="100"
-                      value={discountPercent || ""} 
+                      value={discountPercent || ""}
                       onChange={e => setDiscountPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                       placeholder="0"
-                      className="bg-transparent border-0 outline-0 p-0 text-sm w-full text-right font-bold text-white focus:outline-none focus:ring-0"
+                      className="border-0 outline-0 p-0 text-sm w-full  font-bold focus:outline-none focus:ring-0"
                     />
                     <span className="text-sm font-semibold text-[var(--muted)]">%</span>
                   </div>
@@ -339,40 +335,37 @@ export default function CashierDashboard() {
 
                 {/* Payment Methods */}
                 <div className="space-y-2">
-                  <span className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider block">Payment Method</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button 
+                  <span className="text-[10px] font-bold uppercase tracking-wider block">Payment Method</span>
+                  <div className="grid grid-cols-3 gap-2 ">
+                    <button
                       type="button"
                       onClick={() => setPaymentMethod("card")}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs gap-1.5 transition-all ${
-                        paymentMethod === "card" 
-                          ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)]/5 text-white" 
-                          : "border-[var(--surface-border)] text-[var(--muted)] hover:bg-[var(--surface-hover)]"
-                      }`}
+                      className={`hover:cursor-pointer hover:bg-[var(--surface-hover)]/30 flex flex-col items-center justify-center p-3 rounded-xl border text-xs gap-1.5 transition-all ${paymentMethod === "card"
+                        ? "border-[var(--color-primary-600)] "
+                        : "border-[var(--surface-border)] "
+                        }`}
                     >
                       <CreditCard className="w-4 h-4" />
                       Card
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setPaymentMethod("cash")}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs gap-1.5 transition-all ${
-                        paymentMethod === "cash" 
-                          ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)]/5 text-white" 
-                          : "border-[var(--surface-border)] text-[var(--muted)] hover:bg-[var(--surface-hover)]"
-                      }`}
+                      className={`hover:cursor-pointer hover:bg-[var(--surface-hover)]/30 flex flex-col items-center justify-center p-3 rounded-xl border text-xs gap-1.5 transition-all ${paymentMethod === "cash"
+                        ? "border-[var(--color-primary-600)] "
+                        : "border-[var(--surface-border)] "
+                        }`}
                     >
                       <Wallet className="w-4 h-4" />
                       Cash
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setPaymentMethod("dexel")}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs gap-1.5 transition-all ${
-                        paymentMethod === "dexel" 
-                          ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)]/5 text-white" 
-                          : "border-[var(--surface-border)] text-[var(--muted)] hover:bg-[var(--surface-hover)]"
-                      }`}
+                      className={`hover:cursor-pointer hover:bg-[var(--surface-hover)]/30 flex flex-col items-center justify-center p-3 rounded-xl border text-xs gap-1.5 transition-all ${paymentMethod === "dexel"
+                        ? "border-[var(--color-primary-600)] "
+                        : "border-[var(--surface-border)] "
+                        }`}
                     >
                       <Receipt className="w-4 h-4" />
                       Dexel POS
@@ -386,14 +379,14 @@ export default function CashierDashboard() {
                     <label className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider block">Received Cash Amount</label>
                     <div className="flex items-center gap-1 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg px-3 py-2">
                       <DollarSign className="w-4 h-4 text-[var(--muted)]" />
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         min="0"
                         step="0.01"
-                        value={receivedCash} 
+                        value={receivedCash}
                         onChange={e => setReceivedCash(e.target.value)}
                         placeholder="0.00"
-                        className="bg-transparent border-0 outline-0 p-0 text-sm w-full text-right font-bold text-white focus:outline-none focus:ring-0"
+                        className=" border-0 outline-0 p-0 text-sm w-full  font-bold focus:outline-none focus:ring-0"
                       />
                     </div>
                   </div>
@@ -419,7 +412,7 @@ export default function CashierDashboard() {
                     <span>Service (10%):</span>
                     <span>${serviceCharge.toFixed(2)}</span>
                   </div>
-                  
+
                   <div className="flex justify-between text-base font-bold border-t border-[var(--surface-border)] pt-3 text-white">
                     <span>Total Amount:</span>
                     <span>${finalTotal.toFixed(2)}</span>
@@ -434,8 +427,8 @@ export default function CashierDashboard() {
                 </div>
 
                 {/* Action button */}
-                <Button 
-                  onClick={handleCheckout} 
+                <Button
+                  onClick={handleCheckout}
                   disabled={paymentMethod === "cash" && (!receivedCash || parseFloat(receivedCash) < finalTotal)}
                   className="w-full h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm gap-2 mt-4"
                 >
@@ -458,7 +451,7 @@ export default function CashierDashboard() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white text-black p-6 rounded-2xl w-full max-w-sm flex flex-col shadow-2xl relative border max-h-[85vh] overflow-y-auto">
             {/* Cut-off close button */}
-            <button 
+            <button
               onClick={() => setShowReceiptModal(false)}
               className="absolute right-4 top-4 w-7 h-7 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center font-bold text-xs"
             >
@@ -529,12 +522,12 @@ export default function CashierDashboard() {
                 <span>Total Paid:</span>
                 <span className="text-base">${lastPaidBill.total?.toFixed(2)}</span>
               </div>
-              
+
               <div className="text-[10px] text-zinc-400 italic">
                 Thank you for your visit! Please come again.
               </div>
 
-              <Button 
+              <Button
                 onClick={() => window.print()}
                 className="w-full h-9 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs gap-2"
               >
