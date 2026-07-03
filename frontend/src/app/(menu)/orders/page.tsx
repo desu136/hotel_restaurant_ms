@@ -254,6 +254,11 @@ export default function MyOrdersPage() {
                     <span className="text-[11px] font-extrabold text-gray-800 truncate">
                       {restaurantName}
                     </span>
+                    {(order as any).order_number && (
+                      <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-gray-200 text-gray-800 border border-gray-300">
+                        #{(order as any).order_number}
+                      </span>
+                    )}
                     <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200">
                       {orderTypeLabel}
                     </span>

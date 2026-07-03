@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle, Loader2, Clock, ChefHat, Bell, Home } from "luc
 import type { MiniAppUser } from "@/lib/miniapp-bridge"
 
 interface PaymentScreenProps {
+  theme: "light" | "dark"
   total: number
   onBack: () => void
   onSuccess: (orderId: string) => void
@@ -31,7 +32,13 @@ const STATUS_STEPS = [
   { key: "COMPLETED", label: "Delivered",        icon: <CheckCircle className="w-5 h-5" />, desc: "Enjoy your meal! Thank you for dining with us." },
 ]
 
-export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, tableId, cartPayload, orderNotes, orderType, deliveryAddress, miniAppUser }: PaymentScreenProps) {
+export default function PaymentScreen({ theme, total, onBack, onSuccess, restaurantId, tableId, cartPayload, orderNotes, orderType, deliveryAddress, miniAppUser }: PaymentScreenProps) {
+  const themeBg = theme === "dark" ? "bg-[#030712] text-white" : "bg-gray-50 text-gray-900"
+  const themeCard = theme === "dark" ? "bg-[#0b0f19] border-white/10" : "bg-white border-gray-200 shadow-sm"
+  const themeTextMuted = theme === "dark" ? "text-gray-400" : "text-gray-500"
+  const themeTextTitle = theme === "dark" ? "text-white" : "text-gray-900"
+  const themeBorder = theme === "dark" ? "border-white/5" : "border-gray-200"
+
   const router = useRouter()
   const [selectedMethod, setSelectedMethod] = React.useState<string | null>(null)
   const [phone, setPhone] = React.useState("")
@@ -101,12 +108,12 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
 
   if (step === "success") {
     return (
-      <div className="fixed inset-0 z-[60] flex flex-col bg-[#030712] text-white overflow-y-auto">
+      <div className={`fixed inset-0 z-[60] flex flex-col ${themeBg} overflow-y-auto`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-white/5 shrink-0">
+        <div className={`flex items-center justify-between px-4 py-4 border-b ${themeBorder} shrink-0`}>
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-xs font-semibold"
+            className={`flex items-center gap-2 ${themeTextMuted} hover:${themeTextTitle} transition-colors text-xs font-semibold`}
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Menu
@@ -129,16 +136,16 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
             <div className="w-20 h-20 rounded-full bg-green-500/10 border-2 border-green-500/30 flex items-center justify-center mb-4">
               <CheckCircle className="w-10 h-10 text-green-400" />
             </div>
-            <h1 className="text-xl font-black text-white">Order Placed!</h1>
-            <p className="text-gray-400 text-xs mt-1">The kitchen has been notified.</p>
+            <h1 className={`text-xl font-black ${themeTextTitle}`}>Order Placed!</h1>
+            <p className={`text-xs ${themeTextMuted} mt-1`}>The kitchen has been notified.</p>
             <p className="text-[10px] text-amber-400 font-mono font-bold mt-1.5 bg-amber-500/10 px-3 py-1 rounded-full">
               #{orderId.slice(0, 8).toUpperCase()}
             </p>
           </div>
 
           {/* Live Status Tracker */}
-          <div className="bg-[#0b0f19] border border-white/10 rounded-2xl p-4">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">Order Status</p>
+          <div className={`${themeCard} border rounded-2xl p-4`}>
+            <p className={`text-[10px] font-bold ${themeTextMuted} uppercase tracking-wider mb-4`}>Order Status</p>
             <div className="flex flex-col gap-0">
               {STATUS_STEPS.map((s, idx) => {
                 const isDone = idx < currentStatusIdx
@@ -151,24 +158,24 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
                         isDone ? "bg-green-500/20 text-green-400 border border-green-500/30" :
                         isCurrent ? "bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse" :
-                        "bg-white/5 text-gray-600 border border-white/10"
+                        theme === "dark" ? "bg-white/5 text-gray-600 border border-white/10" : "bg-gray-100 text-gray-400 border border-gray-200"
                       }`}>
                         {s.icon}
                       </div>
                       {!isLast && (
-                        <div className={`w-px flex-1 my-1 ${isDone ? "bg-green-500/30" : "bg-white/10"}`} style={{ minHeight: 20 }} />
+                        <div className={`w-px flex-1 my-1 ${isDone ? "bg-green-500/30" : theme === "dark" ? "bg-white/10" : "bg-gray-200"}`} style={{ minHeight: 20 }} />
                       )}
                     </div>
                     {/* Label */}
                     <div className={`pb-4 flex-1 ${isLast ? "" : ""}`}>
                       <p className={`text-xs font-bold leading-snug ${
-                        isCurrent ? "text-amber-400" : isDone ? "text-green-400" : "text-gray-600"
+                        isCurrent ? "text-amber-400" : isDone ? "text-green-400" : themeTextMuted
                       }`}>
                         {s.label}
                         {isCurrent && <span className="ml-1.5 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 px-1.5 py-0.5 rounded-full">Now</span>}
                       </p>
                       {isCurrent && (
-                        <p className="text-[10px] text-gray-400 mt-0.5 leading-relaxed">{s.desc}</p>
+                        <p className={`text-[10px] ${themeTextMuted} mt-0.5 leading-relaxed`}>{s.desc}</p>
                       )}
                     </div>
                   </div>
@@ -178,18 +185,18 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
           </div>
 
           {/* Payment Summary */}
-          <div className="bg-[#0b0f19] border border-white/10 rounded-2xl p-4 space-y-2.5 text-sm">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Payment Details</p>
+          <div className={`${themeCard} border rounded-2xl p-4 space-y-2.5 text-sm`}>
+            <p className={`text-[10px] font-bold ${themeTextMuted} uppercase tracking-wider`}>Payment Details</p>
             <div className="flex justify-between">
-              <span className="text-gray-400">Method</span>
+              <span className={themeTextMuted}>Method</span>
               <span className="font-semibold">{method?.name}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Transaction</span>
-              <span className="font-mono text-xs text-gray-300">{transactionId}</span>
+              <span className={themeTextMuted}>Transaction</span>
+              <span className={`font-mono text-xs ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>{transactionId}</span>
             </div>
-            <div className="flex justify-between border-t border-white/10 pt-2 mt-1">
-              <span className="text-gray-400 font-semibold">Amount Paid</span>
+            <div className={`flex justify-between border-t ${themeBorder} pt-2 mt-1`}>
+              <span className={`font-semibold ${themeTextMuted}`}>Amount Paid</span>
               <span className="font-extrabold text-green-400 text-base">${total.toFixed(2)}</span>
             </div>
           </div>
@@ -207,7 +214,7 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
             </button>
             <button
               onClick={onBack}
-              className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-3 rounded-xl transition-all text-sm"
+              className={`w-full ${theme === "dark" ? "bg-white/5 hover:bg-white/10 border-white/10 text-white" : "bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-800"} border font-bold py-3 rounded-xl transition-all text-sm`}
             >
               Back to Menu
             </button>
@@ -220,34 +227,34 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
 
   if (step === "confirm" && method) {
     return (
-      <div className="fixed inset-0 z-[60] flex flex-col bg-[#030712] text-white overflow-y-auto">
-        <div className="flex items-center gap-3 p-4 border-b border-white/5 shrink-0">
-          <button onClick={() => setStep("select")} className="p-2 hover:bg-white/5 rounded-lg">
+      <div className={`fixed inset-0 z-[60] flex flex-col ${themeBg} overflow-y-auto`}>
+        <div className={`flex items-center gap-3 p-4 border-b ${themeBorder} shrink-0`}>
+          <button onClick={() => setStep("select")} className={`p-2 ${theme === "dark" ? "hover:bg-white/5" : "hover:bg-black/5"} rounded-lg`}>
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h2 className="font-black text-base">Confirm Payment</h2>
         </div>
         <div className="flex-1 flex flex-col p-5 gap-5 max-w-sm mx-auto w-full">
-          <div className="flex items-center gap-3 bg-[#0b0f19] border border-white/10 rounded-2xl p-4">
+          <div className={`flex items-center gap-3 ${themeCard} border rounded-2xl p-4`}>
             <span className="text-3xl">{method.logo}</span>
             <div>
               <p className="font-bold">{method.name}</p>
-              <p className="text-xs text-gray-400">{method.description}</p>
+              <p className={`text-xs ${themeTextMuted}`}>{method.description}</p>
             </div>
           </div>
 
           {(selectedMethod === "telebirr" || selectedMethod === "cbe" || selectedMethod === "amole") && (
             <div>
-              <label className="block text-xs font-semibold text-gray-400 mb-2">Mobile Phone Number</label>
+              <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>Mobile Phone Number</label>
               <div className="flex gap-2">
-                <span className="flex items-center px-3 bg-[#0b0f19] border border-white/10 rounded-xl text-sm text-gray-300 font-semibold">+251</span>
+                <span className={`flex items-center px-3 ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-gray-300" : "bg-white border-gray-300 text-gray-700"} border rounded-xl text-sm font-semibold`}>+251</span>
                 <input
                   type="tel"
                   placeholder="9XXXXXXXX"
                   value={phone}
                   onChange={e => setPhone(e.target.value.replace(/\D/, ""))}
                   maxLength={9}
-                  className="flex-1 bg-[#0b0f19] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                  className={`flex-1 ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
                 />
               </div>
               <p className="text-[10px] text-gray-500 mt-1.5">You will receive a push notification to approve the payment.</p>
@@ -257,30 +264,30 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
           {selectedMethod === "chapa" && (
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-2">Card Number</label>
+                <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>Card Number</label>
                 <input
                   type="text"
                   placeholder="4242 4242 4242 4242"
-                  className="w-full bg-[#0b0f19] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                  className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
                 />
               </div>
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs font-semibold text-gray-400 mb-2">Expiry</label>
-                  <input type="text" placeholder="MM/YY" className="w-full bg-[#0b0f19] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50" />
+                  <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>Expiry</label>
+                  <input type="text" placeholder="MM/YY" className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs font-semibold text-gray-400 mb-2">CVV</label>
-                  <input type="text" placeholder="123" maxLength={3} className="w-full bg-[#0b0f19] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50" />
+                  <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>CVV</label>
+                  <input type="text" placeholder="123" maxLength={3} className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`} />
                 </div>
               </div>
             </div>
           )}
 
-          <div className="bg-[#0b0f19] border border-white/10 rounded-2xl p-4 space-y-2">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Order Total</p>
+          <div className={`${themeCard} border rounded-2xl p-4 space-y-2`}>
+            <p className={`text-xs font-bold ${themeTextMuted} uppercase tracking-wider`}>Order Total</p>
             <p className="text-3xl font-black text-amber-400">${total.toFixed(2)}</p>
-            <p className="text-[10px] text-gray-500">Taxes and service charges included</p>
+            <p className={`text-[10px] ${themeTextMuted}`}>Taxes and service charges included</p>
           </div>
 
           <button
@@ -301,9 +308,9 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[#030712] text-white overflow-y-auto">
-      <div className="flex items-center gap-3 p-4 border-b border-white/5 shrink-0">
-        <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-lg">
+    <div className={`fixed inset-0 z-[60] flex flex-col ${themeBg} overflow-y-auto`}>
+      <div className={`flex items-center gap-3 p-4 border-b ${themeBorder} shrink-0`}>
+        <button onClick={onBack} className={`p-2 ${theme === "dark" ? "hover:bg-white/5" : "hover:bg-black/5"} rounded-lg`}>
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h2 className="font-black text-base">Choose Payment Method</h2>
@@ -312,10 +319,10 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
       <div className="flex-1 flex flex-col p-5 gap-4 max-w-sm mx-auto w-full">
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
           <p className="text-amber-400 font-black text-2xl">${total.toFixed(2)}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Total amount to pay</p>
+          <p className={`text-[11px] ${themeTextMuted} mt-0.5`}>Total amount to pay</p>
         </div>
 
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Select Payment Method</p>
+        <p className={`text-xs font-bold ${themeTextMuted} uppercase tracking-wider`}>Select Payment Method</p>
 
         <div className="space-y-3">
           {PAYMENT_METHODS.map(pm => (
@@ -325,13 +332,13 @@ export default function PaymentScreen({ total, onBack, onSuccess, restaurantId, 
               className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all text-left ${
                 selectedMethod === pm.id
                   ? "border-amber-500/60 bg-amber-500/5"
-                  : "border-white/10 bg-[#0b0f19] hover:border-white/20"
+                  : `${themeBorder} ${themeCard} ${theme === "dark" ? "hover:border-white/20" : "hover:border-gray-300"}`
               }`}
             >
-              <span className="text-2xl w-10 h-10 flex items-center justify-center bg-white/5 rounded-xl">{pm.logo}</span>
+              <span className={`text-2xl w-10 h-10 flex items-center justify-center ${theme === "dark" ? "bg-white/5" : "bg-gray-100"} rounded-xl`}>{pm.logo}</span>
               <div className="flex-1">
                 <p className="font-bold text-sm">{pm.name}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{pm.description}</p>
+                <p className={`text-[10px] ${themeTextMuted} mt-0.5`}>{pm.description}</p>
               </div>
               <div className={`w-4 h-4 rounded-full border-2 transition-all ${selectedMethod === pm.id ? "border-amber-500 bg-amber-500" : "border-gray-600"}`} />
             </button>
