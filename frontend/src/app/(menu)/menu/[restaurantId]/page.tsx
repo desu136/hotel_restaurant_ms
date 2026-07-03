@@ -195,17 +195,19 @@ export default function CustomerMenuPage() {
   const [restaurantsList, setRestaurantsList] = React.useState<Restaurant[]>([])
   const [selectedPopupRestaurantId, setSelectedPopupRestaurantId] = React.useState<string>(restaurantId)
 
-  const loadRestaurantData = React.useCallback(async (targetId: string, showLoader = true) => {
+  const loadRestaurantData = React.useCallback(async (targetId: string, showLoader = true, forTableId = "") => {
     if (showLoader) {
       setLoading(true)
     } else {
       setSwitching(true)
     }
     try {
+      // Build query string so backend resolves branch from the scanned table
+      const branchQuery = forTableId ? `?tableId=${forTableId}` : ""
       const [restRes, catRes, menuRes] = await Promise.all([
         fetch(`/api/restaurant/public/details/${targetId}`),
-        fetch(`/api/restaurant/public/categories/${targetId}`),
-        fetch(`/api/restaurant/public/menu/${targetId}`)
+        fetch(`/api/restaurant/public/categories/${targetId}${branchQuery}`),
+        fetch(`/api/restaurant/public/menu/${targetId}${branchQuery}`)
       ])
       
       const restData = restRes.ok ? await restRes.json() : null
@@ -248,7 +250,7 @@ export default function CustomerMenuPage() {
     }
 
     const init = async () => {
-      await loadRestaurantData(restaurantId, true)
+      await loadRestaurantData(restaurantId, true, tableId)
 
       // If tableId is present, fetch the real table number
       if (tableId) {
@@ -292,13 +294,13 @@ export default function CustomerMenuPage() {
   }, [tableId])
 
   // Background polling for changes (reflect modifications quickly)
-  // Background polling for changes (reflect modifications quickly)
   React.useEffect(() => {
+    const branchQuery = tableId ? `?tableId=${tableId}` : ""
     const interval = setInterval(async () => {
       try {
         const [catRes, menuRes] = await Promise.all([
-          fetch(`/api/restaurant/public/categories/${activeRestaurantId}`),
-          fetch(`/api/restaurant/public/menu/${activeRestaurantId}`)
+          fetch(`/api/restaurant/public/categories/${activeRestaurantId}${branchQuery}`),
+          fetch(`/api/restaurant/public/menu/${activeRestaurantId}${branchQuery}`)
         ])
         if (catRes.ok) {
           const cats: Category[] = await catRes.json()
@@ -319,7 +321,7 @@ export default function CustomerMenuPage() {
     }, 5000) // Poll every 5 seconds
 
     return () => clearInterval(interval)
-  }, [activeRestaurantId, activeParentId])
+  }, [activeRestaurantId, activeParentId, tableId])
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark"

@@ -72,6 +72,13 @@ router.get('/public/categories/:restaurantId', async (req: Request, res: Respons
       res.json([]);
       return;
     }
+
+    // Fetch the branch to get tenant_id for master categories
+    const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { tenant_id: true } });
+    if (!branch) { res.json([]); return; }
+
+    // Get branch-specific categories AND master categories for this tenant (which were broadcast-created)
+    // The master-broadcasted categories have branch_id set to the specific branch when broadcast
     const categories = await prisma.category.findMany({
       where: { branch_id: branchId, deleted_at: null },
       orderBy: { created_at: 'asc' },
@@ -90,9 +97,13 @@ router.get('/public/menu/:restaurantId', async (req: Request, res: Response): Pr
       res.json([]);
       return;
     }
+
+    // Get both branch-specific items AND master menu items broadcast to this branch
     const items = await prisma.menuItem.findMany({
       where: { branch_id: branchId, availability: true },
-      include: { category: { select: { id: true, name: true } } },
+      include: {
+        category: { select: { id: true, name: true, parent_id: true } },
+      },
       orderBy: { created_at: 'asc' },
     });
     res.json(items);
@@ -687,7 +698,7 @@ router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Reque
   }
 });
 
-// DELETE /api/restaurant/categories/:id  — soft delete
+// DELETE /api/restaurant/categories/:id  — soft delete (recursive for subcategories)
 router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
     const categoryId = req.params.id as string;
@@ -700,10 +711,27 @@ router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Requ
         res.status(403).json({ error: 'Forbidden: You cannot delete a category belonging to another branch.' });
         return;
       }
-      await prisma.category.update({
-        where: { id: categoryId },
-        data: { deleted_at: new Date() },
-      });
+      
+      const now = new Date();
+      // Helper function to recursively soft delete a category and its subcategories
+      const softDeleteCategoryTree = async (id: string) => {
+        // Find subcategories
+        const subcategories = await prisma.category.findMany({
+          where: { parent_id: id, deleted_at: null },
+          select: { id: true }
+        });
+        
+        for (const sub of subcategories) {
+          await softDeleteCategoryTree(sub.id);
+        }
+        
+        await prisma.category.update({
+          where: { id },
+          data: { deleted_at: now }
+        });
+      };
+      
+      await softDeleteCategoryTree(categoryId);
       res.json({ success: true });
       return;
     }
@@ -714,15 +742,54 @@ router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Requ
         res.status(403).json({ error: 'Forbidden: Only owners can delete master categories.' });
         return;
       }
+      
       const now = new Date();
-      await prisma.masterCategory.update({
-        where: { id: categoryId },
-        data: { deleted_at: now },
-      });
-      await prisma.category.updateMany({
-        where: { master_category_id: categoryId },
-        data: { deleted_at: now },
-      });
+      // Helper function to recursively soft delete a master category, its child master categories,
+      // and all corresponding branch-specific categories.
+      const softDeleteMasterCategoryTree = async (id: string) => {
+        // Find sub master categories
+        const subMasterCategories = await prisma.masterCategory.findMany({
+          where: { parent_id: id, deleted_at: null },
+          select: { id: true }
+        });
+        
+        for (const sub of subMasterCategories) {
+          await softDeleteMasterCategoryTree(sub.id);
+        }
+        
+        // Soft delete the master category itself
+        await prisma.masterCategory.update({
+          where: { id },
+          data: { deleted_at: now }
+        });
+        
+        // Soft delete all branch-specific categories mapping to this master category
+        // And also soft delete any of their local subcategories!
+        const localCats = await prisma.category.findMany({
+          where: { master_category_id: id, deleted_at: null },
+          select: { id: true }
+        });
+        
+        for (const localCat of localCats) {
+          const softDeleteLocalCategoryTree = async (lid: string) => {
+            const subLocalCats = await prisma.category.findMany({
+              where: { parent_id: lid, deleted_at: null },
+              select: { id: true }
+            });
+            for (const subLocal of subLocalCats) {
+              await softDeleteLocalCategoryTree(subLocal.id);
+            }
+            await prisma.category.update({
+              where: { id: lid },
+              data: { deleted_at: now }
+            });
+          };
+          
+          await softDeleteLocalCategoryTree(localCat.id);
+        }
+      };
+      
+      await softDeleteMasterCategoryTree(categoryId);
       res.json({ success: true });
       return;
     }
