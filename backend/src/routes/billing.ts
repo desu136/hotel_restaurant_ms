@@ -9,6 +9,8 @@ router.use(authenticate);
 router.get('/unpaid', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const branchId = req.user!.branchId;
 
     const orders = await prisma.order.findMany({
       where: {
@@ -17,6 +19,7 @@ router.get('/unpaid', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER'
         bills: {
           none: { payment_status: 'PAID' },
         },
+        ...(!isOwner && branchId ? { branch_id: branchId } : {}),
       },
       include: {
         items: { include: { menu_item: true } },
@@ -40,6 +43,20 @@ router.post('/bill', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER')
       res.status(400).json({ error: 'order_id and amount are required' });
       return;
     }
+
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: order_id }
+    });
+    if (!existingOrder) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner && req.user!.branchId && existingOrder.branch_id !== req.user!.branchId) {
+      res.status(403).json({ error: 'Forbidden: You do not have access to this branch.' });
+      return;
+    }
+
     const bill = await prisma.bill.create({
       data: {
         order_id,
@@ -57,7 +74,22 @@ router.post('/bill', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER')
 router.post('/bill/:id/pay', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const bill = await prisma.bill.update({
+
+    const bill = await prisma.bill.findUnique({
+      where: { id: id as string },
+      include: { order: true }
+    });
+    if (!bill) {
+      res.status(404).json({ error: 'Bill not found' });
+      return;
+    }
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    if (!isOwner && req.user!.branchId && bill.order?.branch_id !== req.user!.branchId) {
+      res.status(403).json({ error: 'Forbidden: You do not have access to this branch.' });
+      return;
+    }
+
+    const updatedBill = await prisma.bill.update({
       where: { id: id as string },
       data: { payment_status: 'PAID' },
     });
@@ -66,8 +98,9 @@ router.post('/bill/:id/pay', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL
       where: { id: bill.order_id as string },
       data: { status: 'COMPLETED' },
     });
-    res.json({ success: true, bill });
+    res.json({ success: true, bill: updatedBill });
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Failed to record payment' });
   }
 });
@@ -76,6 +109,9 @@ router.post('/bill/:id/pay', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL
 router.get('/history', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
+    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const branchId = req.user!.branchId;
+
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
@@ -83,7 +119,10 @@ router.get('/history', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER
       where: {
         payment_status: 'PAID',
         created_at: { gte: startOfDay },
-        order: { tenant_id: tenantId as string },
+        order: {
+          tenant_id: tenantId as string,
+          ...(!isOwner && branchId ? { branch_id: branchId } : {}),
+        },
       },
       include: {
         order: { include: { table: true, items: { include: { menu_item: true } } } },

@@ -1,7 +1,7 @@
 "use client"
 import * as React from "react"
-import { 
-  Bell, Clock, CheckCircle2, AlertTriangle, Coffee, 
+import {
+  Bell, Clock, CheckCircle2, AlertTriangle, Coffee,
   Utensils, Wifi, WifiOff, RefreshCw, ChefHat, User
 } from "lucide-react"
 
@@ -72,7 +72,7 @@ export default function WaiterScreenPage() {
           finalMe = {
             id: loggedInUser.id,
             name: loggedInUser.name,
-            branchId: loggedInUser.branchId
+            branchId: loggedInUser.branch_id
           }
           setMe(finalMe)
         }
@@ -159,17 +159,17 @@ export default function WaiterScreenPage() {
   return (
     <div className="space-y-6 h-[calc(100vh-8rem)] flex flex-col pb-12">
       {/* Header */}
-      <div className="flex items-center justify-between shrink-0 flex-wrap gap-4 bg-[var(--surface)] border border-[var(--surface-border)] p-4 rounded-2xl shadow-sm">
+      <div className="flex items-center justify-between shrink-0 flex-wrap gap-4 bg-[var(--foreground)] text-[var(--background)] border border-[var(--surface-border)] p-4 rounded-2xl shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-600/10 flex items-center justify-center text-orange-500">
+          <div className="w-10 h-10 rounded-xl bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center ">
             <Bell className="w-6 h-6 animate-bounce" />
           </div>
           <div>
-            <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
-              Ready Orders Unified Screen 🍽️
+            <h1 className="text-xl font-black tracking-tight  flex items-center gap-2">
+              Ready Orders Unified Screen
               <span className={`w-2 h-2 rounded-full ${online ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
             </h1>
-            <p className="text-xs text-[var(--muted)]">Displays all ready orders to be served by assigned waiters</p>
+            <p className="text-xs ">Displays all ready orders to be served by assigned waiters</p>
           </div>
         </div>
 
@@ -180,7 +180,7 @@ export default function WaiterScreenPage() {
                 <select
                   value={selectedRestId}
                   onChange={e => handleRestaurantChange(e.target.value)}
-                  className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className=" border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold  focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   {restaurants.map(r => (
                     <option key={r.id} value={r.id}>{r.name}</option>
@@ -190,7 +190,7 @@ export default function WaiterScreenPage() {
               <select
                 value={selectedBranchId}
                 onChange={e => handleBranchChange(e.target.value)}
-                className="bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="bg-[var(--background)] text-[var(--foreground)] rounded-lg px-3 py-1.5 text-xs font-bold "
               >
                 <option value="">— Select Branch —</option>
                 {branches
@@ -202,16 +202,15 @@ export default function WaiterScreenPage() {
               </select>
             </>
           ) : (
-            <span className="text-xs font-bold px-3 py-1.5 rounded-lg border bg-orange-500/10 text-orange-400 border-orange-500/20">
-              📍 {branches.find(b => b.id === me.branchId)?.name || "Assigned Branch"}
+            <span className="text-xs font-bold px-3 py-1.5 rounded-lg border ">
+              {branches.find(b => b.id === me.branchId)?.name || "Assigned Branch"}
             </span>
           )}
 
-          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-            online
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-              : "bg-red-500/10 text-red-400 border-red-500/20"
-          }`}>
+          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${online
+            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+            : "bg-red-500/10 text-red-400 border-red-500/20"
+            }`}>
             {online ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
             {online ? "LIVE" : "OFFLINE"}
           </span>
@@ -220,10 +219,10 @@ export default function WaiterScreenPage() {
 
       {/* Main Grid */}
       {orders.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-[var(--surface-border)] rounded-2xl p-12 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center rounded-2xl p-12 text-center">
           <Utensils className="w-12 h-12 text-[var(--muted)] opacity-20 mb-3" />
-          <h3 className="text-lg font-bold text-white">No Ready Orders</h3>
-          <p className="text-xs text-[var(--muted)] mt-1">Ready orders from the kitchen will appear here instantly.</p>
+          <h3 className="text-lg font-bold ">No Ready Orders</h3>
+          <p className="text-xs  mt-1">Ready orders from the kitchen will appear here instantly.</p>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 min-h-0 pr-1">
@@ -231,18 +230,16 @@ export default function WaiterScreenPage() {
             const elapsed = getElapsedMins(order.created_at)
             const isLate = elapsed >= 10
             return (
-              <div 
-                key={order.id} 
-                className={`flex flex-col bg-[var(--surface)] border rounded-2xl overflow-hidden shadow-md transition-all ${
-                  isLate 
-                    ? "border-red-500/30 ring-1 ring-red-500/10" 
-                    : "border-[var(--surface-border)]"
-                }`}
+              <div
+                key={order.id}
+                className={`flex flex-col  rounded-2xl overflow-hidden shadow-md transition-all ${isLate
+                  ? "border-red-500/30 ring-1 ring-red-500/10"
+                  : "border-[var(--surface-border)]"
+                  }`}
               >
                 {/* Card Header */}
-                <div className={`px-4 py-3 border-b flex justify-between items-start gap-2 ${
-                  isLate ? "bg-red-500/5 border-red-500/20" : "bg-[var(--surface-hover)]/30 border-[var(--surface-border)]"
-                }`}>
+                <div className={`px-4 py-3 border-b flex justify-between items-start gap-2 ${isLate ? "bg-red-500/5 border-red-500/20" : "bg-[var(--surface-hover)]/30 border-[var(--surface-border)]"
+                  }`}>
                   <div>
                     <span className="text-[10px] font-mono text-[var(--muted)]">ORDER {order.order_number ? `#${order.order_number} (${order.id.slice(-6).toUpperCase()})` : `#${order.id.slice(-6).toUpperCase()}`}</span>
                     <h2 className="text-lg font-black text-white mt-0.5">
@@ -250,9 +247,8 @@ export default function WaiterScreenPage() {
                     </h2>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className={`flex items-center gap-1 text-xs font-semibold ${
-                      isLate ? "text-red-400 font-bold" : "text-amber-400"
-                    }`}>
+                    <span className={`flex items-center gap-1 text-xs font-semibold ${isLate ? "text-red-400 font-bold" : "text-amber-400"
+                      }`}>
                       <Clock className="w-3.5 h-3.5" />
                       {elapsed}m ago
                     </span>
@@ -265,9 +261,9 @@ export default function WaiterScreenPage() {
                 </div>
 
                 {/* Waiter info */}
-                <div className="px-4 py-2 bg-blue-500/5 border-b border-[var(--surface-border)] flex items-center gap-2">
+                <div className="px-4 py-2  flex items-center gap-2">
                   <User className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-xs font-bold text-blue-400">
+                  <span className="text-xs font-bold ">
                     Waiter: {order.table?.waiter?.full_name || "Unassigned"}
                   </span>
                 </div>

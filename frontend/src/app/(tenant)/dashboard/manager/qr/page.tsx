@@ -136,7 +136,7 @@ function QRPageContent() {
   return (
     <div className="space-y-6 pb-12">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight mb-1">QR Code Generator 📲</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-1">QR Code Generator </h1>
         <p className="text-[var(--muted)]">Generate unique QR codes for each table. Customers scan to browse your menu and place orders.</p>
       </div>
 
@@ -155,12 +155,12 @@ function QRPageContent() {
       )}
 
       {/* Generator Card */}
-      <div className="rounded-2xl bg-gradient-to-br from-[var(--color-primary-600)] to-purple-600 p-6 text-white shadow-lg">
+      <div className="rounded-2xl bg-[var(--foreground)] p-6 text-[var(--background)] shadow-lg">
         <h2 className="text-xl font-bold mb-1">Generate New QR Code</h2>
-        <p className="text-white/70 text-sm mb-5">Select a table and generate a unique QR code linking to your digital menu.</p>
+        <p className="text-[var(--background)]/70 text-sm mb-5">Select a table and generate a unique QR code linking to your digital menu.</p>
 
         {tablesWithoutQR.length === 0 && tables.length > 0 ? (
-          <p className="text-white/80 text-sm bg-white/10 rounded-xl px-4 py-3">
+          <p className="text-[var(--background)] text-sm bg-[var(--foreground)] rounded-xl px-4 py-3">
             ✅ All registered tables already have QR codes. Delete an existing one to regenerate.
           </p>
         ) : tables.length === 0 ? (
@@ -171,22 +171,22 @@ function QRPageContent() {
         ) : (
           <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
             <div className="flex-1">
-              <label className="block text-white/80 text-xs font-semibold mb-1.5 uppercase tracking-wider">Select Table</label>
+              <label className="block text-[var(--background)] text-xs font-semibold mb-1.5 uppercase tracking-wider">Select Table</label>
               <select
                 value={selectedTableId}
                 onChange={e => setSelectedTableId(e.target.value)}
-                className="w-full bg-white/20 border border-white/30 text-white placeholder-white/60 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-white/50"
+                className="w-full bg-[var(--surface-hover)] border border-white/30 text-[var(--foreground)] rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-white/50"
               >
-                <option value="" className="text-gray-900">— Choose a table —</option>
+                <option value="" className="text-[var(--foreground)]">— Choose a table —</option>
                 {tablesWithoutQR.map(t => (
-                  <option key={t.id} value={t.id} className="text-gray-900">Table {t.table_number} ({t.capacity} seats)</option>
+                  <option key={t.id} value={t.id} className="text-[var(--foreground)]">Table {t.table_number} ({t.capacity} seats)</option>
                 ))}
               </select>
             </div>
             <button
               onClick={handleGenerate}
               disabled={generating || !selectedTableId}
-              className="flex items-center gap-2 px-6 py-2.5 bg-white text-[var(--color-primary-600)] font-extrabold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all disabled:opacity-60 disabled:scale-100 shrink-0"
+              className="flex items-center gap-2 px-6 py-2.5 bg-[var(--background)] text-[var(--foreground)] font-extrabold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all disabled:opacity-60 disabled:scale-100 shrink-0"
             >
               {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
               {generating ? "Generating..." : "Generate QR"}
@@ -209,7 +209,7 @@ function QRPageContent() {
       {/* QR Codes Grid */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Generated QR Codes ({qrCodes.length})</h2>
-        <button onClick={() => fetchAll(selectedRestaurantId)} className="flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+        <button onClick={() => fetchAll(selectedRestaurantId)} className="flex items-center gap-1.5 text-xs text-[var(--foreground)] hover:text-[var(--foreground)] transition-colors">
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
         </button>
       </div>
@@ -231,7 +231,7 @@ function QRPageContent() {
                 ) : (
                   <QrCode className="w-16 h-16 text-gray-300" />
                 )}
-                <span className="absolute -top-2 -right-2 bg-[var(--color-primary-600)] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow">
+                <span className="absolute -top-2 -right-2 bg-[var(--foreground)] text-[var(--background)] text-[10px] font-black px-2 py-0.5 rounded-full shadow">
                   Table {qr.table?.table_number || "?"}
                 </span>
               </div>
@@ -239,14 +239,14 @@ function QRPageContent() {
               {/* Info */}
               <div className="w-full text-center space-y-1">
                 <p className="font-bold text-sm flex items-center justify-center gap-1.5">
-                  <Table2 className="w-4 h-4 text-[var(--color-primary-600)]" />
+                  <Table2 className="w-4 h-4" />
                   Table {qr.table?.table_number}
                   {qr.table?.capacity && <span className="text-[var(--muted)] font-normal">({qr.table.capacity} seats)</span>}
                 </p>
                 {qr.codeString && (
                   <p className="text-[10px] font-mono text-[var(--muted)] truncate px-2">{qr.codeString.slice(0, 50)}…</p>
                 )}
-                <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${qr.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-500'}`}>
+                <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${qr.status === 'ACTIVE' ? 'bg-[var(--foreground)] text-[var(--background)]' : 'bg-[var(--foreground)] text-[var(--background)]'}`}>
                   {qr.status}
                 </span>
               </div>
@@ -256,7 +256,7 @@ function QRPageContent() {
                 <button
                   onClick={() => downloadQR(qr)}
                   disabled={!qr.qrCodeUrl}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--color-primary-600)] text-white text-xs font-bold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors disabled:opacity-40"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--foreground)] text-[var(--background)] text-xs font-bold rounded-lg hover:bg-[var(--color-primary-500)] transition-colors disabled:opacity-40"
                 >
                   <Download className="w-3.5 h-3.5" /> Download PNG
                 </button>

@@ -620,8 +620,15 @@ router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Reque
     const { name, parent_id } = req.body;
     const categoryId = req.params.id as string;
 
+    const isOwner = isOwnerUser(req);
+    const userBranchId = req.user!.branchId;
+
     const cat = await prisma.category.findUnique({ where: { id: categoryId } });
     if (cat) {
+      if (!isOwner && cat.branch_id !== userBranchId) {
+        res.status(403).json({ error: 'Forbidden: You cannot modify a category belonging to another branch.' });
+        return;
+      }
       const updatedCat = await prisma.category.update({
         where: { id: categoryId },
         data: {
@@ -635,6 +642,10 @@ router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Reque
 
     const masterCat = await prisma.masterCategory.findUnique({ where: { id: categoryId } });
     if (masterCat) {
+      if (!isOwner) {
+        res.status(403).json({ error: 'Forbidden: Only owners can modify master categories.' });
+        return;
+      }
       const updatedMaster = await prisma.masterCategory.update({
         where: { id: categoryId },
         data: {
@@ -680,8 +691,15 @@ router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Reque
 router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
     const categoryId = req.params.id as string;
+    const isOwner = isOwnerUser(req);
+    const userBranchId = req.user!.branchId;
+
     const cat = await prisma.category.findUnique({ where: { id: categoryId } });
     if (cat) {
+      if (!isOwner && cat.branch_id !== userBranchId) {
+        res.status(403).json({ error: 'Forbidden: You cannot delete a category belonging to another branch.' });
+        return;
+      }
       await prisma.category.update({
         where: { id: categoryId },
         data: { deleted_at: new Date() },
@@ -692,6 +710,10 @@ router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Requ
 
     const masterCat = await prisma.masterCategory.findUnique({ where: { id: categoryId } });
     if (masterCat) {
+      if (!isOwner) {
+        res.status(403).json({ error: 'Forbidden: Only owners can delete master categories.' });
+        return;
+      }
       const now = new Date();
       await prisma.masterCategory.update({
         where: { id: categoryId },
@@ -882,8 +904,15 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
     const { display_name, description, price, category_id, availability, customizations, image_url, image_urls } = req.body;
     const menuItemId = req.params.id as string;
 
+    const isOwner = isOwnerUser(req);
+    const userBranchId = req.user!.branchId;
+
     const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
     if (item) {
+      if (!isOwner && item.branch_id !== userBranchId) {
+        res.status(403).json({ error: 'Forbidden: You cannot modify a menu item belonging to another branch.' });
+        return;
+      }
       const updatedItem = await prisma.menuItem.update({
         where: { id: menuItemId },
         data: {
@@ -904,6 +933,10 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
 
     const masterItem = await prisma.masterMenuItem.findUnique({ where: { id: menuItemId } });
     if (masterItem) {
+      if (!isOwner) {
+        res.status(403).json({ error: 'Forbidden: Only owners can modify master menu items.' });
+        return;
+      }
       const updatedMaster = await prisma.masterMenuItem.update({
         where: { id: menuItemId },
         data: {
@@ -946,8 +979,15 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
 router.delete('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
     const menuItemId = req.params.id as string;
+    const isOwner = isOwnerUser(req);
+    const userBranchId = req.user!.branchId;
+
     const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
     if (item) {
+      if (!isOwner && item.branch_id !== userBranchId) {
+        res.status(403).json({ error: 'Forbidden: You cannot delete a menu item belonging to another branch.' });
+        return;
+      }
       await prisma.menuItem.delete({ where: { id: menuItemId } });
       res.json({ success: true });
       return;
@@ -955,6 +995,10 @@ router.delete('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, r
 
     const masterItem = await prisma.masterMenuItem.findUnique({ where: { id: menuItemId } });
     if (masterItem) {
+      if (!isOwner) {
+        res.status(403).json({ error: 'Forbidden: Only owners can delete master menu items.' });
+        return;
+      }
       await prisma.masterMenuItem.update({
         where: { id: menuItemId },
         data: { deleted_at: new Date() },
