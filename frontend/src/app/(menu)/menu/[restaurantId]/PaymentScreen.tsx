@@ -10,6 +10,7 @@ interface PaymentScreenProps {
   onBack: () => void
   onSuccess: (orderId: string) => void
   restaurantId: string
+  branchId?: string
   tableId: string
   cartPayload: { menu_item_id: string; quantity: number; customizations: any }[]
   orderNotes: string
@@ -32,7 +33,7 @@ const STATUS_STEPS = [
   { key: "COMPLETED", label: "Delivered",        icon: <CheckCircle className="w-5 h-5" />, desc: "Enjoy your meal! Thank you for dining with us." },
 ]
 
-export default function PaymentScreen({ theme, total, onBack, onSuccess, restaurantId, tableId, cartPayload, orderNotes, orderType, deliveryAddress, miniAppUser }: PaymentScreenProps) {
+export default function PaymentScreen({ theme, total, onBack, onSuccess, restaurantId, branchId, tableId, cartPayload, orderNotes, orderType, deliveryAddress, miniAppUser }: PaymentScreenProps) {
   const themeBg = theme === "dark" ? "bg-[#030712] text-white" : "bg-gray-50 text-gray-900"
   const themeCard = theme === "dark" ? "bg-[#0b0f19] border-white/10" : "bg-white border-gray-200 shadow-sm"
   const themeTextMuted = theme === "dark" ? "text-gray-400" : "text-gray-500"
@@ -73,6 +74,7 @@ export default function PaymentScreen({ theme, total, onBack, onSuccess, restaur
     try {
       const orderBody: Record<string, any> = {
         restaurant_id: restaurantId,
+        branch_id: branchId || null,
         table_id: tableId || null,
         items: cartPayload,
         notes: orderNotes,

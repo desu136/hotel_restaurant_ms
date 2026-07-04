@@ -507,31 +507,32 @@ model QRCode {
 }
 
 model Order {
-  id              String           @id @default(uuid()) @db.Uuid
-  tenant_id       String           @db.Uuid
-  branch_id       String           @db.Uuid
-  customer_id     String           @db.Uuid
-  table_id        String?          @db.Uuid
-  room_id         String?          @db.Uuid
-  waiter_id       String?          @db.Uuid
-  order_number    String?
-  order_type      OrderType
-  status          OrderStatus      @default(PENDING)
-  total_amount    Decimal          @db.Decimal(10, 2)
-  estimated_prep_time Int          @default(0)
+  id                  String           @id @default(uuid()) @db.Uuid
+  tenant_id           String           @db.Uuid
+  branch_id           String           @db.Uuid
+  customer_id         String           @db.Uuid
+  table_id            String?          @db.Uuid
+  room_id             String?          @db.Uuid
+  waiter_id           String?          @db.Uuid
+  order_number        String?
+  order_type          OrderType
+  status              OrderStatus      @default(PENDING)
+  total_amount        Decimal          @db.Decimal(10, 2)
+  placed_by_staff     Boolean          @default(false)
+  estimated_prep_time Int              @default(0)
   estimated_ready_at  DateTime?
-  created_at      DateTime         @default(now())
-  updated_at      DateTime         @updatedAt
-  bills           Bill[]
-  deliveries      Delivery[]
-  feedbacks       Feedback[]
-  kitchen_tickets KitchenTicket[]
-  items           OrderItem[]
-  branch          Branch           @relation(fields: [branch_id], references: [id], onDelete: Cascade)
-  customer        Customer         @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  room            Room?            @relation(fields: [room_id], references: [id])
-  table           RestaurantTable? @relation(fields: [table_id], references: [id])
-  tenant          Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  created_at          DateTime         @default(now())
+  updated_at          DateTime         @updatedAt
+  bills               Bill[]
+  deliveries          Delivery[]
+  feedbacks           Feedback[]
+  kitchen_tickets     KitchenTicket[]
+  items               OrderItem[]
+  branch              Branch           @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  customer            Customer         @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  room                Room?            @relation(fields: [room_id], references: [id])
+  table               RestaurantTable? @relation(fields: [table_id], references: [id])
+  tenant              Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@map("orders")
 }

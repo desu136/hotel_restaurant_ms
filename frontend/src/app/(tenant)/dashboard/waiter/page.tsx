@@ -74,6 +74,7 @@ interface Order {
   } | null
   items: OrderItem[]
   waiter_id?: string | null
+  placed_by_staff?: boolean
 }
 
 interface QRScannerProps {
@@ -207,6 +208,7 @@ export default function WaiterDashboard() {
   const [activeTab, setActiveTab] = React.useState<"home" | "tables" | "orders" | "alerts">("home")
   const [showScannerModal, setShowScannerModal] = React.useState(false)
   const [scannerError, setScannerError] = React.useState<string | null>(null)
+  const [activeQrOrder, setActiveQrOrder] = React.useState<{ id: string; qrCodeUrl: string } | null>(null)
 
   const handleQRScan = React.useCallback((codeString: string) => {
     let tableId: string | null = null;
@@ -629,6 +631,39 @@ export default function WaiterDashboard() {
     }
   }
 
+  const handleOpenDeliveryQr = async (orderId: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/delivery-qr`);
+      if (res.ok) {
+        const data = await res.json();
+        setActiveQrOrder({ id: orderId, qrCodeUrl: data.qrCodeUrl });
+      } else {
+        alert("Failed to fetch delivery QR. Please try again.");
+      }
+    } catch (err) {
+      console.error("Error fetching delivery QR:", err);
+      alert("Network error fetching delivery QR.");
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeQrOrder) {
+      const stillReady = orders.some(o => o.id === activeQrOrder.id && o.status === "READY");
+      if (!stillReady) {
+        setActiveQrOrder(null);
+        setActivityLogs(prev => [
+          {
+            id: Math.random().toString(),
+            type: "serve_order",
+            message: `Order verified and delivered!`,
+            timestamp: "Just now"
+          },
+          ...prev
+        ]);
+      }
+    }
+  }, [orders, activeQrOrder]);
+
   const handleAssignTable = async (orderId: string, tableId: string) => {
     try {
       const res = await fetch(`/api/orders/${orderId}/table`, {
@@ -715,7 +750,7 @@ export default function WaiterDashboard() {
                 </p>
               </div>
               <Button
-                onClick={() => handleMarkDelivered(o.id)}
+                onClick={() => o.placed_by_staff ? handleMarkDelivered(o.id) : handleOpenDeliveryQr(o.id)}
                 size="sm"
                 className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 font-semibold"
               >
@@ -1019,7 +1054,9 @@ export default function WaiterDashboard() {
                                     <Button
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        handleMarkDelivered(tableReadyOrder.id)
+                                        tableReadyOrder.placed_by_staff
+                                          ? handleMarkDelivered(tableReadyOrder.id)
+                                          : handleOpenDeliveryQr(tableReadyOrder.id)
                                       }}
                                       size="sm"
                                       className="w-full text-[9px] sm:text-[10px] h-6 sm:h-7 bg-emerald-600 hover:bg-emerald-500 font-bold animate-pulse"
@@ -1158,7 +1195,7 @@ export default function WaiterDashboard() {
                       </span>
                       {order.status === "READY" && (
                         <Button
-                          onClick={() => handleMarkDelivered(order.id)}
+                          onClick={() => order.placed_by_staff ? handleMarkDelivered(order.id) : handleOpenDeliveryQr(order.id)}
                           size="sm"
                           className="bg-emerald-600 hover:bg-emerald-500 font-bold text-[10px] px-2.5 py-1 h-7 rounded-lg"
                         >
@@ -1794,6 +1831,63 @@ export default function WaiterDashboard() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* DELIVERY QR CODE DISPLAY MODAL */}
+      {activeQrOrder && typeof window !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[var(--surface)] border border-[var(--surface-border)] rounded-3xl overflow-hidden shadow-2xl relative flex flex-col transition-transform duration-300">
+            {/* Header */}
+            <div className="p-5 border-b border-[var(--surface-border)] flex justify-between items-center bg-[var(--surface-hover)]/40 shrink-0">
+              <h3 className="text-sm font-black text-[var(--foreground)] uppercase tracking-wider flex items-center gap-2">
+                <QrCode className="w-4 h-4 text-emerald-500" />
+                Delivery Verification
+              </h3>
+              <button
+                onClick={() => setActiveQrOrder(null)}
+                className="text-[var(--muted)] hover:text-[var(--foreground)] text-sm px-2.5 py-1 hover:bg-[var(--surface-hover)] rounded-lg transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            {/* QR Code and Instructions */}
+            <div className="p-8 flex flex-col items-center justify-center bg-[var(--surface)] gap-4 text-center">
+              <p className="text-xs text-[var(--foreground)] font-bold">
+                Order Delivery Confirmation QR
+              </p>
+              
+              <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-inner flex items-center justify-center">
+                <img
+                  src={activeQrOrder.qrCodeUrl}
+                  alt="Delivery QR Code"
+                  className="w-56 h-56 object-contain"
+                />
+              </div>
+
+              <p className="text-[11px] text-[var(--muted)] leading-relaxed max-w-[260px]">
+                Please ask the customer to scan this QR code using the scanner in their <span className="font-extrabold text-amber-500">My Orders</span> history page to confirm delivery.
+              </p>
+
+              {/* Developer/Testing Fallback */}
+              <div className="w-full pt-4 border-t border-[var(--surface-border)] mt-2">
+                <p className="text-[10px] text-amber-500 font-medium mb-2">
+                  Testing fallback (HTTP / no second device):
+                </p>
+                <button
+                  onClick={() => {
+                    handleMarkDelivered(activeQrOrder.id);
+                    setActiveQrOrder(null);
+                  }}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2 rounded-xl text-xs transition-all active:scale-95"
+                >
+                  Mark Delivered (Skip Scan)
+                </button>
+              </div>
             </div>
           </div>
         </div>,

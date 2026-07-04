@@ -13,7 +13,7 @@ interface Restaurant {
   banner_url?: string | null
   branchId?: string | null
   branchName?: string | null
-  branch?: { name: string } | null
+  branch?: { name: string; address?: string | null; phone?: string | null } | null
   branches?: Array<{
     id: string
     name: string
@@ -249,6 +249,14 @@ export default function CustomerMenuPage() {
       setActiveRestaurantId(targetId)
       setSelectedPopupRestaurantId(targetId)
 
+      if (branchId) {
+        setActiveBranchId(branchId)
+      } else if (restData?.branchId) {
+        setActiveBranchId(restData.branchId)
+      } else if (restData?.branches && restData.branches.length > 0) {
+        setActiveBranchId(restData.branches[0].id)
+      }
+
       // Save user preferred branch
       setPreferredRestaurantId(targetId)
     } catch (e) {
@@ -270,13 +278,18 @@ export default function CustomerMenuPage() {
     }
 
     const init = async () => {
+      // Pass tableId upfront so the backend resolves the correct branch on first load
       await loadRestaurantData(restaurantId, true, tableId)
 
-      // If tableId is present, fetch the real table number
+      // Also fetch table details for display (table number etc.)
       if (tableId) {
         const tableRes = await fetch(`/api/restaurant/public/table/${tableId}`)
         if (tableRes.ok) {
-          setTableDetails(await tableRes.json())
+          const tDetails = await tableRes.json()
+          setTableDetails(tDetails)
+          if (tDetails.branch_id) {
+            setActiveBranchId(tDetails.branch_id)
+          }
         }
       }
 
@@ -318,6 +331,13 @@ export default function CustomerMenuPage() {
     const branchQuery = tableId ? `?tableId=${tableId}` : ""
     const interval = setInterval(async () => {
       try {
+        let queryParams = ""
+        if (activeBranchId) {
+          queryParams = `?branchId=${activeBranchId}`
+        } else if (tableId) {
+          queryParams = `?tableId=${tableId}`
+        }
+
         const [catRes, menuRes] = await Promise.all([
           fetch(`/api/restaurant/public/categories/${activeRestaurantId}${branchQuery}`),
           fetch(`/api/restaurant/public/menu/${activeRestaurantId}${branchQuery}`)
@@ -341,7 +361,7 @@ export default function CustomerMenuPage() {
     }, 5000) // Poll every 5 seconds
 
     return () => clearInterval(interval)
-  }, [activeRestaurantId, activeParentId, tableId])
+  }, [activeRestaurantId, activeParentId, activeBranchId, tableId])
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark"
@@ -648,6 +668,7 @@ export default function CustomerMenuPage() {
             theme={theme}
             total={cartTotal}
             restaurantId={activeRestaurantId}
+            branchId={activeBranchId}
             tableId={tableId}
             cartPayload={cartPayload}
             orderNotes={orderNotes}
