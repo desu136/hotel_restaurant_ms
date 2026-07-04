@@ -12,6 +12,7 @@ interface Restaurant {
   logo_url?: string | null
   banner_url?: string | null
   branchId?: string | null
+  branchName?: string | null
   branch?: { name: string } | null
   branches?: Array<{
     id: string
@@ -730,12 +731,17 @@ export default function CustomerMenuPage() {
                 )}
                 <div>
                   <h1 className={`text-xl sm:text-2xl font-black text-white drop-shadow-sm`}>{restaurant.name}</h1>
+                  {restaurant.branchName && (
+                    <p className="text-gray-200 text-xs font-bold mt-0.5 drop-shadow-sm">
+                      {restaurant.branchName}
+                    </p>
+                  )}
                   {tableDetails ? (
-                    <p className="text-amber-500 text-xs font-black mt-0.5 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
+                    <p className="text-amber-500 text-xs font-black mt-1 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
                       Table {tableDetails.table_number}
                     </p>
                   ) : tableId ? (
-                    <p className="text-amber-500 text-xs font-black mt-0.5 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
+                    <p className="text-amber-500 text-xs font-black mt-1 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
                       Table {tableId.slice(0, 4).toUpperCase()}
                     </p>
                   ) : null}

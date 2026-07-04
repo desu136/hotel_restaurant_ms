@@ -52,9 +52,10 @@ router.get('/public/details/:restaurantId', async (req: Request, res: Response):
 
     res.json({
       ...restaurant,
-      logo_url: (branchInfo && branchInfo.logo_url) || restaurant.logo_url,
+      logo_url: restaurant.logo_url, // Keep it to using the restaurant's logo
       banner_url: (branchInfo && branchInfo.banner_url) || restaurant.banner_url,
-      name: (branchInfo && branchInfo.name) || restaurant.name,
+      name: restaurant.name,
+      branchName: branchInfo ? branchInfo.name : null,
       branchId: branchId
     });
   } catch (e) {
