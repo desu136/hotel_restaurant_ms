@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth';
+import QRCode from 'qrcode';
 
 const router = Router();
 
@@ -305,6 +306,39 @@ router.get('/public/ready/:restaurantId', async (req: Request, res: Response): P
   }
 });
 
+// PATCH /api/orders/public/:id/confirm-delivery - Confirm delivery via scanned QR code
+router.patch('/public/:id/confirm-delivery', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (typeof id !== 'string' || !UUID_REGEX.test(id)) {
+    res.status(400).json({ error: 'Invalid order ID' });
+    return;
+  }
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: { id: true, status: true }
+    });
+    if (!order) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+    if (order.status !== 'READY') {
+      res.status(400).json({ error: 'Order is not in READY status' });
+      return;
+    }
+    const updated = await prisma.order.update({
+      where: { id },
+      data: { status: 'COMPLETED' },
+      select: { id: true, status: true }
+    });
+    res.json({ success: true, order: updated });
+  } catch (e: any) {
+    console.error('[confirm-delivery] Failed:', e?.message);
+    res.status(500).json({ error: 'Failed to confirm delivery' });
+  }
+});
+
 // GET /api/orders/public/:id - Single order status (wildcard — MUST be last among public routes)
 router.get('/public/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
@@ -336,6 +370,42 @@ router.get('/public/:id', async (req: Request, res: Response): Promise<void> => 
 
 
 router.use(authenticate);
+
+// GET /api/orders/:id/delivery-qr - Generate delivery QR code for waiter
+router.get('/:id/delivery-qr', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (typeof id !== 'string' || !UUID_REGEX.test(id)) {
+    res.status(400).json({ error: 'Invalid order ID' });
+    return;
+  }
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: { id: true, status: true }
+    });
+    if (!order) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+    if (order.status !== 'READY') {
+      res.status(400).json({ error: 'Order is not in READY status' });
+      return;
+    }
+
+    const qrString = `order_delivery:${order.id}`;
+    const qrCodeDataUrl = await QRCode.toDataURL(qrString, {
+      width: 300,
+      margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+
+    res.json({ qrCodeUrl: qrCodeDataUrl });
+  } catch (e: any) {
+    console.error('Failed to generate delivery QR:', e);
+    res.status(500).json({ error: 'Failed to generate QR code' });
+  }
+});
 
 // GET /api/orders/my-ready – Waiter sees only READY orders for tables assigned to them
 router.get('/my-ready', async (req: Request, res: Response): Promise<void> => {
@@ -528,6 +598,7 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
         order_type,
         status: 'PENDING',
         total_amount: totalAmount,
+        placed_by_staff: true,
         items: {
           create: orderItems,
         },

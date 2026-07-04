@@ -11,10 +11,12 @@ interface Restaurant {
   name: string
   logo_url?: string | null
   banner_url?: string | null
-  branch?: { name: string } | null
+  branch?: { name: string; address?: string | null; phone?: string | null } | null
   branches?: Array<{
     id: string
     name: string
+    address?: string | null
+    phone?: string | null
   }> | null
 }
 
@@ -192,21 +194,29 @@ export default function CustomerMenuPage() {
 
   // Restaurant branches popup states
   const [activeRestaurantId, setActiveRestaurantId] = React.useState<string>(restaurantId)
+  const [activeBranchId, setActiveBranchId] = React.useState<string>("")
   const [popupVisible, setPopupVisible] = React.useState(false)
   const [restaurantsList, setRestaurantsList] = React.useState<Restaurant[]>([])
   const [selectedPopupRestaurantId, setSelectedPopupRestaurantId] = React.useState<string>(restaurantId)
 
-  const loadRestaurantData = React.useCallback(async (targetId: string, showLoader = true) => {
+  const loadRestaurantData = React.useCallback(async (targetId: string, showLoader = true, targetBranchId?: string) => {
     if (showLoader) {
       setLoading(true)
     } else {
       setSwitching(true)
     }
     try {
+      let queryParams = ""
+      if (targetBranchId) {
+        queryParams = `?branchId=${targetBranchId}`
+      } else if (tableId) {
+        queryParams = `?tableId=${tableId}`
+      }
+
       const [restRes, catRes, menuRes] = await Promise.all([
         fetch(`/api/restaurant/public/details/${targetId}`),
-        fetch(`/api/restaurant/public/categories/${targetId}`),
-        fetch(`/api/restaurant/public/menu/${targetId}`)
+        fetch(`/api/restaurant/public/categories/${targetId}${queryParams}`),
+        fetch(`/api/restaurant/public/menu/${targetId}${queryParams}`)
       ])
       
       const restData = restRes.ok ? await restRes.json() : null
@@ -228,6 +238,12 @@ export default function CustomerMenuPage() {
       setActiveRestaurantId(targetId)
       setSelectedPopupRestaurantId(targetId)
 
+      if (targetBranchId) {
+        setActiveBranchId(targetBranchId)
+      } else if (restData && restData.branches && restData.branches.length > 0) {
+        setActiveBranchId(restData.branches[0].id)
+      }
+
       // Save user preferred branch
       setPreferredRestaurantId(targetId)
     } catch (e) {
@@ -239,7 +255,7 @@ export default function CustomerMenuPage() {
         setSwitching(false)
       }
     }
-  }, [])
+  }, [tableId])
 
   // Fetch initial data
   React.useEffect(() => {
@@ -249,15 +265,18 @@ export default function CustomerMenuPage() {
     }
 
     const init = async () => {
-      await loadRestaurantData(restaurantId, true)
-
-      // If tableId is present, fetch the real table number
+      let initialBranchId = ""
       if (tableId) {
         const tableRes = await fetch(`/api/restaurant/public/table/${tableId}`)
         if (tableRes.ok) {
-          setTableDetails(await tableRes.json())
+          const tDetails = await tableRes.json()
+          setTableDetails(tDetails)
+          initialBranchId = tDetails.branch_id
+          setActiveBranchId(tDetails.branch_id)
         }
       }
+
+      await loadRestaurantData(restaurantId, true, initialBranchId)
 
       // Load the authenticated user profile from the host app bridge
       const profile = await getUserProfile()
@@ -297,9 +316,16 @@ export default function CustomerMenuPage() {
   React.useEffect(() => {
     const interval = setInterval(async () => {
       try {
+        let queryParams = ""
+        if (activeBranchId) {
+          queryParams = `?branchId=${activeBranchId}`
+        } else if (tableId) {
+          queryParams = `?tableId=${tableId}`
+        }
+
         const [catRes, menuRes] = await Promise.all([
-          fetch(`/api/restaurant/public/categories/${activeRestaurantId}`),
-          fetch(`/api/restaurant/public/menu/${activeRestaurantId}`)
+          fetch(`/api/restaurant/public/categories/${activeRestaurantId}${queryParams}`),
+          fetch(`/api/restaurant/public/menu/${activeRestaurantId}${queryParams}`)
         ])
         if (catRes.ok) {
           const cats: Category[] = await catRes.json()
@@ -320,7 +346,7 @@ export default function CustomerMenuPage() {
     }, 5000) // Poll every 5 seconds
 
     return () => clearInterval(interval)
-  }, [activeRestaurantId, activeParentId])
+  }, [activeRestaurantId, activeParentId, activeBranchId, tableId])
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark"
@@ -614,6 +640,7 @@ export default function CustomerMenuPage() {
             theme={theme}
             total={cartTotal}
             restaurantId={activeRestaurantId}
+            branchId={activeBranchId}
             tableId={tableId}
             cartPayload={cartPayload}
             orderNotes={orderNotes}
@@ -1378,20 +1405,24 @@ export default function CustomerMenuPage() {
 
               {/* Branch Selection List */}
               <div className="flex flex-col gap-2 mb-3 max-h-52 overflow-y-auto pr-1">
-                {restaurantsList.map((rest, idx) => {
-                  const isSelected = rest.id === activeRestaurantId
-                  const isCurrent = rest.id === activeRestaurantId
+                {restaurantsList.flatMap(rest => 
+                  (rest.branches || []).map(branch => ({
+                    ...rest,
+                    branch: branch
+                  }))
+                ).map((item, idx) => {
+                  const isSelected = item.branch.id === activeBranchId
+                  const isCurrent = item.branch.id === activeBranchId
                   return (
                     <button
-                      key={rest.id}
+                      key={item.branch.id}
                       onClick={async () => {
-                        if (rest.id !== activeRestaurantId) {
+                        if (item.branch.id !== activeBranchId) {
                           setPopupVisible(false)
                           setCart([])
                           setOrderNotes("")
                           setActiveTab("home")
-                          // Pass false — no full-screen reload, use subtle overlay instead
-                          await loadRestaurantData(rest.id, false)
+                          await loadRestaurantData(item.id, false, item.branch.id)
                         } else {
                           setPopupVisible(false)
                         }
@@ -1403,9 +1434,9 @@ export default function CustomerMenuPage() {
                     >
                       {/* Thumbnail */}
                       <div className="w-16 h-14 rounded-xl overflow-hidden shrink-0 bg-gray-100 border border-gray-100">
-                        {rest.logo_url || rest.banner_url ? (
+                        {item.logo_url || item.banner_url ? (
                           <img
-                            src={(rest.logo_url || rest.banner_url)!}
+                            src={(item.logo_url || item.banner_url)!}
                             className="w-full h-full object-cover"
                             alt=""
                           />
@@ -1423,16 +1454,18 @@ export default function CustomerMenuPage() {
                             </span>
                           ) : (
                             <span className="text-[9px] font-extrabold text-green-600 flex items-center gap-0.5">
-                              <Navigation className="w-2.5 h-2.5" /> Nearby Restaurants
+                              <Navigation className="w-2.5 h-2.5" /> Nearby Branch
                             </span>
                           )}
-                          <span className="text-[9px] text-gray-400 font-bold">|</span>
-                          <span className="text-[9px] text-gray-500 font-bold">{isCurrent ? "196m" : "787m"}</span>
                         </div>
                         <p className="font-extrabold text-xs text-gray-900 leading-snug line-clamp-2">
-                          {rest.name}
-                          {rest.branches?.[0]?.name ? ` in ${rest.branches[0].name}` : ""}
+                          {item.name} - {item.branch.name}
                         </p>
+                        {item.branch.address && (
+                          <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                            📍 {item.branch.address}
+                          </p>
+                        )}
                       </div>
 
                       {/* Radio Selection Indicator */}
