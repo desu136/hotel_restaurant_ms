@@ -20,7 +20,14 @@ router.get('/public/details/:restaurantId', async (req: Request, res: Response):
         parent_id: true,
         branches: {
           where: { deleted_at: null },
-          select: { id: true, name: true, address: true, phone: true }
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            phone: true,
+            logo_url: true,
+            banner_url: true
+          }
         },
       },
     });
@@ -28,8 +35,30 @@ router.get('/public/details/:restaurantId', async (req: Request, res: Response):
       res.status(404).json({ error: 'Restaurant not found' });
       return;
     }
-    res.json(restaurant);
+
+    const branchId = await resolveBranchId(restaurantId, req);
+    let branchInfo = null;
+    if (branchId) {
+      branchInfo = await prisma.branch.findUnique({
+        where: { id: branchId },
+        select: {
+          id: true,
+          name: true,
+          logo_url: true,
+          banner_url: true
+        }
+      });
+    }
+
+    res.json({
+      ...restaurant,
+      logo_url: (branchInfo && branchInfo.logo_url) || restaurant.logo_url,
+      banner_url: (branchInfo && branchInfo.banner_url) || restaurant.banner_url,
+      name: (branchInfo && branchInfo.name) || restaurant.name,
+      branchId: branchId
+    });
   } catch (e) {
+    console.error('Error fetching public details:', e);
     res.status(500).json({ error: 'Failed to fetch restaurant details' });
   }
 });
@@ -142,7 +171,7 @@ router.get('/public/list', async (req: Request, res: Response): Promise<void> =>
         parent_id: true,
         branches: {
           where: { deleted_at: null },
-          select: { id: true, name: true, address: true, phone: true }
+          select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }
         },
       },
       orderBy: { created_at: 'asc' },
@@ -184,7 +213,7 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           parent_id: true,
           branches: {
             where: { deleted_at: null },
-            select: { id: true, name: true, address: true, phone: true }
+            select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }
           },
         },
         orderBy: { created_at: 'asc' },
@@ -216,7 +245,7 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           parent_id: true,
           branches: {
             where: { deleted_at: null },
-            select: { id: true, name: true, address: true, phone: true }
+            select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }
           },
         },
         orderBy: { created_at: 'asc' },
@@ -858,11 +887,13 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id, branch_id, display_name, description, price, category_id, availability, customizations, image_url, image_urls, is_master } = req.body;
+    const { restaurant_id, branch_id, display_name, description, price, category_id, availability, customizations, image_url, image_urls, is_master, prep_time } = req.body;
     if (!display_name) {
       res.status(400).json({ error: 'display_name is required' });
       return;
     }
+
+    const prepTimeParsed = prep_time !== undefined ? parseInt(prep_time.toString(), 10) || 0 : 0;
 
     if (is_master) {
       if (!restaurant_id) {
@@ -881,6 +912,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
           customizations: customizations ?? null,
           image_url: image_url ?? null,
           image_urls: image_urls ?? null,
+          prep_time: prepTimeParsed,
         },
         include: { category: { select: { id: true, name: true } } },
       });
@@ -910,6 +942,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
             customizations: customizations ?? null,
             image_url: image_url ?? null,
             image_urls: image_urls ?? null,
+            prep_time: prepTimeParsed,
           }
         });
       }
@@ -955,6 +988,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
         customizations: customizations ?? null,
         image_url: image_url ?? null,
         image_urls: image_urls ?? null,
+        prep_time: prepTimeParsed,
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -968,11 +1002,13 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
 // PATCH /api/restaurant/menu/:id
 router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
-    const { display_name, description, price, category_id, availability, customizations, image_url, image_urls } = req.body;
+    const { display_name, description, price, category_id, availability, customizations, image_url, image_urls, prep_time } = req.body;
     const menuItemId = req.params.id as string;
 
     const isOwner = isOwnerUser(req);
     const userBranchId = req.user!.branchId;
+
+    const prepTimeParsed = prep_time !== undefined ? parseInt(prep_time.toString(), 10) || 0 : undefined;
 
     const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
     if (item) {
@@ -991,6 +1027,7 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
           ...(customizations !== undefined && { customizations }),
           ...(image_url !== undefined && { image_url }),
           ...(image_urls !== undefined && { image_urls }),
+          ...(prepTimeParsed !== undefined && { prep_time: prepTimeParsed }),
         },
         include: { category: { select: { id: true, name: true } } },
       });
@@ -1015,6 +1052,7 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
           ...(customizations !== undefined && { customizations }),
           ...(image_url !== undefined && { image_url }),
           ...(image_urls !== undefined && { image_urls }),
+          ...(prepTimeParsed !== undefined && { prep_time: prepTimeParsed }),
         },
         include: { category: { select: { id: true, name: true } } },
       });
@@ -1030,6 +1068,7 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
           ...(image_urls !== undefined && { image_urls }),
           ...(price !== undefined && { price }),
           ...(availability !== undefined && { availability }),
+          ...(prepTimeParsed !== undefined && { prep_time: prepTimeParsed }),
         }
       });
       res.json(updatedMaster);

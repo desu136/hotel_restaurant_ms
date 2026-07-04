@@ -13,6 +13,54 @@ async function generateOrderNumber(branchId: string): Promise<string> {
   return String(count + 1).padStart(2, '0');
 }
 
+async function calculateEstimatedPrepTime(
+  branchId: string,
+  items: { menu_item_id: string; quantity: number }[]
+): Promise<{ estimatedPrepTimeMinutes: number; estimatedReadyAt: Date }> {
+  let maxPrepTimeForOrder = 0;
+
+  for (const item of items) {
+    // 1. Get the menu item to find its prep_time
+    const menuItem = await prisma.menuItem.findUnique({
+      where: { id: item.menu_item_id },
+      select: { prep_time: true }
+    });
+    const prepTime = menuItem?.prep_time ?? 0; // in minutes
+    
+    // 2. Base prep time for this item in the current order
+    const currentItemPrepTime = prepTime * item.quantity;
+
+    // 3. Find preceding orders (same branch, status in PENDING, CONFIRMED, PREPARING)
+    // that contain the same menu_item_id
+    const precedingOrderItems = await prisma.orderItem.findMany({
+      where: {
+        menu_item_id: item.menu_item_id,
+        order: {
+          branch_id: branchId,
+          status: { in: ['PENDING', 'CONFIRMED', 'PREPARING'] }
+        }
+      },
+      select: {
+        quantity: true
+      }
+    });
+
+    const precedingQuantity = precedingOrderItems.reduce((sum, poi) => sum + poi.quantity, 0);
+    const precedingItemPrepTime = prepTime * precedingQuantity;
+
+    const totalItemPrepTime = precedingItemPrepTime + currentItemPrepTime;
+    if (totalItemPrepTime > maxPrepTimeForOrder) {
+      maxPrepTimeForOrder = totalItemPrepTime;
+    }
+  }
+
+  const estimatedReadyAt = new Date(Date.now() + maxPrepTimeForOrder * 60 * 1000);
+  return {
+    estimatedPrepTimeMinutes: maxPrepTimeForOrder,
+    estimatedReadyAt
+  };
+}
+
 // POST /api/orders/public - Customer self-ordering from a table QR code
 router.post('/public', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -183,15 +231,19 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
       });
     }
 
+    const { estimatedPrepTimeMinutes, estimatedReadyAt } = await calculateEstimatedPrepTime(resolvedBranchId, orderItems);
+
     const orderData: any = {
       tenant_id: tenantId,
-      branch_id: branchId,
-      order_number: await generateOrderNumber(branchId),
+      branch_id: resolvedBranchId,
+      order_number: await generateOrderNumber(resolvedBranchId),
       customer_id: customerId,
       table_id: table_id || null,
       order_type: order_type as any,
       status: 'PENDING',
       total_amount: totalAmount,
+      estimated_prep_time: estimatedPrepTimeMinutes,
+      estimated_ready_at: estimatedReadyAt,
       items: {
         create: orderItems,
       },
@@ -517,6 +569,8 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
       orderItems.push({ menu_item_id: item.menu_item_id, quantity: item.quantity, unit_price });
     }
 
+    const { estimatedPrepTimeMinutes, estimatedReadyAt } = await calculateEstimatedPrepTime(resolvedBranchId, orderItems);
+
     const order = await prisma.order.create({
       data: {
         tenant_id: tenantId!,
@@ -528,6 +582,8 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
         order_type,
         status: 'PENDING',
         total_amount: totalAmount,
+        estimated_prep_time: estimatedPrepTimeMinutes,
+        estimated_ready_at: estimatedReadyAt,
         items: {
           create: orderItems,
         },

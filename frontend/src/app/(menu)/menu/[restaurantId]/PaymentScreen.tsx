@@ -46,6 +46,8 @@ export default function PaymentScreen({ theme, total, onBack, onSuccess, restaur
   const [step, setStep] = React.useState<"select" | "confirm" | "success">("select")
   const [orderId, setOrderId] = React.useState("")
   const [orderStatus, setOrderStatus] = React.useState("PENDING")
+  const [estimatedReadyAt, setEstimatedReadyAt] = React.useState<string | null>(null)
+  const [estimatedPrepTime, setEstimatedPrepTime] = React.useState<number>(0)
   const [transactionId] = React.useState(() => `TXN${Date.now().toString(36).toUpperCase()}`)
 
   // Poll order status every 8s after success
@@ -92,6 +94,8 @@ export default function PaymentScreen({ theme, total, onBack, onSuccess, restaur
         const localIds = JSON.parse(localStorage.getItem(`placed_orders_${restaurantId}`) || "[]")
         localStorage.setItem(`placed_orders_${restaurantId}`, JSON.stringify([...localIds, order.id]))
         setOrderId(order.id)
+        if (order.estimated_ready_at) setEstimatedReadyAt(order.estimated_ready_at)
+        if (order.estimated_prep_time) setEstimatedPrepTime(order.estimated_prep_time)
         await new Promise(r => setTimeout(r, 1800))
         setStep("success")
       }
@@ -142,6 +146,30 @@ export default function PaymentScreen({ theme, total, onBack, onSuccess, restaur
               #{orderId.slice(0, 8).toUpperCase()}
             </p>
           </div>
+
+          {/* Estimated Ready Time Card */}
+          {estimatedPrepTime > 0 && (
+            <div className={`${themeCard} border rounded-2xl p-4 flex items-center gap-3`}>
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[10px] font-bold ${themeTextMuted} uppercase tracking-wider`}>Estimated Ready Time</p>
+                <p className="text-amber-400 font-black text-lg leading-tight">
+                  ~{estimatedPrepTime} min
+                </p>
+                {estimatedReadyAt && (
+                  <p className={`text-[10px] ${themeTextMuted} mt-0.5`}>
+                    Ready by {new Date(estimatedReadyAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className={`text-[10px] ${themeTextMuted}`}>Accounts for</p>
+                <p className={`text-[10px] ${themeTextMuted}`}>kitchen queue</p>
+              </div>
+            </div>
+          )}
 
           {/* Live Status Tracker */}
           <div className={`${themeCard} border rounded-2xl p-4`}>

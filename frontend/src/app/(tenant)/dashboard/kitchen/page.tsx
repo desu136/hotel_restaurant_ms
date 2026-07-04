@@ -249,8 +249,8 @@ export default function KitchenDashboard() {
           {/* Header */}
           <div className="flex justify-between items-start px-4 py-3 border-b border-[var(--surface-border)]">
             <div>
-              <h3 className="font-black text-sm tracking-tight text-white">#{orderNum}</h3>
-              <p className="text-xs text-[var(--muted)] mt-0.5">{tableLabel}</p>
+              <h3 className="font-black text-sm tracking-tight">#{orderNum}</h3>
+              <p className="text-xs mt-0.5">{tableLabel}</p>
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className={`flex items-center gap-1 text-xs ${getTimerStyle(elapsed)}`}>
@@ -258,13 +258,13 @@ export default function KitchenDashboard() {
                 {elapsed}m ago
               </span>
               {isLate && (
-                <span className="text-[9px] text-red-500 font-black uppercase tracking-wider flex items-center gap-0.5">
+                <span className="text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5">
                   <AlertTriangle className="w-2.5 h-2.5" /> LATE
                 </span>
               )}
               <button
                 onClick={() => printOrderTicket(order)}
-                className="text-[10px] text-[var(--muted)] hover:text-white flex items-center gap-0.5 mt-0.5 transition-colors"
+                className="text-[10px] hover:text-white flex items-center gap-0.5 mt-0.5 transition-colors"
                 title="Print ticket"
               >
                 <Printer className="w-3 h-3" /> Print
@@ -277,13 +277,13 @@ export default function KitchenDashboard() {
             {order.items.map((it) => (
               <div key={it.id} className="text-xs">
                 <div className="flex items-start gap-2">
-                  <span className="text-amber-500 font-black shrink-0">{it.quantity}×</span>
-                  <span className="text-white font-semibold leading-snug">{it.menu_item.display_name}</span>
+                  <span className="font-black shrink-0">{it.quantity}×</span>
+                  <span className="font-semibold leading-snug">{it.menu_item.display_name}</span>
                 </div>
                 {it.customizations && Object.entries(it.customizations).map(([k, v]) => {
                   const display = Array.isArray(v) ? v.join(", ") : v
                   return display ? (
-                    <p key={k} className="text-[10px] text-blue-400 italic ml-5 mt-0.5">
+                    <p key={k} className="text-[10px]  italic ml-5 mt-0.5">
                       → {k}: {display}
                     </p>
                   ) : null
@@ -294,16 +294,16 @@ export default function KitchenDashboard() {
 
           {/* Order notes */}
           {order.notes && (
-            <div className="mx-4 mb-3 bg-amber-500/5 border border-amber-500/10 rounded-lg p-2.5 flex items-start gap-2">
-              <MessageSquare className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-[10px] text-amber-400/90 font-medium leading-relaxed">{order.notes}</p>
+            <div className="mx-4 mb-3 border border-amber-500/10 rounded-lg p-2.5 flex items-start gap-2">
+              <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <p className="text-[10px] font-medium leading-relaxed">{order.notes}</p>
             </div>
           )}
 
           {/* Action */}
           <div className="px-4 pb-4 border-t border-[var(--surface-border)] pt-3">
             {isUpdating ? (
-              <div className="w-full h-9 flex items-center justify-center text-xs text-[var(--muted)]">
+              <div className="w-full h-9 flex items-center justify-center text-xs">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" /> Updating…
               </div>
             ) : action}
@@ -318,9 +318,6 @@ export default function KitchenDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between shrink-0 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          {/* <div className="w-10 h-10 rounded-xl bg-orange-600/10 flex items-center justify-center text-orange-500">
-            <Flame className="w-6 h-6" />
-          </div> */}
           <div>
             <h1 className="text-xl font-black tracking-tight text-[var(--foreground)] flex items-center gap-2">
               Kitchen Display System
@@ -343,7 +340,7 @@ export default function KitchenDashboard() {
           <span className="text-xs text-[var(--foreground)] font-semibold text-[20px] border border-[var(--surface-border)] px-3 py-1.5 rounded-lg flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" /> Active: {orders.length}
           </span>
-          <span className="text-xs text-[20px] text-red-400 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+          <span className="text-xs text-[20px] font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />
             Late (&gt;15m): {orders.filter(o => getElapsedMins(o.created_at) >= 15).length}
           </span>
@@ -360,8 +357,8 @@ export default function KitchenDashboard() {
       {loading && orders.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[var(--color-primary-500)]" />
-            <p className="text-sm text-[var(--muted)]">Loading kitchen orders…</p>
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto" />
+            <p className="text-sm ">Loading kitchen orders…</p>
           </div>
         </div>
       ) : (
@@ -369,10 +366,10 @@ export default function KitchenDashboard() {
         <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-5 min-h-0">
 
           {/* ── Column 1: New Orders ── */}
-          <div className="flex flex-col bg-[var(--surface)]/20 border border-[var(--surface-border)] rounded-2xl overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/30 flex justify-between items-center shrink-0">
+          <div className="flex flex-col border border-[var(--surface-border)] rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-[var(--surface-border)] flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                <span className="w-2.5 h-2.5 rounded-full" />
                 <h2 className="font-bold text-sm uppercase tracking-wider text-[var(--foreground)] ">New Orders</h2>
               </div>
               <span className="text-[15px] font-bold font-black px-2 py-0.5 rounded-md  text-[var(--foreground)] ">
@@ -381,7 +378,7 @@ export default function KitchenDashboard() {
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {pendingOrders.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-[var(--muted)] py-12 text-center">
+                <div className="h-full flex flex-col items-center justify-center py-12 text-center">
                   <ChefHat className="w-8 h-8 opacity-20 mb-2" />
                   <p className="text-xs">No pending orders</p>
                 </div>
@@ -392,7 +389,7 @@ export default function KitchenDashboard() {
                   action={
                     <Button
                       onClick={() => handleUpdateStatus(order.id, "PREPARING")}
-                      className="w-full h-9 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold gap-2"
+                      className="w-full h-9 hover:bg-blue-500 text-xs font-bold gap-2"
                     >
                       <Play className="w-3.5 h-3.5" /> Start Preparing
                     </Button>
@@ -403,10 +400,10 @@ export default function KitchenDashboard() {
           </div>
 
           {/* ── Column 2: Preparing ── */}
-          <div className="flex flex-col bg-[var(--surface)]/20 border border-[var(--surface-border)] rounded-2xl overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/30 flex justify-between items-center shrink-0">
+          <div className="flex flex-col border border-[var(--surface-border)] rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-[var(--surface-border)] flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full animate-pulse" />
                 <h2 className="font-bold text-sm uppercase tracking-wider text-[var(--foreground)]">Preparing</h2>
               </div>
               <span className="text-[15px] font-bold font-black px-2 py-0.5 rounded-md  text-[var(--foreground)] ">
@@ -415,7 +412,7 @@ export default function KitchenDashboard() {
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {preparingOrders.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-[var(--muted)] py-12 text-center">
+                <div className="h-full flex flex-col items-center justify-center py-12 text-center">
                   <ChefHat className="w-8 h-8 opacity-20 mb-2" />
                   <p className="text-xs">No active cooking ticket</p>
                 </div>
@@ -426,7 +423,7 @@ export default function KitchenDashboard() {
                   action={
                     <Button
                       onClick={() => handleUpdateStatus(order.id, "READY")}
-                      className="w-full h-9 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold gap-2"
+                      className="w-full h-9 hover:bg-emerald-500 text-xs font-bold gap-2"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Mark as Ready
                     </Button>
@@ -437,10 +434,10 @@ export default function KitchenDashboard() {
           </div>
 
           {/* ── Column 3: Ready / Pickup ── */}
-          <div className="flex flex-col bg-[var(--surface)]/20 border border-[var(--surface-border)] rounded-2xl overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-[var(--surface-border)] bg-[var(--surface-hover)]/30 flex justify-between items-center shrink-0">
+          <div className="flex flex-col border border-[var(--surface-border)] rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-[var(--surface-border)]  flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <span className="w-2.5 h-2.5 rounded-full animate-ping" />
                 <h2 className="font-bold text-sm uppercase tracking-wider text-[var(--foreground)]">Ready / Pickup</h2>
               </div>
               <span className="text-[15px] font-bold font-black px-2 py-0.5 rounded-md  text-[var(--foreground)] ">
@@ -449,7 +446,7 @@ export default function KitchenDashboard() {
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {readyOrders.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-[var(--muted)] py-12 text-center">
+                <div className="h-full flex flex-col items-center justify-center py-12 text-center">
                   <Award className="w-8 h-8 opacity-20 mb-2" />
                   <p className="text-xs">No food waiting pickup</p>
                 </div>
@@ -460,7 +457,7 @@ export default function KitchenDashboard() {
                   action={
                     <Button
                       onClick={() => handleUpdateStatus(order.id, "COMPLETED")}
-                      className="w-full h-9 bg-[var(--surface-hover)] hover:bg-emerald-600 border border-[var(--surface-border)] hover:border-emerald-500 text-[var(--muted)] hover:text-white text-xs font-bold gap-2 transition-all"
+                      className="w-full h-9  hover:bg-emerald-600 border border-[var(--surface-border)] hover:border-emerald-500 hover:text-white text-xs font-bold gap-2 transition-all"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Mark Completed
                     </Button>
