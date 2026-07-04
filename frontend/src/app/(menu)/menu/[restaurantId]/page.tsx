@@ -1,7 +1,7 @@
 "use client"
 import * as React from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
-import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon, Check, Store, Navigation, ChevronRight } from "lucide-react"
+import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon, Check, Store, Navigation, ChevronRight, Timer } from "lucide-react"
 import PaymentScreen from "./PaymentScreen"
 import { motion, AnimatePresence } from "framer-motion"
 import { setPreferredRestaurantId, getUserProfile, MiniAppUser } from "@/lib/miniapp-bridge"
@@ -11,10 +11,14 @@ interface Restaurant {
   name: string
   logo_url?: string | null
   banner_url?: string | null
+  branchId?: string | null
+  branchName?: string | null
   branch?: { name: string; address?: string | null; phone?: string | null } | null
   branches?: Array<{
     id: string
     name: string
+    logo_url?: string | null
+    banner_url?: string | null
     address?: string | null
     phone?: string | null
   }> | null
@@ -49,6 +53,7 @@ interface MenuItem {
   image_url?: string | null
   image_urls?: string[] | null
   customizations?: Customization[] | null
+  prep_time?: number | null
 }
 
 interface CartItem {
@@ -199,29 +204,35 @@ export default function CustomerMenuPage() {
   const [restaurantsList, setRestaurantsList] = React.useState<Restaurant[]>([])
   const [selectedPopupRestaurantId, setSelectedPopupRestaurantId] = React.useState<string>(restaurantId)
 
-  const loadRestaurantData = React.useCallback(async (targetId: string, showLoader = true, targetBranchId?: string) => {
+  // Ref for the right scrollable menu item list (used for subcategory scroll)
+  const menuListRef = React.useRef<HTMLDivElement>(null)
+
+  const loadRestaurantData = React.useCallback(async (targetId: string, showLoader = true, forTableId = "", branchId = "") => {
     if (showLoader) {
       setLoading(true)
     } else {
       setSwitching(true)
     }
     try {
-      let queryParams = ""
-      if (targetBranchId) {
-        queryParams = `?branchId=${targetBranchId}`
-      } else if (tableId) {
-        queryParams = `?tableId=${tableId}`
+      // Build query string so backend resolves branch from scanned table or explicit branch selection
+      let branchQuery = ""
+      if (forTableId) {
+        branchQuery = `?tableId=${forTableId}`
+      } else if (branchId) {
+        branchQuery = `?branchId=${branchId}`
       }
-
       const [restRes, catRes, menuRes] = await Promise.all([
-        fetch(`/api/restaurant/public/details/${targetId}`),
-        fetch(`/api/restaurant/public/categories/${targetId}${queryParams}`),
-        fetch(`/api/restaurant/public/menu/${targetId}${queryParams}`)
+        fetch(`/api/restaurant/public/details/${targetId}${branchQuery}`),
+        fetch(`/api/restaurant/public/categories/${targetId}${branchQuery}`),
+        fetch(`/api/restaurant/public/menu/${targetId}${branchQuery}`)
       ])
-      
+
       const restData = restRes.ok ? await restRes.json() : null
       setRestaurant(restData)
-      
+      if (restData?.branchId) {
+        setActiveBranchId(restData.branchId)
+      }
+
       const cats: Category[] = catRes.ok ? await catRes.json() : []
       setCategories(cats)
       setMenuItems(menuRes.ok ? await menuRes.json() : [])
@@ -233,14 +244,16 @@ export default function CustomerMenuPage() {
       } else {
         setActiveParentId("")
       }
-      
+
       // Update active local state
       setActiveRestaurantId(targetId)
       setSelectedPopupRestaurantId(targetId)
 
-      if (targetBranchId) {
-        setActiveBranchId(targetBranchId)
-      } else if (restData && restData.branches && restData.branches.length > 0) {
+      if (branchId) {
+        setActiveBranchId(branchId)
+      } else if (restData?.branchId) {
+        setActiveBranchId(restData.branchId)
+      } else if (restData?.branches && restData.branches.length > 0) {
         setActiveBranchId(restData.branches[0].id)
       }
 
@@ -255,7 +268,7 @@ export default function CustomerMenuPage() {
         setSwitching(false)
       }
     }
-  }, [tableId])
+  }, [])
 
   // Fetch initial data
   React.useEffect(() => {
@@ -265,18 +278,20 @@ export default function CustomerMenuPage() {
     }
 
     const init = async () => {
-      let initialBranchId = ""
+      // Pass tableId upfront so the backend resolves the correct branch on first load
+      await loadRestaurantData(restaurantId, true, tableId)
+
+      // Also fetch table details for display (table number etc.)
       if (tableId) {
         const tableRes = await fetch(`/api/restaurant/public/table/${tableId}`)
         if (tableRes.ok) {
           const tDetails = await tableRes.json()
           setTableDetails(tDetails)
-          initialBranchId = tDetails.branch_id
-          setActiveBranchId(tDetails.branch_id)
+          if (tDetails.branch_id) {
+            setActiveBranchId(tDetails.branch_id)
+          }
         }
       }
-
-      await loadRestaurantData(restaurantId, true, initialBranchId)
 
       // Load the authenticated user profile from the host app bridge
       const profile = await getUserProfile()
@@ -312,8 +327,8 @@ export default function CustomerMenuPage() {
   }, [tableId])
 
   // Background polling for changes (reflect modifications quickly)
-  // Background polling for changes (reflect modifications quickly)
   React.useEffect(() => {
+    const branchQuery = tableId ? `?tableId=${tableId}` : ""
     const interval = setInterval(async () => {
       try {
         let queryParams = ""
@@ -324,8 +339,8 @@ export default function CustomerMenuPage() {
         }
 
         const [catRes, menuRes] = await Promise.all([
-          fetch(`/api/restaurant/public/categories/${activeRestaurantId}${queryParams}`),
-          fetch(`/api/restaurant/public/menu/${activeRestaurantId}${queryParams}`)
+          fetch(`/api/restaurant/public/categories/${activeRestaurantId}${branchQuery}`),
+          fetch(`/api/restaurant/public/menu/${activeRestaurantId}${branchQuery}`)
         ])
         if (catRes.ok) {
           const cats: Category[] = await catRes.json()
@@ -410,14 +425,27 @@ export default function CustomerMenuPage() {
     }
   }, [activeParentId])
 
-  // Menu items filtered by category hierarchy
-  const filteredMenuItems = menuItems.filter(item => {
-    if (activeSubCategory === "all") {
-      // Show items directly in the parent category OR any of its subcategories
-      return item.category_id === activeParentId || filteredSubCategories.some(sc => sc.id === item.category_id)
+  // Menu items always show all items under active parent (subcategory selection only scrolls, not filters)
+  const filteredMenuItems = menuItems.filter(item =>
+    item.category_id === activeParentId || filteredSubCategories.some(sc => sc.id === item.category_id)
+  )
+
+  // Scroll the menu list container to a subcategory section
+  const scrollToSubCategory = (subCatId: string) => {
+    setActiveSubCategory(subCatId)
+    if (subCatId === "all") {
+      menuListRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+    } else {
+      const element = document.getElementById(`subcat-${subCatId}`)
+      const container = menuListRef.current
+      if (element && container) {
+        const containerRect = container.getBoundingClientRect()
+        const elementRect = element.getBoundingClientRect()
+        const relativeTop = elementRect.top - containerRect.top + container.scrollTop
+        container.scrollTo({ top: relativeTop - 10, behavior: "smooth" })
+      }
     }
-    return item.category_id === activeSubCategory
-  })
+  }
 
   // Get dynamic item price including selected customization option extra charges
   const getCustomizedItemPrice = (item: MenuItem, selectedCusts: Record<string, string | string[]>) => {
@@ -527,9 +555,9 @@ export default function CustomerMenuPage() {
         c => c.menuItem.id === item.id && Object.keys(c.selectedCustomizations).length === 0 && !c.notes
       )
       if (existingIdx >= 0) {
-        const updated = [...prev]
-        updated[existingIdx].quantity += 1
-        return updated
+        return prev.map((c, i) =>
+          i === existingIdx ? { ...c, quantity: c.quantity + 1 } : c
+        )
       }
       return [
         ...prev,
@@ -554,9 +582,9 @@ export default function CustomerMenuPage() {
           c.notes === itemNotes
       )
       if (existingIdx >= 0) {
-        const updated = [...prev]
-        updated[existingIdx].quantity += itemQty
-        return updated
+        return prev.map((c, i) =>
+          i === existingIdx ? { ...c, quantity: c.quantity + itemQty } : c
+        )
       }
       return [
         ...prev,
@@ -573,12 +601,12 @@ export default function CustomerMenuPage() {
 
   const updateCartQty = (idx: number, delta: number) => {
     setCart(prev => {
-      const updated = [...prev]
-      updated[idx].quantity += delta
-      if (updated[idx].quantity <= 0) {
+      if (prev[idx].quantity + delta <= 0) {
         return prev.filter((_, i) => i !== idx)
       }
-      return updated
+      return prev.map((c, i) =>
+        i === idx ? { ...c, quantity: c.quantity + delta } : c
+      )
     })
   }
 
@@ -724,12 +752,17 @@ export default function CustomerMenuPage() {
                 )}
                 <div>
                   <h1 className={`text-xl sm:text-2xl font-black text-white drop-shadow-sm`}>{restaurant.name}</h1>
+                  {restaurant.branchName && (
+                    <p className="text-gray-200 text-xs font-bold mt-0.5 drop-shadow-sm">
+                      {restaurant.branchName}
+                    </p>
+                  )}
                   {tableDetails ? (
-                    <p className="text-amber-500 text-xs font-black mt-0.5 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
+                    <p className="text-amber-500 text-xs font-black mt-1 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
                       Table {tableDetails.table_number}
                     </p>
                   ) : tableId ? (
-                    <p className="text-amber-500 text-xs font-black mt-0.5 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
+                    <p className="text-amber-500 text-xs font-black mt-1 bg-amber-500/10 px-2 py-0.5 rounded-full inline-block">
                       Table {tableId.slice(0, 4).toUpperCase()}
                     </p>
                   ) : null}
@@ -773,7 +806,7 @@ export default function CustomerMenuPage() {
                 <div className="space-y-1">
                   {parentCategories.length > 0 && (
                     <button
-                      onClick={() => setActiveSubCategory("all")}
+                      onClick={() => scrollToSubCategory("all")}
                       className={`w-full text-left px-3 py-3.5 text-xs font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${activeSubCategory === "all"
                         ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
                         : `${themeTextMuted} border-transparent hover:bg-white/5`
@@ -787,7 +820,7 @@ export default function CustomerMenuPage() {
                     return (
                       <button
                         key={cat.id}
-                        onClick={() => setActiveSubCategory(cat.id)}
+                        onClick={() => scrollToSubCategory(cat.id)}
                         className={`w-full text-left px-3 py-3.5 text-xs font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${isActive
                           ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
                           : `${themeTextMuted} border-transparent hover:bg-white/5`
@@ -801,114 +834,140 @@ export default function CustomerMenuPage() {
               </div>
 
               {/* Right Scrollable Product List */}
-              <div className="flex-1 overflow-y-auto px-3 pt-3 pb-32">
+              <div ref={menuListRef} className="flex-1 overflow-y-auto px-3 pt-3 pb-32">
                 {filteredMenuItems.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <p className="text-3xl mb-2">🍽️</p>
                     <p className="text-xs font-semibold">No items available</p>
                   </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {/* <p className={`text-[10px] ${themeTextMuted} font-bold uppercase tracking-wider px-1`}>
-                    {activeSubCategory === "all" ? "All Items" : categories.find(c => c.id === activeSubCategory)?.name}
-                  </p> */}
-                    <p
-                      className={`sticky top-[-12px] z-10 ${themeBg} text-[10px] ${themeTextMuted} font-bold uppercase tracking-wider px-1 py-2`}
-                    >
-                      {activeSubCategory === "all"
-                        ? "All Items"
-                        : categories.find(c => c.id === activeSubCategory)?.name}
-                    </p>
-                    {filteredMenuItems.map(item => {
-                      const itemPrice = parseFloat(item.price.toString())
-                      const inCartCount = cart
-                        .filter(c => c.menuItem.id === item.id)
-                        .reduce((sum, cur) => sum + cur.quantity, 0)
+                ) : (() => {
+                  // Build grouped sections: parent-direct items first, then each subcategory
+                  const parentDirectItems = filteredMenuItems.filter(item => item.category_id === activeParentId)
+                  const subGroups = filteredSubCategories
+                    .map(sc => ({ sc, items: filteredMenuItems.filter(item => item.category_id === sc.id) }))
+                    .filter(g => g.items.length > 0)
 
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => openItemDetail(item)}
-                          className={`w-full ${themeCard} rounded-xl flex gap-3 p-2.5 border hover:border-amber-500/30 active:scale-[0.99] transition-all cursor-pointer relative group`}
-                        >
-                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl shrink-0 bg-gray-200 dark:bg-gray-900 border border-white/5 flex items-center justify-center relative overflow-hidden">
-                            {(() => {
-                              const allImgs = [item.image_url, ...(Array.isArray(item.image_urls) ? item.image_urls : [])].filter(Boolean) as string[]
-                              return allImgs.length > 0 ? (
-                                <SlideshowImage
-                                  images={allImgs}
-                                  alt={item.display_name}
-                                  className="w-full h-full"
-                                  interval={2500}
-                                />
-                              ) : (
-                                <span className="text-2xl">🍽️</span>
-                              )
-                            })()}
+                  const renderCard = (item: MenuItem) => {
+                    const itemPrice = parseFloat(item.price.toString())
+                    const inCartCount = cart
+                      .filter(c => c.menuItem.id === item.id)
+                      .reduce((sum, cur) => sum + cur.quantity, 0)
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => openItemDetail(item)}
+                        className={`w-full ${themeCard} rounded-xl flex gap-3 p-2.5 border hover:border-amber-500/30 active:scale-[0.99] transition-all cursor-pointer relative group`}
+                      >
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl shrink-0 bg-gray-200 dark:bg-gray-900 border border-white/5 flex items-center justify-center relative overflow-hidden">
+                          {(() => {
+                            const allImgs = [item.image_url, ...(Array.isArray(item.image_urls) ? item.image_urls : [])].filter(Boolean) as string[]
+                            return allImgs.length > 0 ? (
+                              <SlideshowImage
+                                images={allImgs}
+                                alt={item.display_name}
+                                className="w-full h-full"
+                                interval={2500}
+                              />
+                            ) : (
+                              <span className="text-2xl">🍽️</span>
+                            )
+                          })()}
+                        </div>
+
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <h3 className={`font-bold text-sm ${themeTextTitle} leading-tight group-hover:text-amber-500 transition-colors line-clamp-1`}>
+                              {item.display_name}
+                            </h3>
+                            {item.description && (
+                              <p className={`text-[10px] ${themeTextMuted} mt-0.5 line-clamp-2 leading-normal`}>
+                                {item.description}
+                              </p>
+                            )}
+                            {(item.prep_time ?? 0) > 0 && (
+                              <p className="flex items-center gap-0.5 mt-1">
+                                <span className="text-[9px] flex flex-row font-bold text-green-400/80 bg-green-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full leading-none">
+                                  <Timer className="" size={10} strokeWidth={3.5} />  ~{item.prep_time} min
+                                </span>
+                              </p>
+                            )}
                           </div>
 
-                          <div className="flex-1 min-w-0 flex flex-col justify-between">
-                            <div>
-                              <h3 className={`font-bold text-sm ${themeTextTitle} leading-tight group-hover:text-amber-500 transition-colors line-clamp-1`}>
-                                {item.display_name}
-                              </h3>
-                              {item.description && (
-                                <p className={`text-[10px] ${themeTextMuted} mt-0.5 line-clamp-2 leading-normal`}>
-                                  {item.description}
-                                </p>
-                              )}
-                            </div>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span className="text-amber-500 font-extrabold text-sm">${itemPrice.toFixed(2)}</span>
 
-                            <div className="flex items-center justify-between mt-1.5">
-                              <span className="text-amber-500 font-extrabold text-sm">${itemPrice.toFixed(2)}</span>
-
-                              {/* Direct add controls with explicit stopPropagation */}
-                              <div onClick={e => e.stopPropagation()}>
-                                {inCartCount > 0 ? (
-                                  <div className="flex items-center gap-2 bg-amber-500 rounded-lg px-2 py-0.5 text-black shadow-sm">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        e.preventDefault()
-                                        const cartIdx = cart.findIndex(c => c.menuItem.id === item.id && Object.keys(c.selectedCustomizations).length === 0)
-                                        if (cartIdx >= 0) updateCartQty(cartIdx, -1)
-                                      }}
-                                      className="font-black text-sm w-4 h-4 flex items-center justify-center"
-                                    >
-                                      −
-                                    </button>
-                                    <span className="font-black text-xs min-w-[12px] text-center">{inCartCount}</span>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        e.preventDefault()
-                                        addToCartDirectly(item)
-                                      }}
-                                      className="font-black text-sm w-4 h-4 flex items-center justify-center"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                ) : (
+                            {/* Direct add controls with explicit stopPropagation */}
+                            <div onClick={e => e.stopPropagation()}>
+                              {inCartCount > 0 ? (
+                                <div className="flex items-center gap-2 bg-amber-500 rounded-lg px-2 py-0.5 text-black shadow-sm">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      e.preventDefault()
+                                      const cartIdx = cart.findIndex(c => c.menuItem.id === item.id && Object.keys(c.selectedCustomizations).length === 0)
+                                      if (cartIdx >= 0) updateCartQty(cartIdx, -1)
+                                    }}
+                                    className="font-black text-sm w-4 h-4 flex items-center justify-center"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="font-black text-xs min-w-[12px] text-center">{inCartCount}</span>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       e.preventDefault()
                                       addToCartDirectly(item)
                                     }}
-                                    className="bg-amber-500 text-black border border-amber-500/20 hover:bg-amber-400 rounded-lg px-3.5 py-1 text-[10px] font-black transition-all shadow-sm flex items-center justify-center"
+                                    className="font-black text-sm w-4 h-4 flex items-center justify-center"
                                   >
-                                    Add
+                                    +
                                   </button>
-                                )}
-                              </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    addToCartDirectly(item)
+                                  }}
+                                  className="bg-amber-500 text-black border border-amber-500/20 hover:bg-amber-400 rounded-lg px-3.5 py-1 text-[10px] font-black transition-all shadow-sm flex items-center justify-center"
+                                >
+                                  Add
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div className="space-y-1">
+                      {/* Items directly under parent category */}
+                      {parentDirectItems.length > 0 && (
+                        <div id="subcat-all" className="space-y-2.5 pb-3">
+                          {subGroups.length > 0 && (
+                            <p className={`text-[10px] ${themeTextMuted} font-black uppercase tracking-wider px-1 pt-1 pb-0.5`}>
+                              {categories.find(c => c.id === activeParentId)?.name || "General"}
+                            </p>
+                          )}
+                          {parentDirectItems.map(renderCard)}
+                        </div>
+                      )}
+
+                      {/* Subcategory groups */}
+                      {subGroups.map(({ sc, items }) => (
+                        <div key={sc.id} id={`subcat-${sc.id}`} className="space-y-2.5 pb-3">
+                          <p className={`text-[10px] ${themeTextMuted} font-black uppercase tracking-wider px-1 pt-1 pb-0.5`}>
+                            {sc.name}
+                          </p>
+                          {items.map(renderCard)}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>
@@ -962,6 +1021,11 @@ export default function CustomerMenuPage() {
                           {item.notes && (
                             <p className={`text-[10px] ${themeTextMuted} italic mt-1 bg-white/5 px-2 py-0.5 rounded border-l-2 border-amber-500/40`}>
                               "{item.notes}"
+                            </p>
+                          )}
+                          {(item.menuItem.prep_time ?? 0) > 0 && (
+                            <p className="text-[10px] text-amber-500 font-semibold mt-1 flex items-center gap-1">
+                              <span>⏱ ~{item.menuItem.prep_time}m prep</span>
                             </p>
                           )}
                         </div>
@@ -1046,6 +1110,12 @@ export default function CustomerMenuPage() {
                         <span>Subtotal</span>
                         <span>${cartTotal.toFixed(2)}</span>
                       </div>
+                      {Math.max(...cart.map(c => c.menuItem.prep_time ?? 0), 0) > 0 && (
+                        <div className="flex justify-between opacity-75">
+                          <span>Est. Prep Time</span>
+                          <span className="font-semibold text-amber-500">~{Math.max(...cart.map(c => c.menuItem.prep_time ?? 0), 0)} mins</span>
+                        </div>
+                      )}
                       <div className={`flex justify-between font-bold text-sm pt-1 border-t ${themeBorder}`}>
                         <span>Total Amount</span>
                         <span className="text-amber-500 text-base font-extrabold">${cartTotal.toFixed(2)}</span>
@@ -1143,6 +1213,11 @@ export default function CustomerMenuPage() {
                   <p className="text-[10px] text-amber-500 font-bold mt-1 uppercase tracking-wider">
                     {categories.find(c => c.id === selectedItem.category_id)?.name || "Dish"}
                   </p>
+                  {(selectedItem.prep_time ?? 0) > 0 && (
+                    <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                      ⏱ ~{selectedItem.prep_time} min prep
+                    </span>
+                  )}
                 </div>
                 <span className="text-amber-500 font-extrabold text-xl shrink-0">
                   ${parseFloat(selectedItem.price.toString()).toFixed(2)}
@@ -1403,79 +1478,111 @@ export default function CustomerMenuPage() {
                 Which restaurant would you like to eat?
               </h2>
 
-              {/* Branch Selection List */}
+              {/* Branch Selection List — flattened to individual branches */}
               <div className="flex flex-col gap-2 mb-3 max-h-52 overflow-y-auto pr-1">
-                {restaurantsList.flatMap(rest => 
-                  (rest.branches || []).map(branch => ({
-                    ...rest,
-                    branch: branch
-                  }))
-                ).map((item, idx) => {
-                  const isSelected = item.branch.id === activeBranchId
-                  const isCurrent = item.branch.id === activeBranchId
-                  return (
-                    <button
-                      key={item.branch.id}
-                      onClick={async () => {
-                        if (item.branch.id !== activeBranchId) {
-                          setPopupVisible(false)
-                          setCart([])
-                          setOrderNotes("")
-                          setActiveTab("home")
-                          await loadRestaurantData(item.id, false, item.branch.id)
-                        } else {
-                          setPopupVisible(false)
-                        }
-                      }}
-                      className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all text-left relative ${isSelected
-                        ? "border-amber-500 bg-amber-50/50 shadow-md shadow-amber-500/5"
-                        : "border-gray-100 bg-white hover:border-gray-200"
-                        }`}
-                    >
-                      {/* Thumbnail */}
-                      <div className="w-16 h-14 rounded-xl overflow-hidden shrink-0 bg-gray-100 border border-gray-100">
-                        {item.logo_url || item.banner_url ? (
-                          <img
-                            src={(item.logo_url || item.banner_url)!}
-                            className="w-full h-full object-cover"
-                            alt=""
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xl bg-amber-50">🍽️</div>
-                        )}
-                      </div>
+                {(() => {
+                  // Flatten restaurantsList into one entry per branch
+                  const outlets: Array<{
+                    restaurantId: string
+                    branchId: string
+                    name: string
+                    logo_url?: string | null
+                    banner_url?: string | null
+                    address?: string | null
+                  }> = []
+                  for (const rest of restaurantsList) {
+                    if (rest.branches && rest.branches.length > 0) {
+                      for (const branch of rest.branches) {
+                        outlets.push({
+                          restaurantId: rest.id,
+                          branchId: branch.id,
+                          name: rest.branches.length > 1 ? `${rest.name} — ${branch.name}` : rest.name,
+                          logo_url: branch.logo_url || rest.logo_url,
+                          banner_url: branch.banner_url || rest.banner_url,
+                          address: branch.address,
+                        })
+                      }
+                    } else {
+                      outlets.push({
+                        restaurantId: rest.id,
+                        branchId: "",
+                        name: rest.name,
+                        logo_url: rest.logo_url,
+                        banner_url: rest.banner_url,
+                        address: null,
+                      })
+                    }
+                  }
 
-                      {/* Info Details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          {isCurrent ? (
-                            <span className="text-[9px] font-extrabold text-blue-600 flex items-center gap-0.5">
-                              <Store className="w-2.5 h-2.5" /> You are currently browsing
-                            </span>
+                  return outlets.map((outlet) => {
+                    const isSelected = outlet.branchId
+                      ? outlet.branchId === activeBranchId
+                      : outlet.restaurantId === activeRestaurantId
+                    return (
+                      <button
+                        key={`${outlet.restaurantId}-${outlet.branchId}`}
+                        onClick={async () => {
+                          const sameOutlet = outlet.branchId
+                            ? outlet.branchId === activeBranchId
+                            : outlet.restaurantId === activeRestaurantId
+                          if (!sameOutlet) {
+                            setPopupVisible(false)
+                            setCart([])
+                            setOrderNotes("")
+                            setActiveTab("home")
+                            await loadRestaurantData(outlet.restaurantId, false, "", outlet.branchId)
+                          } else {
+                            setPopupVisible(false)
+                          }
+                        }}
+                        className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all text-left relative ${isSelected
+                          ? "border-amber-500 bg-amber-50/50 shadow-md shadow-amber-500/5"
+                          : "border-gray-100 bg-white hover:border-gray-200"
+                          }`}
+                      >
+                        {/* Thumbnail */}
+                        <div className="w-16 h-14 rounded-xl overflow-hidden shrink-0 bg-gray-100 border border-gray-100">
+                          {outlet.logo_url || outlet.banner_url ? (
+                            <img
+                              src={(outlet.logo_url || outlet.banner_url)!}
+                              className="w-full h-full object-cover"
+                              alt=""
+                            />
                           ) : (
-                            <span className="text-[9px] font-extrabold text-green-600 flex items-center gap-0.5">
-                              <Navigation className="w-2.5 h-2.5" /> Nearby Branch
-                            </span>
+                            <div className="w-full h-full flex items-center justify-center text-xl bg-amber-50">🍽️</div>
                           )}
                         </div>
-                        <p className="font-extrabold text-xs text-gray-900 leading-snug line-clamp-2">
-                          {item.name} - {item.branch.name}
-                        </p>
-                        {item.branch.address && (
-                          <p className="text-[10px] text-gray-500 truncate mt-0.5">
-                            📍 {item.branch.address}
-                          </p>
-                        )}
-                      </div>
 
-                      {/* Radio Selection Indicator */}
-                      <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${isSelected ? "border-amber-500 bg-amber-500" : "border-gray-200"
-                        }`}>
-                        {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3.5} />}
-                      </div>
-                    </button>
-                  )
-                })}
+                        {/* Info Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            {isSelected ? (
+                              <span className="text-[9px] font-extrabold text-blue-600 flex items-center gap-0.5">
+                                <Store className="w-2.5 h-2.5" /> Currently browsing
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-extrabold text-green-600 flex items-center gap-0.5">
+                                <Navigation className="w-2.5 h-2.5" /> Switch branch
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-extrabold text-xs text-gray-900 leading-snug line-clamp-2">
+                            {outlet.name}
+                          </p>
+                          {outlet.address && (
+                            <p className="text-[9px] text-gray-400 mt-0.5 line-clamp-1">{outlet.address}</p>
+                          )}
+                        </div>
+
+                        {/* Radio Selection Indicator */}
+                        <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${isSelected ? "border-amber-500 bg-amber-500" : "border-gray-200"
+                          }`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3.5} />}
+                        </div>
+                      </button>
+                    )
+                  })
+                })()}
 
                 {restaurantsList.length === 0 && (
                   <div className="text-center py-6 text-gray-400 text-xs font-semibold">No outlets discovered</div>

@@ -20,7 +20,14 @@ router.get('/public/details/:restaurantId', async (req: Request, res: Response):
         parent_id: true,
         branches: {
           where: { deleted_at: null },
-          select: { id: true, name: true, address: true, phone: true }
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            phone: true,
+            logo_url: true,
+            banner_url: true
+          }
         },
       },
     });
@@ -28,8 +35,31 @@ router.get('/public/details/:restaurantId', async (req: Request, res: Response):
       res.status(404).json({ error: 'Restaurant not found' });
       return;
     }
-    res.json(restaurant);
+
+    const branchId = await resolveBranchId(restaurantId, req);
+    let branchInfo = null;
+    if (branchId) {
+      branchInfo = await prisma.branch.findUnique({
+        where: { id: branchId },
+        select: {
+          id: true,
+          name: true,
+          logo_url: true,
+          banner_url: true
+        }
+      });
+    }
+
+    res.json({
+      ...restaurant,
+      logo_url: restaurant.logo_url, // Keep it to using the restaurant's logo
+      banner_url: (branchInfo && branchInfo.banner_url) || restaurant.banner_url,
+      name: restaurant.name,
+      branchName: branchInfo ? branchInfo.name : null,
+      branchId: branchId
+    });
   } catch (e) {
+    console.error('Error fetching public details:', e);
     res.status(500).json({ error: 'Failed to fetch restaurant details' });
   }
 });
@@ -72,6 +102,13 @@ router.get('/public/categories/:restaurantId', async (req: Request, res: Respons
       res.json([]);
       return;
     }
+
+    // Fetch the branch to get tenant_id for master categories
+    const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { tenant_id: true } });
+    if (!branch) { res.json([]); return; }
+
+    // Get branch-specific categories AND master categories for this tenant (which were broadcast-created)
+    // The master-broadcasted categories have branch_id set to the specific branch when broadcast
     const categories = await prisma.category.findMany({
       where: { branch_id: branchId, deleted_at: null },
       orderBy: { created_at: 'asc' },
@@ -90,9 +127,13 @@ router.get('/public/menu/:restaurantId', async (req: Request, res: Response): Pr
       res.json([]);
       return;
     }
+
+    // Get both branch-specific items AND master menu items broadcast to this branch
     const items = await prisma.menuItem.findMany({
       where: { branch_id: branchId, availability: true },
-      include: { category: { select: { id: true, name: true } } },
+      include: {
+        category: { select: { id: true, name: true, parent_id: true } },
+      },
       orderBy: { created_at: 'asc' },
     });
     res.json(items);
@@ -131,7 +172,7 @@ router.get('/public/list', async (req: Request, res: Response): Promise<void> =>
         parent_id: true,
         branches: {
           where: { deleted_at: null },
-          select: { id: true, name: true, address: true, phone: true }
+          select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }
         },
       },
       orderBy: { created_at: 'asc' },
@@ -173,7 +214,7 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           parent_id: true,
           branches: {
             where: { deleted_at: null },
-            select: { id: true, name: true, address: true, phone: true }
+            select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }
           },
         },
         orderBy: { created_at: 'asc' },
@@ -205,7 +246,7 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           parent_id: true,
           branches: {
             where: { deleted_at: null },
-            select: { id: true, name: true, address: true, phone: true }
+            select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }
           },
         },
         orderBy: { created_at: 'asc' },
@@ -687,7 +728,7 @@ router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Reque
   }
 });
 
-// DELETE /api/restaurant/categories/:id  — soft delete
+// DELETE /api/restaurant/categories/:id  — soft delete (recursive for subcategories)
 router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
     const categoryId = req.params.id as string;
@@ -700,10 +741,27 @@ router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Requ
         res.status(403).json({ error: 'Forbidden: You cannot delete a category belonging to another branch.' });
         return;
       }
-      await prisma.category.update({
-        where: { id: categoryId },
-        data: { deleted_at: new Date() },
-      });
+      
+      const now = new Date();
+      // Helper function to recursively soft delete a category and its subcategories
+      const softDeleteCategoryTree = async (id: string) => {
+        // Find subcategories
+        const subcategories = await prisma.category.findMany({
+          where: { parent_id: id, deleted_at: null },
+          select: { id: true }
+        });
+        
+        for (const sub of subcategories) {
+          await softDeleteCategoryTree(sub.id);
+        }
+        
+        await prisma.category.update({
+          where: { id },
+          data: { deleted_at: now }
+        });
+      };
+      
+      await softDeleteCategoryTree(categoryId);
       res.json({ success: true });
       return;
     }
@@ -714,15 +772,54 @@ router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Requ
         res.status(403).json({ error: 'Forbidden: Only owners can delete master categories.' });
         return;
       }
+      
       const now = new Date();
-      await prisma.masterCategory.update({
-        where: { id: categoryId },
-        data: { deleted_at: now },
-      });
-      await prisma.category.updateMany({
-        where: { master_category_id: categoryId },
-        data: { deleted_at: now },
-      });
+      // Helper function to recursively soft delete a master category, its child master categories,
+      // and all corresponding branch-specific categories.
+      const softDeleteMasterCategoryTree = async (id: string) => {
+        // Find sub master categories
+        const subMasterCategories = await prisma.masterCategory.findMany({
+          where: { parent_id: id, deleted_at: null },
+          select: { id: true }
+        });
+        
+        for (const sub of subMasterCategories) {
+          await softDeleteMasterCategoryTree(sub.id);
+        }
+        
+        // Soft delete the master category itself
+        await prisma.masterCategory.update({
+          where: { id },
+          data: { deleted_at: now }
+        });
+        
+        // Soft delete all branch-specific categories mapping to this master category
+        // And also soft delete any of their local subcategories!
+        const localCats = await prisma.category.findMany({
+          where: { master_category_id: id, deleted_at: null },
+          select: { id: true }
+        });
+        
+        for (const localCat of localCats) {
+          const softDeleteLocalCategoryTree = async (lid: string) => {
+            const subLocalCats = await prisma.category.findMany({
+              where: { parent_id: lid, deleted_at: null },
+              select: { id: true }
+            });
+            for (const subLocal of subLocalCats) {
+              await softDeleteLocalCategoryTree(subLocal.id);
+            }
+            await prisma.category.update({
+              where: { id: lid },
+              data: { deleted_at: now }
+            });
+          };
+          
+          await softDeleteLocalCategoryTree(localCat.id);
+        }
+      };
+      
+      await softDeleteMasterCategoryTree(categoryId);
       res.json({ success: true });
       return;
     }
@@ -791,11 +888,13 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
-    const { restaurant_id, branch_id, display_name, description, price, category_id, availability, customizations, image_url, image_urls, is_master } = req.body;
+    const { restaurant_id, branch_id, display_name, description, price, category_id, availability, customizations, image_url, image_urls, is_master, prep_time } = req.body;
     if (!display_name) {
       res.status(400).json({ error: 'display_name is required' });
       return;
     }
+
+    const prepTimeParsed = prep_time !== undefined ? parseInt(prep_time.toString(), 10) || 0 : 0;
 
     if (is_master) {
       if (!restaurant_id) {
@@ -814,6 +913,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
           customizations: customizations ?? null,
           image_url: image_url ?? null,
           image_urls: image_urls ?? null,
+          prep_time: prepTimeParsed,
         },
         include: { category: { select: { id: true, name: true } } },
       });
@@ -843,6 +943,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
             customizations: customizations ?? null,
             image_url: image_url ?? null,
             image_urls: image_urls ?? null,
+            prep_time: prepTimeParsed,
           }
         });
       }
@@ -888,6 +989,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
         customizations: customizations ?? null,
         image_url: image_url ?? null,
         image_urls: image_urls ?? null,
+        prep_time: prepTimeParsed,
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -901,11 +1003,13 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
 // PATCH /api/restaurant/menu/:id
 router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
-    const { display_name, description, price, category_id, availability, customizations, image_url, image_urls } = req.body;
+    const { display_name, description, price, category_id, availability, customizations, image_url, image_urls, prep_time } = req.body;
     const menuItemId = req.params.id as string;
 
     const isOwner = isOwnerUser(req);
     const userBranchId = req.user!.branchId;
+
+    const prepTimeParsed = prep_time !== undefined ? parseInt(prep_time.toString(), 10) || 0 : undefined;
 
     const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
     if (item) {
@@ -924,6 +1028,7 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
           ...(customizations !== undefined && { customizations }),
           ...(image_url !== undefined && { image_url }),
           ...(image_urls !== undefined && { image_urls }),
+          ...(prepTimeParsed !== undefined && { prep_time: prepTimeParsed }),
         },
         include: { category: { select: { id: true, name: true } } },
       });
@@ -948,6 +1053,7 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
           ...(customizations !== undefined && { customizations }),
           ...(image_url !== undefined && { image_url }),
           ...(image_urls !== undefined && { image_urls }),
+          ...(prepTimeParsed !== undefined && { prep_time: prepTimeParsed }),
         },
         include: { category: { select: { id: true, name: true } } },
       });
@@ -963,6 +1069,7 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
           ...(image_urls !== undefined && { image_urls }),
           ...(price !== undefined && { price }),
           ...(availability !== undefined && { availability }),
+          ...(prepTimeParsed !== undefined && { prep_time: prepTimeParsed }),
         }
       });
       res.json(updatedMaster);

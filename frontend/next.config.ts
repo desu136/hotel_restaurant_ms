@@ -12,12 +12,14 @@ const nextConfig: NextConfig = {
     // Current active IPs
     '192.168.1.98',
     '192.168.1.13',
+    '192.168.1.16',
     '10.167.172.97',
     // Wildcard for any 192.168.x.x device
     '192.168.1.0/24',
     '192.168.0.0/24',
     // Wildcard for any 10.x.x.x device
     '10.167.172.0/24',
+    '10.0.0.0/8',
   ],
 };
 

@@ -5,7 +5,8 @@ import {
   Store, Pencil, Loader2, Check, X, AlertCircle,
   GitBranch, UtensilsCrossed, Table2, Calendar,
   MapPin, Phone, Plus, Trash2, Utensils, Tag, Layers, Users,
-  Sliders, ToggleLeft, ToggleRight, Trash
+  Sliders, ToggleLeft, ToggleRight, Trash,
+  Timer
 } from "lucide-react"
 
 interface Restaurant {
@@ -56,6 +57,7 @@ interface MasterMenuItem {
   price: string | number
   master_category_id?: string | null
   availability: boolean
+  prep_time?: number
   customizations?: any
   image_url?: string | null
   image_urls?: string[] | null
@@ -71,6 +73,7 @@ interface MenuItem {
   category_id?: string | null
   master_menu_item_id?: string | null
   availability: boolean
+  prep_time?: number
   customizations?: any
   image_url?: string | null
   image_urls?: string[] | null
@@ -126,6 +129,7 @@ export function EditMenuTab() {
     displayName: "",
     description: "",
     price: "",
+    prepTime: "",
     isMaster: true,
     branchId: "",
     categoryId: "",
@@ -133,12 +137,12 @@ export function EditMenuTab() {
     imageUrl: "",
     imageUrls: [] as string[]
   })
-  
+
   const [menuImageUploading, setMenuImageUploading] = React.useState(false)
   const [galleryUploading, setGalleryUploading] = React.useState(false)
   const [choiceUploading, setChoiceUploading] = React.useState<Record<string, boolean>>({})
   const [customizations, setCustomizations] = React.useState<Customization[]>([])
-  
+
   const [menuSubmitting, setMenuSubmitting] = React.useState(false)
   const [menuError, setMenuError] = React.useState("")
   const [deletingMenuId, setDeletingMenuId] = React.useState<string | null>(null)
@@ -235,6 +239,7 @@ export function EditMenuTab() {
       displayName: "",
       description: "",
       price: "",
+      prepTime: "",
       isMaster: true,
       branchId: branches[0]?.id ?? "",
       categoryId: "",
@@ -267,6 +272,7 @@ export function EditMenuTab() {
       displayName: item.display_name,
       description: item.description ?? "",
       price: String(item.price),
+      prepTime: item.prep_time ? String(item.prep_time) : "",
       isMaster,
       branchId: isMaster ? "" : item.branch_id,
       categoryId: isMaster ? (item.master_category_id ?? "") : (item.category_id ?? ""),
@@ -347,7 +353,7 @@ export function EditMenuTab() {
     setMenuError("")
     try {
       const isEdit = !!editMenuTarget
-      
+
       const formattedCustomizations = customizations.map(c => ({
         key: c.key.trim().toLowerCase().replace(/\s+/g, "_"),
         label: c.label.trim(),
@@ -360,11 +366,14 @@ export function EditMenuTab() {
         }))
       }))
 
+      const prepTimeParsed = menuForm.prepTime ? parseInt(menuForm.prepTime, 10) || 0 : 0
+
       const payload = isEdit
         ? {
           display_name: menuForm.displayName.trim(),
           description: menuForm.description.trim() || null,
           price: parseFloat(menuForm.price),
+          prep_time: prepTimeParsed,
           category_id: menuForm.categoryId || null,
           availability: menuForm.availability,
           image_url: menuForm.imageUrl || null,
@@ -377,6 +386,7 @@ export function EditMenuTab() {
           display_name: menuForm.displayName.trim(),
           description: menuForm.description.trim() || null,
           price: parseFloat(menuForm.price),
+          prep_time: prepTimeParsed,
           category_id: menuForm.categoryId || null,
           availability: menuForm.availability,
           image_url: menuForm.imageUrl || null,
@@ -454,7 +464,7 @@ export function EditMenuTab() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {masterMenuItems.map(item => (
-                  <div key={item.id} className="border border-[var(--surface-border)] rounded-xl p-4 flex gap-3 bg-[var(--surface-hover)]">
+                  <div key={item.id} className="border border-[var(--surface-border)] rounded-xl p-4 flex gap-3 shadow-lg">
                     {item.image_url ? (
                       <img src={item.image_url} alt={item.display_name} className="w-16 h-16 object-cover rounded-lg shrink-0 border" />
                     ) : (
@@ -466,6 +476,9 @@ export function EditMenuTab() {
                         <p className="text-xs text-[var(--muted)] line-clamp-1">{item.description}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <p className="text-xs font-black font-mono">${Number(item.price).toFixed(2)}</p>
+                          {(item.prep_time ?? 0) > 0 && (
+                            <span className="text-[10px] bg-[var(--foreground)] text-[var(--background)] font-semibold flex flex-row  px-1.5 py-0.5 rounded-full gap-1"><Timer className="" size={12} strokeWidth={3.5} /> {item.prep_time}m</span>
+                          )}
                           {Array.isArray(item.image_urls) && item.image_urls.length > 0 && (
                             <span className="text-[10px] text-[var(--muted)]">📷 {item.image_urls.length}</span>
                           )}
@@ -500,7 +513,7 @@ export function EditMenuTab() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {branchMenuItems.filter(i => !i.master_menu_item_id).map(item => (
-                  <div key={item.id} className="border border-[var(--surface-border)] rounded-xl p-4 flex gap-3 bg-[var(--surface-hover)]">
+                  <div key={item.id} className="border border-[var(--surface-border)] rounded-xl p-4 flex gap-3 shadow-lg">
                     {item.image_url ? (
                       <img src={item.image_url} alt={item.display_name} className="w-16 h-16 object-cover rounded-lg shrink-0 border" />
                     ) : (
@@ -512,6 +525,9 @@ export function EditMenuTab() {
                         <p className="text-xs text-[var(--muted)] line-clamp-1">{item.description}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <p className="text-xs font-black font-mono">${Number(item.price).toFixed(2)}</p>
+                          {(item.prep_time ?? 0) > 0 && (
+                            <span className="text-[10px] bg-[var(--foreground)] text-[var(--background)] font-semibold flex flex-row  px-1.5 py-0.5 rounded-full gap-1"><Timer className="" size={12} strokeWidth={3.5} /> {item.prep_time}m</span>
+                          )}
                           {Array.isArray(item.image_urls) && item.image_urls.length > 0 && (
                             <span className="text-[10px] text-[var(--muted)]">📷 {item.image_urls.length}</span>
                           )}
@@ -576,6 +592,22 @@ export function EditMenuTab() {
                     className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">
+                  ⏱ Prep Time (minutes)
+                  <span className="ml-1.5 text-xs font-normal text-[var(--muted)]">How long it takes to prepare this item</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 15"
+                  value={menuForm.prepTime}
+                  onChange={e => setMenuForm(f => ({ ...f, prepTime: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm"
+                />
               </div>
 
               <div>
@@ -727,8 +759,8 @@ export function EditMenuTab() {
 
                 <div className="space-y-4">
                   {customizations.map((cust, gIdx) => (
-                    <div 
-                      key={gIdx} 
+                    <div
+                      key={gIdx}
                       className="p-4 rounded-xl border bg-[var(--surface-hover)]/30 border-[var(--surface-border)] space-y-3 relative group"
                     >
                       <button
@@ -775,7 +807,7 @@ export function EditMenuTab() {
                       {/* Values/choices inside the group */}
                       <div className="space-y-2">
                         <label className="block text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">Selectable Choices / Values</label>
-                        
+
                         <div className="flex flex-wrap gap-2 items-center">
                           {cust.values.map((val, vIdx) => (
                             <div key={vIdx} className="flex flex-col gap-2 bg-[var(--surface)] border border-[var(--surface-border)] p-2.5 rounded-lg w-full sm:w-auto">
@@ -806,7 +838,7 @@ export function EditMenuTab() {
                                   </button>
                                 )}
                               </div>
-                              
+
                               <div className="flex items-center justify-between border-t pt-1.5 border-[var(--surface-border)] gap-3">
                                 <div className="flex items-center">
                                   {val.image_url ? (
@@ -869,11 +901,10 @@ export function EditMenuTab() {
                                     }
                                     updateCustomizationValue(gIdx, vIdx, { recommended: !val.recommended })
                                   }}
-                                  className={`text-[9px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 transition-all ${
-                                    val.recommended 
-                                      ? "bg-neutral-200 dark:bg-neutral-800 text-[var(--foreground)] border border-[var(--surface-border)]" 
-                                      : "bg-transparent border border-[var(--surface-border)] text-[var(--muted)] hover:text-[var(--foreground)]"
-                                  }`}
+                                  className={`text-[9px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 transition-all ${val.recommended
+                                    ? "bg-neutral-200 dark:bg-neutral-800 text-[var(--foreground)] border border-[var(--surface-border)]"
+                                    : "bg-transparent border border-[var(--surface-border)] text-[var(--muted)] hover:text-[var(--foreground)]"
+                                    }`}
                                 >
                                   <span>✨</span>
                                   <span>{val.recommended ? "Default" : "Set Default"}</span>
@@ -881,7 +912,7 @@ export function EditMenuTab() {
                               </div>
                             </div>
                           ))}
-                          
+
                           <button
                             type="button"
                             onClick={() => addCustomizationValue(gIdx)}
@@ -908,7 +939,7 @@ export function EditMenuTab() {
             </form>
           </div>
         </div>
-      )}  
+      )}
     </>
   )
 }
