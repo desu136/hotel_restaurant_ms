@@ -101,16 +101,16 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
       { href: "/dashboard/manager/reports", label: "Reports", icon: BarChart3, exact: false }
     )
   }
-  if (isOwner || isWaiter) {
-    operationsNav.push({ href: "/dashboard/waiter", label: "Waiter", icon: Utensils })
+  if (isOwner || isWaiter || isManager) {
+    operationsNav.push({ href: "/dashboard/waiter", label: "Waiters Station", icon: Utensils })
   }
   if (isOwner || isManager) {
-    operationsNav.push({ href: "/dashboard/waiter-screen", label: "Display Screen", icon: Bell })
+    operationsNav.push({ href: "/dashboard/waiter-screen", label: "Waiters Display Screen", icon: Bell })
   }
-  if (isOwner || isChef) {
-    operationsNav.push({ href: "/dashboard/kitchen", label: "Kitchen Display", icon: ChefHat })
+  if (isOwner || isChef || isManager) {
+    operationsNav.push({ href: "/dashboard/kitchen", label: "Kitchen Display Screen", icon: ChefHat })
   }
-  if (isOwner || isCashier) {
+  if (isOwner || isCashier || isManager) {
     operationsNav.push({ href: "/dashboard/cashier", label: "Cashier Counter", icon: Receipt })
   }
 

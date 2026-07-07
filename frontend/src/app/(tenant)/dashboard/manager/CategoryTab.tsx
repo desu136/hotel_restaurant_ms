@@ -49,6 +49,10 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
   const [branches, setBranches] = React.useState<Branch[]>([])
   const [masterCategories, setMasterCategories] = React.useState<MasterCategory[]>([])
   const [branchCategories, setBranchCategories] = React.useState<Category[]>([])
+  const [currentUser, setCurrentUser] = React.useState<{ branch_id?: string | null; roles?: string[] } | null>(null)
+
+  // A branch manager has a non-null branch_id; overall managers / owners do not
+  const isBranchManager = !!(currentUser?.branch_id)
 
   const [loading, setLoading] = React.useState(true)
 
@@ -80,6 +84,12 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
       const myData = myRes.ok ? await myRes.json() : null
       setRestaurant(myData)
 
+      // Get current user to determine role scope
+      const meRes = await fetch("/api/auth/me")
+      const meData = meRes.ok ? await meRes.json() : null
+      const user = meData?.user ?? null
+      setCurrentUser(user)
+
       if (myData) {
         const [branchRes, masterCatRes, branchCatRes] = await Promise.all([
           fetch("/api/branches"),
@@ -92,10 +102,13 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
         setBranchCategories(branchCatRes.ok ? await branchCatRes.json() : [])
 
         // Initialize default branch in form
-        if (branchData.length > 0) {
+        const defaultBranchId = user?.branch_id ?? branchData[0]?.id ?? ""
+        if (defaultBranchId) {
           setCatForm(prev => ({
             ...prev,
-            branchId: branchData[0].id
+            branchId: defaultBranchId,
+            // Branch managers can only create branch-specific categories
+            isMaster: !user?.branch_id
           }))
         }
       }
@@ -120,7 +133,13 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
   // ── Main modal open/close ──
   const openCatCreate = () => {
     setEditCatTarget(null)
-    setCatForm({ name: "", isMaster: true, branchId: branches[0]?.id ?? "", parentId: "" })
+    setCatForm({
+      name: "",
+      // Branch managers cannot create master/broadcasted categories
+      isMaster: isBranchManager ? false : true,
+      branchId: currentUser?.branch_id ?? branches[0]?.id ?? "",
+      parentId: ""
+    })
     setCatError("")
     setShowCatModal(true)
   }
@@ -684,7 +703,8 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
                 />
               </div>
 
-              {!editCatTarget && (
+              {/* Broadcast toggle — hidden for branch managers */}
+              {!editCatTarget && !isBranchManager && (
                 <div className="flex items-center gap-2 py-1">
                   <input
                     type="checkbox"
@@ -705,15 +725,22 @@ export function CategoryTab({ mode = "both" }: { mode?: "category" | "staff" | "
                   <label className="block text-sm font-medium mb-1.5">
                     Target Branch <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={catForm.branchId}
-                    onChange={e => setCatForm(f => ({ ...f, branchId: e.target.value, parentId: "" }))}
-                    className="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none"
-                  >
-                    {branches.map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
+                  {isBranchManager ? (
+                    // Branch managers are locked to their own branch
+                    <p className="px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm text-[var(--muted)]">
+                      {branches.find(b => b.id === catForm.branchId)?.name ?? "Your Branch"}
+                    </p>
+                  ) : (
+                    <select
+                      value={catForm.branchId}
+                      onChange={e => setCatForm(f => ({ ...f, branchId: e.target.value, parentId: "" }))}
+                      className="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none"
+                    >
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
 

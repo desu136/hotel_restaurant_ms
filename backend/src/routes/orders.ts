@@ -516,7 +516,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       where: whereClause,
       include: {
         items: { include: { menu_item: true } },
-        table: true,
+        table: {
+          include: {
+            waiter: { select: { id: true, full_name: true } }
+          }
+        },
         bills: true,
         deliveries: true,
       },

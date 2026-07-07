@@ -3,7 +3,7 @@ import * as React from "react"
 import {
   TrendingUp, TrendingDown, DollarSign, ShoppingBag, CheckCircle2,
   XCircle, BarChart2, Clock, Star, RefreshCw, ChevronDown,
-  Utensils, PieChart, Building2, ArrowUpRight, ArrowDownRight
+  Utensils, PieChart, Building2, ArrowUpRight, ArrowDownRight, Users2
 } from "lucide-react"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ interface DailyPoint { date: string; revenue: number; orders: number }
 interface TopItem { name: string; qty: number; revenue: number }
 interface PeakHour { hour: number; count: number }
 interface BranchBreakdown { branchId: string; name: string; revenue: number; orders: number }
+interface CustomerStat { id: string; name: string; email: string | null; phone: string | null; ordersCount: number; totalSpent: number }
 interface ReportData {
   range: number
   since: string
@@ -28,6 +29,7 @@ interface ReportData {
   topItems: TopItem[]
   dailyTrend: DailyPoint[]
   peakHours: PeakHour[]
+  customerStats?: CustomerStat[]
   branchBreakdown: BranchBreakdown[]
 }
 
@@ -373,6 +375,52 @@ export default function ReportsPage() {
               ))}
             </div>
           </div>
+
+          {/* ── Customer Activity & Usage ── */}
+          {data.customerStats && data.customerStats.length > 0 && (
+            <div className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] p-6">
+              <h2 className="text-lg font-black flex items-center gap-2 mb-5">
+                <Users2 className="w-5 h-5 text-indigo-400" /> Customer Activity & Usage
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-[var(--surface-border)]">
+                      {["Customer", "Contact", "Orders", "Total Spent", "Avg. Order"].map(h => (
+                        <th key={h} className="pb-3 pr-4 text-left text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.customerStats.map((c, idx) => (
+                      <tr key={c.id} className="border-b border-[var(--surface-border)]/50 hover:bg-[var(--surface-hover)]/40 transition-colors">
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-[var(--muted)] w-5">{idx + 1}</span>
+                            <div className="flex flex-col">
+                              <span className="font-semibold">{c.name}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 text-[var(--muted)] text-xs">
+                          {c.email || c.phone || "—"}
+                        </td>
+                        <td className="py-3 pr-4 font-semibold">{c.ordersCount}</td>
+                        <td className="py-3 pr-4 font-black text-emerald-400">
+                          ${fmt(c.totalSpent)}
+                        </td>
+                        <td className="py-3 font-semibold text-[var(--muted)]">
+                          ${c.ordersCount ? fmt(c.totalSpent / c.ordersCount) : "0.00"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* ── Branch Breakdown (Owner only) ── */}
           {data.branchBreakdown.length > 0 && (

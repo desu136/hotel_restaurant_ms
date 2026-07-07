@@ -75,10 +75,23 @@ const INITIAL_PAID_HISTORY = [
   }
 ]
 
+interface CashierOrder {
+  id: string
+  orderNumber: string
+  tableNumber: string
+  waiter: string
+  items: { name: string; quantity: number; price: number }[]
+  subtotal: number
+  tax: number
+  serviceCharge: number
+  total: number
+}
+
 export default function CashierDashboard() {
-  const [unpaidOrders, setUnpaidOrders] = React.useState(INITIAL_UNPAID_ORDERS)
-  const [paidHistory, setPaidHistory] = React.useState(INITIAL_PAID_HISTORY)
-  const [selectedOrderId, setSelectedOrderId] = React.useState<string>(INITIAL_UNPAID_ORDERS[0]?.id || "")
+  const [unpaidOrders, setUnpaidOrders] = React.useState<CashierOrder[]>([])
+  const [paidHistory, setPaidHistory] = React.useState<any[]>([])
+  const [totalCollected, setTotalCollected] = React.useState<number>(0)
+  const [selectedOrderId, setSelectedOrderId] = React.useState<string>("")
   const [paymentMethod, setPaymentMethod] = React.useState<"cash" | "card" | "dexel">("card")
 
   // Checkout details state
@@ -87,6 +100,79 @@ export default function CashierDashboard() {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [showReceiptModal, setShowReceiptModal] = React.useState(false)
   const [lastPaidBill, setLastPaidBill] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  const loadBillingData = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const [unpaidRes, historyRes] = await Promise.all([
+        fetch("/api/billing/unpaid"),
+        fetch("/api/billing/history")
+      ])
+
+      const unpaidData = unpaidRes.ok ? await unpaidRes.json() : []
+      const historyData = historyRes.ok ? await historyRes.json() : { bills: [], total_collected: 0 }
+
+      const mappedUnpaid = unpaidData.map((o: any) => {
+        const items = (o.items || []).map((it: any) => ({
+          name: it.menu_item?.display_name || "Unknown Item",
+          quantity: it.quantity,
+          price: parseFloat(it.unit_price || "0")
+        }))
+        const sub = items.reduce((sum: number, it: any) => sum + (it.price * it.quantity), 0)
+        const t = sub * 0.08
+        const s = sub * 0.10
+        return {
+          id: o.id,
+          orderNumber: o.order_number || o.id.slice(-6).toUpperCase(),
+          tableNumber: o.table?.table_number || "Takeaway",
+          waiter: o.waiter_id ? "Staff" : "Customer",
+          items,
+          subtotal: sub,
+          tax: t,
+          serviceCharge: s,
+          total: sub + t + s
+        }
+      })
+
+      const mappedHistory = (historyData.bills || []).map((b: any) => {
+        const order = b.order || {}
+        const items = (order.items || []).map((it: any) => ({
+          name: it.menu_item?.display_name || "Unknown Item",
+          quantity: it.quantity,
+          price: parseFloat(it.unit_price || "0")
+        }))
+        return {
+          id: b.id,
+          orderNumber: order.order_number || order.id?.slice(-6).toUpperCase() || b.id.slice(-6).toUpperCase(),
+          tableNumber: order.table?.table_number || "Takeaway",
+          total: parseFloat(b.amount || "0"),
+          method: "Paid",
+          time: new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          items,
+          subtotal: parseFloat(b.amount || "0") / 1.18
+        }
+      })
+
+      setUnpaidOrders(mappedUnpaid)
+      setPaidHistory(mappedHistory)
+      setTotalCollected(historyData.total_collected || 0)
+
+      if (mappedUnpaid.length > 0 && !selectedOrderId) {
+        setSelectedOrderId(mappedUnpaid[0].id)
+      } else if (mappedUnpaid.length === 0) {
+        setSelectedOrderId("")
+      }
+    } catch (err) {
+      console.error("Failed to load billing data", err)
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedOrderId])
+
+  React.useEffect(() => {
+    loadBillingData()
+  }, [])
 
   const selectedOrder = unpaidOrders.find(o => o.id === selectedOrderId)
 
@@ -105,43 +191,60 @@ export default function CashierDashboard() {
     return Math.max(0, cashVal - finalTotal)
   }, [receivedCash, finalTotal])
 
-  const handleCheckout = (e: React.FormEvent) => {
+  const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedOrder) return
 
-    const newPayment = {
-      id: `h_${Date.now()}`,
-      orderNumber: selectedOrder.orderNumber,
-      tableNumber: selectedOrder.tableNumber,
-      total: parseFloat(finalTotal.toFixed(2)),
-      method: paymentMethod === "cash" ? "Cash" : paymentMethod === "card" ? "Card" : "Dexel Pay",
-      time: "Just now",
-      items: selectedOrder.items,
-      subtotal: subtotal,
-      discount: discountAmount,
-      tax: tax,
-      serviceCharge: serviceCharge
+    try {
+      // 1. Create a bill
+      const billRes = await fetch("/api/billing/bill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: selectedOrder.id,
+          amount: parseFloat(finalTotal.toFixed(2)),
+          discount_percent: discountPercent
+        })
+      })
+      if (!billRes.ok) throw new Error("Failed to create bill")
+      const bill = await billRes.json()
+
+      // 2. Pay the bill
+      const payRes = await fetch(`/api/billing/bill/${bill.id}/pay`, {
+        method: "POST"
+      })
+      if (!payRes.ok) throw new Error("Failed to record payment")
+
+      const newPayment = {
+        orderNumber: selectedOrder.orderNumber,
+        tableNumber: selectedOrder.tableNumber,
+        total: parseFloat(finalTotal.toFixed(2)),
+        method: paymentMethod === "cash" ? "Cash" : paymentMethod === "card" ? "Card" : "Dexel Pay",
+        items: selectedOrder.items,
+        subtotal: subtotal,
+        discount: discountAmount,
+        tax: tax,
+        serviceCharge: serviceCharge
+      }
+      setLastPaidBill(newPayment)
+
+      // Reset values
+      setDiscountPercent(0)
+      setReceivedCash("")
+      setShowReceiptModal(true)
+
+      // Auto-select next unpaid order
+      const remaining = unpaidOrders.filter(o => o.id !== selectedOrderId)
+      if (remaining.length > 0) {
+        setSelectedOrderId(remaining[0].id)
+      } else {
+        setSelectedOrderId("")
+      }
+
+      await loadBillingData()
+    } catch (err: any) {
+      alert(err.message || "Failed to process checkout")
     }
-
-    // Move from unpaid to paid history
-    setPaidHistory(prev => [newPayment, ...prev])
-    setUnpaidOrders(prev => prev.filter(o => o.id !== selectedOrderId))
-    setLastPaidBill(newPayment)
-
-    // Reset values
-    setDiscountPercent(0)
-    setReceivedCash("")
-
-    // Auto-select next unpaid order
-    const remaining = unpaidOrders.filter(o => o.id !== selectedOrderId)
-    if (remaining.length > 0) {
-      setSelectedOrderId(remaining[0].id)
-    } else {
-      setSelectedOrderId("")
-    }
-
-    // Open receipt modal
-    setShowReceiptModal(true)
   }
 
   const filteredUnpaid = unpaidOrders.filter(o =>
@@ -149,7 +252,6 @@ export default function CashierDashboard() {
     o.tableNumber.includes(searchQuery)
   )
 
-  const totalCollected = paidHistory.reduce((sum, item) => sum + item.total, 0)
 
   return (
     <div className="space-y-6 pb-12">

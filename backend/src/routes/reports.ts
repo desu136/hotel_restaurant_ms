@@ -39,6 +39,7 @@ router.get(
         include: {
           items: { include: { menu_item: { select: { display_name: true } } } },
           bills: { select: { payment_status: true, amount: true } },
+          customer: { select: { id: true, full_name: true, email: true, phone: true } },
         },
         orderBy: { created_at: 'asc' },
       });
@@ -117,7 +118,32 @@ router.get(
         count: hourMap[h] || 0,
       }));
 
-      // ── 8. Branch breakdown (owner only) ─────────────────────────────────
+      // ── 8. Customer stats breakdown ───────────────────────────────────────
+      const customerMap: Record<string, { id: string; name: string; email: string | null; phone: string | null; ordersCount: number; totalSpent: number }> = {};
+      for (const o of orders) {
+        if (!o.customer) continue;
+        const cid = o.customer.id;
+        if (!customerMap[cid]) {
+          customerMap[cid] = {
+            id: cid,
+            name: o.customer.full_name,
+            email: o.customer.email,
+            phone: o.customer.phone,
+            ordersCount: 0,
+            totalSpent: 0,
+          };
+        }
+        customerMap[cid].ordersCount += 1;
+        const paid = o.bills
+          .filter(b => b.payment_status === 'PAID')
+          .reduce((s, b) => s + Number(b.amount), 0);
+        customerMap[cid].totalSpent += paid;
+      }
+      const customerStats = Object.values(customerMap)
+        .sort((a, b) => b.ordersCount - a.ordersCount)
+        .slice(0, 10);
+
+      // ── 9. Branch breakdown (owner only) ─────────────────────────────────
       let branchBreakdown: { branchId: string; name: string; revenue: number; orders: number }[] = [];
       if (isOwner) {
         const branchMap: Record<string, { name?: string; revenue: number; orders: number }> = {};
@@ -161,6 +187,7 @@ router.get(
         topItems,
         dailyTrend,
         peakHours,
+        customerStats,
         branchBreakdown,
       });
     } catch (e) {

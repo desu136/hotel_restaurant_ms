@@ -279,6 +279,25 @@ const isOwnerUser = (req: Request) =>
   req.user!.roles.some(r => OWNER_ROLES.includes(r));
 
 /**
+ * Returns true if the user has access to manage broadcasted/master entities.
+ * Managers should not create broadcasted things unless they are the overall restaurant manager (i.e. no branchId).
+ */
+const canManageBroadcasted = (req: Request): boolean => {
+  if (isOwnerUser(req)) return true;
+  const isOverallManager = req.user!.roles.some(r => ['RESTAURANT_MANAGER', 'HOTEL_MANAGER'].includes(r)) && !req.user!.branchId;
+  return isOverallManager;
+};
+
+/**
+ * Returns true if the user has access to the specified branch.
+ * Branch managers only have access to their own branchId.
+ */
+const hasBranchAccess = (req: Request, branchId: string | null): boolean => {
+  if (isOwnerUser(req) || !req.user!.branchId) return true;
+  return req.user!.branchId === branchId;
+};
+
+/**
  * For non-owner users, verify that a given restaurant belongs to their branch.
  * Throws (returns false + sends 403) if the guard fails.
  */
@@ -583,6 +602,10 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
     }
 
     if (is_master) {
+      if (!canManageBroadcasted(req)) {
+        res.status(403).json({ error: 'Forbidden: Only owners or overall restaurant managers can create master categories.' });
+        return;
+      }
       if (!restaurant_id) {
         res.status(400).json({ error: 'restaurant_id is required for master category' });
         return;
@@ -637,12 +660,9 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
     }
 
     // Guard: Ensure user has access to the resolved branch
-    if (!isOwnerUser(req)) {
-      const userBranchId = req.user!.branchId;
-      if (userBranchId !== resolvedBranchId) {
-        res.status(403).json({ error: 'You do not have access to this branch.' });
-        return;
-      }
+    if (!hasBranchAccess(req, resolvedBranchId)) {
+      res.status(403).json({ error: 'You do not have access to this branch.' });
+      return;
     }
 
     const category = await prisma.category.create({
@@ -666,7 +686,7 @@ router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Reque
 
     const cat = await prisma.category.findUnique({ where: { id: categoryId } });
     if (cat) {
-      if (!isOwner && cat.branch_id !== userBranchId) {
+      if (!hasBranchAccess(req, cat.branch_id)) {
         res.status(403).json({ error: 'Forbidden: You cannot modify a category belonging to another branch.' });
         return;
       }
@@ -683,8 +703,8 @@ router.patch('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Reque
 
     const masterCat = await prisma.masterCategory.findUnique({ where: { id: categoryId } });
     if (masterCat) {
-      if (!isOwner) {
-        res.status(403).json({ error: 'Forbidden: Only owners can modify master categories.' });
+      if (!canManageBroadcasted(req)) {
+        res.status(403).json({ error: 'Forbidden: Only owners or overall restaurant managers can modify master categories.' });
         return;
       }
       const updatedMaster = await prisma.masterCategory.update({
@@ -737,7 +757,7 @@ router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Requ
 
     const cat = await prisma.category.findUnique({ where: { id: categoryId } });
     if (cat) {
-      if (!isOwner && cat.branch_id !== userBranchId) {
+      if (!hasBranchAccess(req, cat.branch_id)) {
         res.status(403).json({ error: 'Forbidden: You cannot delete a category belonging to another branch.' });
         return;
       }
@@ -768,8 +788,8 @@ router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Requ
 
     const masterCat = await prisma.masterCategory.findUnique({ where: { id: categoryId } });
     if (masterCat) {
-      if (!isOwner) {
-        res.status(403).json({ error: 'Forbidden: Only owners can delete master categories.' });
+      if (!canManageBroadcasted(req)) {
+        res.status(403).json({ error: 'Forbidden: Only owners or overall restaurant managers can delete master categories.' });
         return;
       }
       
@@ -897,6 +917,10 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
     const prepTimeParsed = prep_time !== undefined ? parseInt(prep_time.toString(), 10) || 0 : 0;
 
     if (is_master) {
+      if (!canManageBroadcasted(req)) {
+        res.status(403).json({ error: 'Forbidden: Only owners or overall restaurant managers can create master menu items.' });
+        return;
+      }
       if (!restaurant_id) {
         res.status(400).json({ error: 'restaurant_id is required for master menu item' });
         return;
@@ -969,12 +993,9 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
       return;
     }
 
-    if (!isOwnerUser(req)) {
-      const userBranchId = req.user!.branchId;
-      if (userBranchId !== resolvedBranchId) {
-        res.status(403).json({ error: 'You do not have access to this branch.' });
-        return;
-      }
+    if (!hasBranchAccess(req, resolvedBranchId)) {
+      res.status(403).json({ error: 'You do not have access to this branch.' });
+      return;
     }
 
     const item = await prisma.menuItem.create({
@@ -1006,14 +1027,11 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
     const { display_name, description, price, category_id, availability, customizations, image_url, image_urls, prep_time } = req.body;
     const menuItemId = req.params.id as string;
 
-    const isOwner = isOwnerUser(req);
-    const userBranchId = req.user!.branchId;
-
     const prepTimeParsed = prep_time !== undefined ? parseInt(prep_time.toString(), 10) || 0 : undefined;
 
     const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
     if (item) {
-      if (!isOwner && item.branch_id !== userBranchId) {
+      if (!hasBranchAccess(req, item.branch_id)) {
         res.status(403).json({ error: 'Forbidden: You cannot modify a menu item belonging to another branch.' });
         return;
       }
@@ -1038,8 +1056,8 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
 
     const masterItem = await prisma.masterMenuItem.findUnique({ where: { id: menuItemId } });
     if (masterItem) {
-      if (!isOwner) {
-        res.status(403).json({ error: 'Forbidden: Only owners can modify master menu items.' });
+      if (!canManageBroadcasted(req)) {
+        res.status(403).json({ error: 'Forbidden: Only owners or overall restaurant managers can modify master menu items.' });
         return;
       }
       const updatedMaster = await prisma.masterMenuItem.update({
@@ -1086,12 +1104,10 @@ router.patch('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, re
 router.delete('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
     const menuItemId = req.params.id as string;
-    const isOwner = isOwnerUser(req);
-    const userBranchId = req.user!.branchId;
 
     const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
     if (item) {
-      if (!isOwner && item.branch_id !== userBranchId) {
+      if (!hasBranchAccess(req, item.branch_id)) {
         res.status(403).json({ error: 'Forbidden: You cannot delete a menu item belonging to another branch.' });
         return;
       }
@@ -1102,8 +1118,8 @@ router.delete('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, r
 
     const masterItem = await prisma.masterMenuItem.findUnique({ where: { id: menuItemId } });
     if (masterItem) {
-      if (!isOwner) {
-        res.status(403).json({ error: 'Forbidden: Only owners can delete master menu items.' });
+      if (!canManageBroadcasted(req)) {
+        res.status(403).json({ error: 'Forbidden: Only owners or overall restaurant managers can delete master menu items.' });
         return;
       }
       await prisma.masterMenuItem.update({
@@ -1171,8 +1187,8 @@ router.post('/tables', requireRole(...MANAGER_ROLES), async (req: Request, res: 
 
     const parsedCapacity = parseInt(capacity);
 
-    // ── Owner: multi-branch creation ────────────────────────────────────────
-    if (isOwnerUser(req) && (all_branches || (Array.isArray(branch_ids) && branch_ids.length > 1))) {
+    // ── Multi-branch creation: owners or overall restaurant managers only ──────
+    if (canManageBroadcasted(req) && (all_branches || (Array.isArray(branch_ids) && branch_ids.length > 1))) {
       let targetBranchIds: string[] = [];
 
       if (all_branches && restaurant_id) {
@@ -1201,7 +1217,7 @@ router.post('/tables', requireRole(...MANAGER_ROLES), async (req: Request, res: 
       return;
     }
 
-    // ── Single branch creation (owner specifying one branch, or branch manager) ─
+    // ── Single branch creation (owner/overall-manager specifying one branch, or branch manager) ─
     let resolvedBranchId = branch_id;
     if (!resolvedBranchId) {
       if (req.user!.branchId) {
@@ -1219,12 +1235,9 @@ router.post('/tables', requireRole(...MANAGER_ROLES), async (req: Request, res: 
       return;
     }
 
-    if (!isOwnerUser(req)) {
-      const userBranchId = req.user!.branchId;
-      if (userBranchId !== resolvedBranchId) {
-        res.status(403).json({ error: 'You do not have access to this branch.' });
-        return;
-      }
+    if (!hasBranchAccess(req, resolvedBranchId)) {
+      res.status(403).json({ error: 'You do not have access to this branch.' });
+      return;
     }
 
     const table = await prisma.restaurantTable.create({
@@ -1249,8 +1262,8 @@ router.delete('/tables/:id', requireRole(...MANAGER_ROLES), async (req: Request,
     });
     if (!table) { res.status(404).json({ error: 'Table not found' }); return; }
 
-    // Non-owners can only delete tables in their own branch
-    if (!isOwnerUser(req) && req.user!.branchId !== table.branch_id) {
+    // Only allow access to tables in the user's own branch
+    if (!hasBranchAccess(req, table.branch_id)) {
       res.status(403).json({ error: 'You do not have access to this branch.' });
       return;
     }
@@ -1275,8 +1288,8 @@ router.patch('/tables/:id/waiter', requireRole(...MANAGER_ROLES), async (req: Re
     const table = await prisma.restaurantTable.findFirst({ where: { id: tableId, tenant_id: tenantId } });
     if (!table) { res.status(404).json({ error: 'Table not found' }); return; }
 
-    // Non-owners can only manage tables in their own branch
-    if (!isOwnerUser(req) && req.user!.branchId !== table.branch_id) {
+    // Only allow access to tables in the user's own branch
+    if (!hasBranchAccess(req, table.branch_id)) {
       res.status(403).json({ error: 'You do not have access to this branch.' });
       return;
     }
