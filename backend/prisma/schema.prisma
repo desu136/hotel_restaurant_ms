@@ -38,6 +38,7 @@ model Tenant {
   users             User[]
   masterCategories  MasterCategory[]
   masterMenuItems   MasterMenuItem[]
+  promotions        Promotion[]
 
   @@map("tenants")
 }
@@ -144,6 +145,7 @@ model Branch {
   restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
 
   orders           Order[]
+  promotions       Promotion[]
   reservations     Reservation[]
   rooms            Room[]
   users            User[]
@@ -349,6 +351,7 @@ model Restaurant {
   
   masterCategories MasterCategory[]
   masterMenuItems  MasterMenuItem[]
+  promotions       Promotion[]
 
   @@map("restaurants")
 }
@@ -404,6 +407,7 @@ model Category {
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   menu_items   MenuItem[]
+  promotions   Promotion[]
 }
 
 model MasterMenuItem {
@@ -473,6 +477,7 @@ model MenuItem {
   tenant           Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   order_items  OrderItem[]
+  promotions   Promotion[]
 }
 
 model RestaurantTable {
@@ -718,4 +723,65 @@ enum DeliveryStatus {
   PICKED_UP
   DELIVERED
   CANCELLED
+}
+
+enum PromotionStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+}
+
+enum PromotionType {
+  PERCENTAGE_DISCOUNT
+  FIXED_DISCOUNT
+  BOGO
+  COMBO_OFFER
+  FEATURED_ITEM
+  SEASONAL_OFFER
+}
+
+enum PromotionScope {
+  RESTAURANT
+  CATEGORY
+  MENU_ITEM
+  COMBO
+}
+
+model Promotion {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenant_id        String   @db.Uuid
+  restaurant_id    String?  @db.Uuid
+  branch_id        String?  @db.Uuid
+  category_id      String?  @db.Uuid
+  menu_item_id     String?  @db.Uuid
+
+  title            String
+  description      String?
+  terms_conditions String?
+  code             String?
+  discount_value   String?
+  banner_url       String?
+  
+  type             PromotionType   @default(PERCENTAGE_DISCOUNT)
+  scope            PromotionScope  @default(RESTAURANT)
+  status           PromotionStatus @default(ACTIVE)
+  
+  start_date       DateTime @default(now())
+  end_date         DateTime @default(dbgenerated("now() + interval '1 year'"))
+  is_active        Boolean  @default(true)
+  
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  tenant           Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  restaurant       Restaurant? @relation(fields: [restaurant_id], references: [id], onDelete: SetNull)
+  branch           Branch?     @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  category         Category?   @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  menu_item        MenuItem?   @relation(fields: [menu_item_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id])
+  @@index([restaurant_id])
+  @@index([branch_id])
+  @@map("promotions")
 }

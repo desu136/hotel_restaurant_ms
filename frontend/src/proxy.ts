@@ -6,7 +6,7 @@ export default async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // Define public paths that don't require authentication
-  const isPublicPath = path === '/' || path === '/login' || path === '/register' || path.startsWith('/menu');
+  const isPublicPath = path === '/' || path === '/login' || path === '/register' || path === '/home' || path === '/orders' || path.startsWith('/menu');
   
   // Define Super Admin specific paths
   const isSuperAdminPath = path.startsWith('/tenants') || path.startsWith('/subscriptions');

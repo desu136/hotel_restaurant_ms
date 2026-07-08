@@ -1,10 +1,10 @@
 "use client"
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, RefreshCw, ChevronRight, Clock, Scan, QrCode, Camera } from "lucide-react"
+import { ArrowLeft, RefreshCw, ChevronRight, Clock, QrCode, Sun, Moon, Search, X } from "lucide-react"
 import { getUserProfile } from "@/lib/miniapp-bridge"
 import { createPortal } from "react-dom"
-import jsQR from "jsqr"
+import { motion, AnimatePresence } from "framer-motion"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type FilterTab = "ALL" | "DINE_IN" | "TAKEAWAY" | "DELIVERY"
@@ -39,9 +39,34 @@ export default function MyOrdersPage() {
   const [loading, setLoading] = React.useState(true)
   const [refreshing, setRefreshing] = React.useState(false)
   const [activeFilter, setActiveFilter] = React.useState<FilterTab>("ALL")
+  const [searchQuery, setSearchQuery] = React.useState("")
+  const [showSearch, setShowSearch] = React.useState(false)
   const [toast, setToast] = React.useState<{ msg: string; icon: string } | null>(null)
-  const [scanningOrderId, setScanningOrderId] = React.useState<string | null>(null)
-  const [scannerError, setScannerError] = React.useState<string | null>(null)
+  const [activeQrOrder, setActiveQrOrder] = React.useState<any | null>(null)
+  const [theme, setTheme] = React.useState<"light" | "dark">("light")
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("menu-theme") as "light" | "dark" | null
+      if (saved) {
+        setTheme(saved)
+      } else {
+        const darkQuery = window.matchMedia("(prefers-color-scheme: dark)")
+        if (darkQuery.matches) {
+          setTheme("dark")
+        }
+      }
+    }
+  }, [])
+
+
+
+  const themeBg = theme === "dark" ? "bg-[#030712] text-white" : "bg-gray-50 text-gray-900"
+  const themeCard = theme === "dark" ? "bg-[#0b0f19] border-white/5 text-white" : "bg-white border-gray-100 text-gray-900"
+  const themePanel = theme === "dark" ? "bg-[#0b0f19] border-white/5" : "bg-white border-gray-100"
+  const themeBorder = theme === "dark" ? "border-white/5" : "border-gray-100"
+  const themeTextTitle = theme === "dark" ? "text-white font-extrabold" : "text-gray-900 font-extrabold"
+  const themeTextMuted = theme === "dark" ? "text-gray-400" : "text-gray-500"
 
   const showToast = (msg: string, icon = "✅") => {
     setToast({ msg, icon })
@@ -105,75 +130,162 @@ export default function MyOrdersPage() {
 
   React.useEffect(() => { fetchOrders() }, [fetchOrders])
 
-  const handleDeliveryQRScan = React.useCallback(async (codeString: string) => {
-    if (!scanningOrderId) return;
+  React.useEffect(() => {
+    if (!activeQrOrder) return;
     
-    const prefix = "order_delivery:";
-    if (!codeString.startsWith(prefix)) {
-      showToast("Invalid QR code scanned. Please scan the waiter's delivery QR code.", "❌");
-      return;
-    }
-    
-    const scannedId = codeString.substring(prefix.length);
-    if (scannedId !== scanningOrderId) {
-      showToast("This QR code does not match the selected order.", "❌");
-      return;
-    }
-    
-    try {
-      const res = await fetch(`/api/orders/public/${scannedId}/confirm-delivery`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" }
-      });
-      if (res.ok) {
-        showToast("Delivery confirmed! Enjoy your meal! 🍽️", "✅");
-        setScanningOrderId(null);
-        setScannerError(null);
-        fetchOrders(true);
-      } else {
-        const errData = await res.json();
-        showToast(errData.error || "Failed to confirm delivery.", "❌");
-      }
-    } catch (err) {
-      console.error("Error confirming delivery:", err);
-      showToast("Network error confirming delivery.", "❌");
-    }
-  }, [scanningOrderId, fetchOrders]);
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/orders/public/${activeQrOrder.id}`)
+        if (res.ok) {
+          const order = await res.json()
+          if (order.status === "COMPLETED") {
+            showToast("Order delivered! Enjoy your meal! 🍽️", "✅")
+            setActiveQrOrder(null)
+            fetchOrders(true)
+          }
+        }
+      } catch (_) {}
+    }, 3000)
 
-  // ── Filter ─────────────────────────────────────────────────────────────────
-  const filtered = activeFilter === "ALL"
-    ? orders
-    : orders.filter(o => o.order_type === activeFilter)
+    return () => clearInterval(interval)
+  }, [activeQrOrder, fetchOrders]);
+
+  // ── Filter & Search ────────────────────────────────────────────────────────
+  const filtered = React.useMemo(() => {
+    let list = activeFilter === "ALL"
+      ? orders
+      : orders.filter(o => o.order_type === activeFilter)
+
+    if (searchQuery.trim() !== "") {
+      const q = searchQuery.toLowerCase().trim()
+      list = list.filter(o => {
+        const restName = (o.branch?.restaurant?.name || o.branch?.name || "").toLowerCase()
+        const orderNum = (o.order_number || "").toString().toLowerCase()
+        const orderIdVal = (o.id || "").toString().toLowerCase()
+        const hasItem = (o.items || []).some((it: any) => 
+          (it.menu_item?.display_name || it.menu_item?.name || "").toLowerCase().includes(q)
+        )
+        return restName.includes(q) || orderNum.includes(q) || orderIdVal.includes(q) || hasItem
+      })
+    }
+    return list
+  }, [orders, activeFilter, searchQuery])
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-[system-ui,sans-serif]">
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${themeBg}`}>
 
       {/* ── Toast ── */}
-      {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 animate-fade-in">
-          <span>{toast.icon}</span>{toast.msg}
-        </div>
-      )}
+      <AnimatePresence>
+        {toast && (
+          <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] text-xs font-bold px-5 py-3 rounded-full shadow-xl flex items-center gap-2 border backdrop-blur-md transition-all ${
+            theme === "dark" 
+              ? "bg-gray-900/90 text-white border-white/10" 
+              : "bg-white/90 text-gray-800 border-gray-100"
+          }`}>
+            <span>{toast.icon}</span>
+            <span>{toast.msg}</span>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ── Header ── */}
-      <div className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+      <div className={`sticky top-0 z-40 border-b transition-colors ${
+        theme === "dark" ? "bg-gray-900/80 border-white/5 backdrop-blur-md" : "bg-white border-gray-100 shadow-sm"
+      }`}>
         <div className="flex items-center justify-between px-4 py-3.5">
           <button
             onClick={() => router.back()}
-            className="p-2 -ml-1 rounded-full active:bg-gray-100 transition-colors"
+            className={`p-2 -ml-1 rounded-full transition-colors ${
+              theme === "dark" ? "hover:bg-white/5 text-white" : "hover:bg-gray-100 text-gray-700"
+            }`}
           >
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
+            <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="font-extrabold text-sm text-gray-900">My Orders</h1>
-          <button
-            onClick={() => fetchOrders(true)}
-            disabled={refreshing}
-            className="p-2 -mr-1 rounded-full active:bg-gray-100 transition-colors"
-          >
-            <RefreshCw className={`w-4 h-4 text-gray-500 ${refreshing ? "animate-spin" : ""}`} />
-          </button>
+          <h1 className={`font-black text-sm uppercase tracking-wider ${themeTextTitle}`}>My Orders</h1>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                setShowSearch(s => !s)
+                if (showSearch) setSearchQuery("")
+              }}
+              className={`p-2 rounded-full border transition-all active:scale-90 ${
+                showSearch
+                  ? (theme === "dark" ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-600")
+                  : (theme === "dark" ? "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10" : "bg-white border-gray-100 shadow-sm text-gray-500 hover:text-amber-600 hover:bg-gray-50")
+              }`}
+              title="Search Orders"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => {
+                const next = theme === "dark" ? "light" : "dark"
+                setTheme(next)
+                localStorage.setItem("menu-theme", next)
+              }}
+              className={`p-2 rounded-full border transition-all active:scale-90 ${
+                theme === "dark" 
+                  ? "bg-white/5 border-white/10 text-yellow-400 hover:bg-white/10" 
+                  : "bg-white border-gray-100 shadow-sm text-amber-600 hover:bg-gray-50"
+              }`}
+              title="Toggle Theme"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => fetchOrders(true)}
+              disabled={refreshing}
+              className={`p-2 rounded-full transition-colors ${
+                theme === "dark" ? "hover:bg-white/5 text-gray-300" : "hover:bg-gray-100 text-gray-500"
+              }`}
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+          </div>
         </div>
+
+        {/* ── Collapsible Search Panel ── */}
+        <AnimatePresence>
+          {showSearch && (
+            <motion.div
+              key="orders-search"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="overflow-hidden px-4 pb-2"
+            >
+              <div className={`relative flex items-center rounded-xl border transition-all ${
+                theme === "dark" 
+                  ? "bg-white/5 border-white/10 focus-within:border-amber-500/50" 
+                  : "bg-gray-100 border-gray-200 focus-within:border-amber-500 focus-within:bg-white"
+              }`}>
+                <Search className={`w-3.5 h-3.5 absolute left-3 pointer-events-none ${theme === "dark" ? "text-gray-400" : "text-gray-400"}`} />
+                <input
+                  autoFocus
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by restaurant, #number, items..."
+                  className={`w-full bg-transparent pl-9 pr-8 py-2.5 text-xs outline-none ${
+                    theme === "dark" ? "text-white placeholder-gray-500" : "text-gray-900 placeholder-gray-400"
+                  }`}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className={`absolute right-2.5 p-1 rounded-full transition-colors ${
+                      theme === "dark" ? "hover:bg-white/10 text-gray-400 hover:text-white" : "hover:bg-gray-200 text-gray-400 hover:text-gray-800"
+                    }`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── Filter Tabs ── */}
         <div className="flex gap-0 px-4 pb-0 overflow-x-auto scrollbar-none">
@@ -181,25 +293,26 @@ export default function MyOrdersPage() {
             const count = tab.key === "ALL"
               ? orders.length
               : orders.filter(o => o.order_type === tab.key).length
+            const isSelected = activeFilter === tab.key
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveFilter(tab.key)}
-                className={`relative shrink-0 px-4 py-2.5 text-xs font-bold transition-colors ${
-                  activeFilter === tab.key
-                    ? "text-amber-600"
-                    : "text-gray-400 hover:text-gray-600"
+                className={`relative shrink-0 px-4 py-3 text-xs font-bold transition-colors ${
+                  isSelected
+                    ? "text-amber-500"
+                    : (theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-400 hover:text-gray-600")
                 }`}
               >
                 {tab.label}
                 {count > 0 && tab.key !== "ALL" && (
-                  <span className={`ml-1 text-[9px] font-black px-1 py-0.5 rounded-full ${
-                    activeFilter === tab.key
-                      ? "bg-amber-500 text-white"
-                      : "bg-gray-100 text-gray-400"
+                  <span className={`ml-1 text-[9px] font-black px-1.5 py-0.5 rounded-full ${
+                    isSelected
+                      ? "bg-amber-500 text-black"
+                      : (theme === "dark" ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-400")
                   }`}>{count}</span>
                 )}
-                {activeFilter === tab.key && (
+                {isSelected && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500 rounded-t-full" />
                 )}
               </button>
@@ -209,35 +322,36 @@ export default function MyOrdersPage() {
       </div>
 
       {/* ── Content ── */}
-      <div className="flex-1 px-4 py-4 flex flex-col gap-3 pb-10">
+      <div className="flex-1 px-4 py-4 flex flex-col gap-3.5 pb-12">
         {loading ? (
           // Loading skeleton
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
-              <div className="h-10 bg-gray-100" />
+            <div key={i} className={`rounded-2xl border overflow-hidden animate-pulse ${themePanel}`}>
+              <div className={`h-10 ${theme === "dark" ? "bg-white/5" : "bg-gray-100"}`} />
               <div className="flex gap-3 p-4">
-                <div className="w-14 h-14 rounded-xl bg-gray-100 shrink-0" />
+                <div className={`w-14 h-14 rounded-xl shrink-0 ${theme === "dark" ? "bg-white/5" : "bg-gray-100"}`} />
                 <div className="flex-1 flex flex-col gap-2 pt-1">
-                  <div className="h-3 bg-gray-100 rounded-full w-3/4" />
-                  <div className="h-2 bg-gray-100 rounded-full w-1/2" />
-                  <div className="h-2 bg-gray-100 rounded-full w-1/3" />
+                  <div className={`h-3 rounded-full w-3/4 ${theme === "dark" ? "bg-white/5" : "bg-gray-100"}`} />
+                  <div className={`h-2 rounded-full w-1/2 ${theme === "dark" ? "bg-white/5" : "bg-gray-100"}`} />
                 </div>
               </div>
               <div className="flex gap-2 px-4 pb-4">
-                <div className="flex-1 h-8 bg-gray-100 rounded-xl" />
-                <div className="flex-1 h-8 bg-amber-100 rounded-xl" />
+                <div className={`flex-1 h-8 rounded-xl ${theme === "dark" ? "bg-white/5" : "bg-gray-100"}`} />
+                <div className="flex-1 h-8 bg-amber-500/20 rounded-xl" />
               </div>
             </div>
           ))
         ) : filtered.length === 0 ? (
           // Empty state
           <div className="flex-1 flex flex-col items-center justify-center gap-4 py-20 text-center">
-            <div className="w-20 h-20 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center">
-              <Clock className="w-9 h-9 text-amber-300" />
+            <div className={`w-20 h-20 rounded-full border flex items-center justify-center ${
+              theme === "dark" ? "bg-white/5 border-white/10" : "bg-amber-50 border-amber-100"
+            }`}>
+              <Clock className="w-9 h-9 text-amber-500/80" />
             </div>
             <div>
-              <p className="font-extrabold text-sm text-gray-800">No orders yet</p>
-              <p className="text-[11px] text-gray-400 mt-1 max-w-[200px] mx-auto leading-relaxed">
+              <p className={`font-black text-sm ${themeTextTitle}`}>No orders yet</p>
+              <p className={`text-[11px] ${themeTextMuted} mt-1 max-w-[200px] mx-auto leading-relaxed`}>
                 {activeFilter === "ALL"
                   ? "You haven't placed any orders yet. Start exploring our menu!"
                   : `No ${activeFilter.toLowerCase().replace("_", "-")} orders found.`}
@@ -245,7 +359,7 @@ export default function MyOrdersPage() {
             </div>
             <button
               onClick={() => router.push("/home")}
-              className="mt-2 bg-amber-500 text-white font-extrabold text-xs px-7 py-2.5 rounded-xl active:scale-95 transition-all shadow-sm"
+              className="mt-2 bg-amber-500 text-black font-extrabold text-xs px-7 py-2.5 rounded-xl active:scale-95 transition-all shadow-sm"
             >
               Browse Menu
             </button>
@@ -259,7 +373,6 @@ export default function MyOrdersPage() {
               "Restaurant"
             const restaurantId: string | null =
               order.branch?.restaurant?.id || null
-
 
             const firstItem = (order.items || [])[0]
             const firstImage = firstItem?.menu_item?.image_url
@@ -280,25 +393,32 @@ export default function MyOrdersPage() {
               order.order_type === "DELIVERY" ? "Delivery" : "Order"
 
             const statusLabel = STATUS_LABEL[order.status] || order.status
-            const statusColor = STATUS_COLOR[order.status] || "text-gray-500 bg-gray-50 border-gray-200"
+            const statusColor =
+              order.status === "PENDING" ? "text-amber-500 bg-amber-500/10 border-amber-500/20" :
+              order.status === "PREPARING" ? "text-blue-500 bg-blue-500/10 border-blue-500/20" :
+              order.status === "READY" ? "text-green-500 bg-green-500/10 border-green-500/20" :
+              order.status === "COMPLETED" ? "text-gray-400 bg-white/5 border-white/10" :
+              "text-red-500 bg-red-500/10 border-red-200"
 
             return (
               <div
                 key={order.id}
-                className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm"
+                className={`border rounded-2xl overflow-hidden shadow-sm transition-colors ${themeCard}`}
               >
                 {/* Card Header */}
-                <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 border-b border-gray-100">
+                <div className={`flex items-center justify-between px-4 py-2.5 border-b ${
+                  theme === "dark" ? "bg-white/[0.01] border-white/5" : "bg-gray-50/70 border-gray-100"
+                }`}>
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[11px] font-extrabold text-gray-800 truncate">
+                    <span className={`text-[11px] font-extrabold truncate ${themeTextTitle}`}>
                       {restaurantName}
                     </span>
-                    {(order as any).order_number && (
-                      <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-gray-200 text-gray-800 border border-gray-300">
-                        #{(order as any).order_number}
-                      </span>
-                    )}
-                    <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200">
+                    <span className={`shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded border ${
+                      theme === "dark" ? "bg-white/5 border-white/10 text-gray-300" : "bg-gray-200 text-gray-800 border-gray-300"
+                    }`}>
+                      #{order.order_number || order.id.slice(-6).toUpperCase()}
+                    </span>
+                    <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20">
                       {orderTypeLabel}
                     </span>
                   </div>
@@ -310,7 +430,9 @@ export default function MyOrdersPage() {
                 {/* Card Body */}
                 <div className="flex gap-3 px-4 py-3">
                   {/* Food thumbnail */}
-                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 shrink-0 flex items-center justify-center">
+                  <div className={`w-14 h-14 rounded-xl overflow-hidden shrink-0 flex items-center justify-center border ${
+                    theme === "dark" ? "bg-white/5 border-white/5" : "bg-gray-50 border-gray-100"
+                  }`}>
                     {firstImage ? (
                       <img src={firstImage} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -320,43 +442,49 @@ export default function MyOrdersPage() {
 
                   {/* Details */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-xs text-gray-900 leading-snug line-clamp-1">
+                    <p className={`font-bold text-xs leading-snug line-clamp-1 ${themeTextTitle}`}>
                       {firstItem?.menu_item?.display_name || "Item"}
                     </p>
                     {order.items?.length > 1 && (
-                      <p className="text-[9px] text-gray-400 mt-0.5">
+                      <p className={`text-[9px] ${themeTextMuted} mt-0.5`}>
                         + {order.items.length - 1} more item{order.items.length - 1 !== 1 ? "s" : ""}
                       </p>
                     )}
-                    <p className="text-[9px] text-gray-400 mt-1">
+                    <p className={`text-[9px] ${themeTextMuted} mt-1`}>
                       {orderDate} · {orderTime}
                     </p>
-                    <p className="text-[9px] text-gray-400">
+                    <p className={`text-[9px] ${themeTextMuted}`}>
                       {itemCount} item{itemCount !== 1 ? "s" : ""}
                     </p>
                   </div>
 
                   {/* Price */}
                   <div className="shrink-0 text-right pt-0.5">
-                    <p className="font-extrabold text-sm text-gray-900">${totalNum.toFixed(2)}</p>
+                    <p className="font-extrabold text-sm text-amber-500">${totalNum.toFixed(2)}</p>
                   </div>
                 </div>
 
+
+
                 {/* Card Footer — action buttons */}
-                <div className="flex items-center gap-2 px-4 pb-3">
+                <div className="flex items-center gap-2 px-4 pb-3 border-t border-gray-50 dark:border-white/5 pt-3">
                   {order.status === "READY" ? (
                     <button
-                      onClick={() => setScanningOrderId(order.id)}
-                      className="flex-1 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-[10px] font-extrabold text-white transition-all active:scale-95 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                      onClick={() => setActiveQrOrder(order)}
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-[10px] font-extrabold text-white transition-all active:scale-95 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Scan className="w-3.5 h-3.5" />
-                      Scan to Confirm Delivery
+                      <QrCode className="w-3.5 h-3.5" />
+                      Show QR Code
                     </button>
                   ) : (
                     <>
                       <button
                         onClick={() => showToast("Invoice feature coming soon!", "🧾")}
-                        className="flex-1 py-2 rounded-xl border border-gray-200 text-[10px] font-bold text-gray-600 bg-white active:bg-gray-50 transition-all active:scale-95"
+                        className={`flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all active:scale-95 ${
+                          theme === "dark"
+                            ? "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
+                            : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                        }`}
                       >
                         Get Invoice
                       </button>
@@ -368,7 +496,7 @@ export default function MyOrdersPage() {
                             router.push("/home")
                           }
                         }}
-                        className="flex-1 py-2 rounded-xl bg-amber-500 text-[10px] font-extrabold text-white active:bg-amber-600 transition-all active:scale-95 shadow-sm"
+                        className="flex-1 py-2 rounded-xl bg-amber-500 text-[10px] font-extrabold text-black active:bg-amber-400 transition-all active:scale-95 shadow-sm"
                       >
                         Order Again
                       </button>
@@ -381,69 +509,54 @@ export default function MyOrdersPage() {
         )}
       </div>
 
-      {/* SCANNER MODAL */}
-      {scanningOrderId && typeof window !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex flex-col items-center justify-end sm:justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-md bg-white rounded-t-[2.5rem] sm:rounded-3xl overflow-hidden shadow-2xl relative flex flex-col h-[85vh] sm:h-[500px] transition-transform duration-300">
+      {/* activeQrOrder Modal */}
+      {activeQrOrder && typeof window !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+          <div className={`w-full max-w-sm border rounded-3xl overflow-hidden shadow-2xl relative flex flex-col transition-transform duration-300 ${
+            theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-200 text-gray-900"
+          }`}>
             {/* Header */}
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
+            <div className={`p-5 border-b flex justify-between items-center shrink-0 ${
+              theme === "dark" ? "bg-white/[0.02] border-white/5" : "bg-gray-50 border-gray-100"
+            }`}>
+              <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-2 ${themeTextTitle}`}>
                 <QrCode className="w-4 h-4 text-amber-500" />
-                Scan Delivery QR Code
+                Order QR Code
               </h3>
               <button
-                onClick={() => {
-                  setScanningOrderId(null)
-                  setScannerError(null)
-                }}
-                className="text-gray-400 hover:text-gray-900 text-sm px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                onClick={() => setActiveQrOrder(null)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-colors ${
+                  theme === "dark"
+                    ? "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
+                    : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                }`}
               >
-                Cancel
+                Close
               </button>
             </div>
 
-            {/* Viewfinder Area */}
-            <div className="flex-1 bg-black relative flex items-center justify-center overflow-hidden">
-              {scannerError ? (
-                <div className="p-6 text-center space-y-3 z-20">
-                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mx-auto text-red-500">
-                    <Camera className="w-6 h-6" />
-                  </div>
-                  <p className="text-xs text-white font-bold">Camera Access Failed</p>
-                  <p className="text-[11px] text-gray-400 leading-relaxed max-w-[280px] mx-auto">
-                    {scannerError}
-                  </p>
-                  <p className="text-[10px] text-amber-500/90 font-medium animate-pulse">
-                    Please use simulated action below if testing on HTTP without camera permissions.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <QRScanner onScan={handleDeliveryQRScan} onError={(err) => setScannerError(err)} />
-                  {/* Hint text */}
-                  <div className="absolute bottom-4 left-0 right-0 text-center z-20 pointer-events-none">
-                    <span className="bg-black/60 text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-white/5">
-                      Point camera at waiter's delivery QR
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
+            {/* QR Content */}
+            <div className="p-8 flex flex-col items-center justify-center gap-4 text-center">
+              <p className={`text-xs font-bold ${themeTextTitle}`}>
+                Share this QR code with the waiter to verify and confirm your order delivery.
+              </p>
 
-            {/* Simulation/testing actions */}
-            <div className="p-4 border-t border-gray-100 bg-gray-50/50 space-y-3 shrink-0">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                Testing Fallback (HTTP / No second device)
-              </span>
-              <button
-                onClick={() => {
-                  handleDeliveryQRScan(`order_delivery:${scanningOrderId}`)
-                }}
-                className="w-full bg-green-600 hover:bg-green-500 text-white text-xs font-black py-2.5 px-3 rounded-xl shadow-md transition-all active:scale-95 text-center flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Scan className="w-3.5 h-3.5" />
-                Simulate Scan and Confirm Delivery
-              </button>
+              <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-inner flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent("order_delivery:" + activeQrOrder.id)}`}
+                  alt="Order QR Code"
+                  className="w-52 h-52 object-contain"
+                />
+              </div>
+
+              <div className="space-y-1 mt-2">
+                <p className={`text-xs font-black uppercase tracking-wider ${themeTextTitle}`}>
+                  Order #{activeQrOrder.order_number || activeQrOrder.id.slice(-6).toUpperCase()}
+                </p>
+                <p className={`text-[10px] ${themeTextMuted}`}>
+                  {activeQrOrder.branch?.restaurant?.name || activeQrOrder.branch?.name || "Restaurant"}
+                </p>
+              </div>
             </div>
           </div>
         </div>,
@@ -451,121 +564,4 @@ export default function MyOrdersPage() {
       )}
     </div>
   )
-}
-
-interface QRScannerProps {
-  onScan: (data: string) => void;
-  onError: (error: string) => void;
-}
-
-function QRScanner({ onScan, onError }: QRScannerProps) {
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-  const streamRef = React.useRef<MediaStream | null>(null);
-  const animRef = React.useRef<number | null>(null);
-
-  React.useEffect(() => {
-    let isMounted = true;
-
-    async function initCamera() {
-      if (typeof window === "undefined" || !navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        onError("Camera access requires a secure connection (HTTPS) on mobile. Accessing via HTTP blocks camera APIs. Please use HTTPS or continue testing with the simulated actions below.");
-        return;
-      }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }
-        });
-
-        if (!isMounted) {
-          stream.getTracks().forEach(track => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute("playsinline", "true");
-          videoRef.current.play().catch(e => {
-            console.error("Video play failed:", e);
-          });
-        }
-
-        animRef.current = requestAnimationFrame(scan);
-      } catch (err: any) {
-        console.error("Camera capture error:", err);
-        onError(err.message || "Failed to access camera. Please verify camera permissions are granted.");
-      }
-    }
-
-    function scan() {
-      if (!isMounted) return;
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (ctx) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-          try {
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: "dontInvert"
-            });
-            if (code && code.data) {
-              onScan(code.data);
-              return; // Stop scan loop
-            }
-          } catch (e) {
-            console.error("jsQR scan error:", e);
-          }
-        }
-      }
-      animRef.current = requestAnimationFrame(scan);
-    }
-
-    initCamera();
-
-    return () => {
-      isMounted = false;
-      if (animRef.current) {
-        cancelAnimationFrame(animRef.current);
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [onScan, onError]);
-
-  return (
-    <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
-      <video
-        ref={videoRef}
-        className="absolute inset-0 w-full h-full object-cover"
-        muted
-        playsInline
-      />
-      <canvas ref={canvasRef} className="hidden" />
-
-      {/* Viewfinder Grid Overlay */}
-      <div className="absolute inset-0 border-[30px] border-black/80 pointer-events-none z-10" />
-      <div className="w-64 h-64 border-2 border-white/20 rounded-3xl relative flex items-center justify-center overflow-hidden z-20 pointer-events-none">
-        {/* Corners */}
-        <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-amber-500 rounded-tl-lg" />
-        <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-amber-500 rounded-tr-lg" />
-        <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-amber-500 rounded-bl-lg" />
-        <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-amber-500 rounded-br-lg" />
-
-        {/* Laser Animation */}
-        <div className="absolute left-0 right-0 h-1 bg-amber-500 opacity-80 shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-pulse"
-          style={{
-            animation: "scanner-laser 2s ease-in-out infinite",
-            top: "0%"
-          }}
-        />
-      </div>
-    </div>
-  );
 }

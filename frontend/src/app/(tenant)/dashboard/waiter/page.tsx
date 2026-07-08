@@ -208,9 +208,46 @@ export default function WaiterDashboard() {
   const [activeTab, setActiveTab] = React.useState<"home" | "tables" | "orders" | "alerts">("home")
   const [showScannerModal, setShowScannerModal] = React.useState(false)
   const [scannerError, setScannerError] = React.useState<string | null>(null)
-  const [activeQrOrder, setActiveQrOrder] = React.useState<{ id: string; qrCodeUrl: string } | null>(null)
+  const [activeQrOrder, setActiveQrOrder] = React.useState<any | null>(null)
+
+  const handleMarkDelivered = React.useCallback(async (orderId: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "COMPLETED" })
+      })
+      if (res.ok) {
+        const order = orders.find(o => o.id === orderId)
+        const tbl = order?.table_id ? tables.find(t => t.id === order.table_id) : null
+        const tblLabel = tbl ? `Table T${tbl.table_number}` : "Customer"
+        setActivityLogs(prev => [
+          { id: Math.random().toString(), type: "serve_order", message: `Served Order to ${tblLabel}`, timestamp: "Just now" },
+          ...prev
+        ])
+        setOrders(prev => prev.filter(o => o.id !== orderId))
+      }
+    } catch (err) {
+      console.error("Failed to mark order as delivered", err)
+    }
+  }, [orders, tables])
+
+  const handleOpenDeliveryQr = React.useCallback((orderId: string) => {
+    const order = orders.find(o => o.id === orderId)
+    if (order) {
+      setActiveQrOrder(order)
+    }
+  }, [orders])
 
   const handleQRScan = React.useCallback((codeString: string) => {
+    if (codeString.startsWith("order_delivery:")) {
+      const orderId = codeString.substring("order_delivery:".length)
+      handleMarkDelivered(orderId)
+      setShowScannerModal(false)
+      setScannerError(null)
+      return
+    }
+
     let tableId: string | null = null;
     try {
       const url = new URL(codeString);
@@ -251,8 +288,8 @@ export default function WaiterDashboard() {
       }
     }
 
-    alert(`Invalid QR code scanned: ${codeString}. No matching table found.`);
-  }, [tables]);
+    alert(`Invalid QR code scanned: ${codeString}. No matching table or order found.`);
+  }, [tables, handleMarkDelivered]);
   const [activityLogs, setActivityLogs] = React.useState<Array<{
     id: string;
     type: "create_order" | "clear_table" | "serve_order";
@@ -609,60 +646,7 @@ export default function WaiterDashboard() {
     } catch { setError("Network error. Please try again.") }
   }
 
-  const handleMarkDelivered = async (orderId: string) => {
-    try {
-      const res = await fetch(`/api/orders/${orderId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "COMPLETED" })
-      })
-      if (res.ok) {
-        const order = orders.find(o => o.id === orderId)
-        const tbl = order?.table_id ? tables.find(t => t.id === order.table_id) : null
-        const tblLabel = tbl ? `Table T${tbl.table_number}` : "Customer"
-        setActivityLogs(prev => [
-          { id: Math.random().toString(), type: "serve_order", message: `Served Order to ${tblLabel}`, timestamp: "Just now" },
-          ...prev
-        ])
-        setOrders(prev => prev.filter(o => o.id !== orderId))
-      }
-    } catch (err) {
-      console.error("Failed to mark order as delivered", err)
-    }
-  }
-
-  const handleOpenDeliveryQr = async (orderId: string) => {
-    try {
-      const res = await fetch(`/api/orders/${orderId}/delivery-qr`);
-      if (res.ok) {
-        const data = await res.json();
-        setActiveQrOrder({ id: orderId, qrCodeUrl: data.qrCodeUrl });
-      } else {
-        alert("Failed to fetch delivery QR. Please try again.");
-      }
-    } catch (err) {
-      console.error("Error fetching delivery QR:", err);
-      alert("Network error fetching delivery QR.");
-    }
-  };
-
-  React.useEffect(() => {
-    if (activeQrOrder) {
-      const stillReady = orders.some(o => o.id === activeQrOrder.id && o.status === "READY");
-      if (!stillReady) {
-        setActiveQrOrder(null);
-        setActivityLogs(prev => [
-          {
-            id: Math.random().toString(),
-            type: "serve_order",
-            message: `Order verified and delivered!`,
-            timestamp: "Just now"
-          },
-          ...prev
-        ]);
-      }
-    }
-  }, [orders, activeQrOrder]);
+  // Delivery confirmation handlers migrated to states block
 
   const handleAssignTable = async (orderId: string, tableId: string) => {
     try {
@@ -1054,9 +1038,7 @@ export default function WaiterDashboard() {
                                     <Button
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        tableReadyOrder.placed_by_staff
-                                          ? handleMarkDelivered(tableReadyOrder.id)
-                                          : handleOpenDeliveryQr(tableReadyOrder.id)
+                                        handleMarkDelivered(tableReadyOrder.id)
                                       }}
                                       size="sm"
                                       className="w-full text-[9px] sm:text-[10px] h-6 sm:h-7 bg-emerald-600 hover:bg-emerald-500 font-bold animate-pulse"
@@ -1195,7 +1177,7 @@ export default function WaiterDashboard() {
                       </span>
                       {order.status === "READY" && (
                         <Button
-                          onClick={() => order.placed_by_staff ? handleMarkDelivered(order.id) : handleOpenDeliveryQr(order.id)}
+                          onClick={() => (order.table_id || order.placed_by_staff) ? handleMarkDelivered(order.id) : handleOpenDeliveryQr(order.id)}
                           size="sm"
                           className="bg-emerald-600 hover:bg-emerald-500 font-bold text-[10px] px-2.5 py-1 h-7 rounded-lg"
                         >
@@ -1837,15 +1819,15 @@ export default function WaiterDashboard() {
         document.body
       )}
 
-      {/* DELIVERY QR CODE DISPLAY MODAL */}
+      {/* DELIVERY VERIFICATION MODAL */}
       {activeQrOrder && typeof window !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-sm bg-[var(--surface)] border border-[var(--surface-border)] rounded-3xl overflow-hidden shadow-2xl relative flex flex-col transition-transform duration-300">
             {/* Header */}
             <div className="p-5 border-b border-[var(--surface-border)] flex justify-between items-center bg-[var(--surface-hover)]/40 shrink-0">
               <h3 className="text-sm font-black text-[var(--foreground)] uppercase tracking-wider flex items-center gap-2">
-                <QrCode className="w-4 h-4 text-emerald-500" />
-                Delivery Verification
+                <QrCode className="w-4 h-4 text-amber-500" />
+                Confirm Delivery
               </h3>
               <button
                 onClick={() => setActiveQrOrder(null)}
@@ -1855,37 +1837,45 @@ export default function WaiterDashboard() {
               </button>
             </div>
 
-            {/* QR Code and Instructions */}
-            <div className="p-8 flex flex-col items-center justify-center bg-[var(--surface)] gap-4 text-center">
-              <p className="text-xs text-[var(--foreground)] font-bold">
-                Order Delivery Confirmation QR
-              </p>
-              
-              <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-inner flex items-center justify-center">
-                <img
-                  src={activeQrOrder.qrCodeUrl}
-                  alt="Delivery QR Code"
-                  className="w-56 h-56 object-contain"
-                />
+            {/* Verification options */}
+            <div className="p-6 flex flex-col items-center justify-center bg-[var(--surface)] gap-5 text-center">
+              <div className="space-y-1">
+                <p className="text-xs text-[var(--muted)] font-bold uppercase tracking-wider">
+                  Order Verification
+                </p>
+                <p className="text-lg font-black text-[var(--foreground)]">
+                  Order #{activeQrOrder.order_number || activeQrOrder.id.slice(-6).toUpperCase()}
+                </p>
               </div>
 
-              <p className="text-[11px] text-[var(--muted)] leading-relaxed max-w-[260px]">
-                Please ask the customer to scan this QR code using the scanner in their <span className="font-extrabold text-amber-500">My Orders</span> history page to confirm delivery.
-              </p>
+              <div className="w-full border border-[var(--surface-border)] rounded-2xl p-4 bg-[var(--surface-hover)]/20 space-y-3">
+                <p className="text-[11px] text-[var(--muted)] leading-relaxed">
+                  Method 1: Scan the customer's QR code on their device.
+                </p>
+                <button
+                  onClick={() => {
+                    setActiveQrOrder(null);
+                    setShowScannerModal(true);
+                  }}
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-black font-extrabold py-2.5 rounded-xl text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md"
+                >
+                  <QrCode className="w-4 h-4" />
+                  Scan Customer QR
+                </button>
+              </div>
 
-              {/* Developer/Testing Fallback */}
-              <div className="w-full pt-4 border-t border-[var(--surface-border)] mt-2">
-                <p className="text-[10px] text-amber-500 font-medium mb-2">
-                  Testing fallback (HTTP / no second device):
+              <div className="w-full border border-[var(--surface-border)] rounded-2xl p-4 bg-[var(--surface-hover)]/20 space-y-3">
+                <p className="text-[11px] text-[var(--muted)] leading-relaxed">
+                  Method 2: Confirm by manually viewing and matching the order code.
                 </p>
                 <button
                   onClick={() => {
                     handleMarkDelivered(activeQrOrder.id);
                     setActiveQrOrder(null);
                   }}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2 rounded-xl text-xs transition-all active:scale-95"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 rounded-xl text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md"
                 >
-                  Mark Delivered (Skip Scan)
+                  Confirm Delivery by Code
                 </button>
               </div>
             </div>
