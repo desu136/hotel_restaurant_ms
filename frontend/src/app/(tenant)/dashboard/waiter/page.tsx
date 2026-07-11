@@ -71,9 +71,11 @@ interface Order {
   table?: {
     id: string
     table_number: string
+    waiter?: { id: string; full_name: string } | null
   } | null
   items: OrderItem[]
   waiter_id?: string | null
+  waiter?: { id: string; full_name: string } | null
   placed_by_staff?: boolean
 }
 
@@ -209,6 +211,9 @@ export default function WaiterDashboard() {
   const [showScannerModal, setShowScannerModal] = React.useState(false)
   const [scannerError, setScannerError] = React.useState<string | null>(null)
   const [activeQrOrder, setActiveQrOrder] = React.useState<any | null>(null)
+  // Manager-specific: branch waiters list & active waiter filter
+  const [branchWaiters, setBranchWaiters] = React.useState<{ id: string; full_name: string }[]>([])
+  const [selectedWaiterId, setSelectedWaiterId] = React.useState<string>("")
 
   const handleMarkDelivered = React.useCallback(async (orderId: string) => {
     try {
@@ -396,6 +401,19 @@ export default function WaiterDashboard() {
 
       setSelectedRestId(activeRestId)
       setSelectedBranchId(activeBranchId)
+
+      // For managers/owners: fetch branch waiters for the filter dropdown
+      const isManagerOrOwner = (finalMe?.roles || []).some((r: string) =>
+        ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r)
+      )
+      if (isManagerOrOwner && activeBranchId) {
+        const empRes = await fetch(`/api/employees?branch_id=${activeBranchId}`)
+        const empData = empRes.ok ? await empRes.json() : []
+        const waiters = empData.filter((e: any) =>
+          (e.roles || []).some((r: any) => (r.role?.code || r) === 'WAITER')
+        )
+        setBranchWaiters(waiters.map((e: any) => ({ id: e.id, full_name: e.full_name })))
+      }
 
       if (activeRestId) {
         await fetchRestaurantData(activeRestId, activeBranchId)
@@ -699,7 +717,22 @@ export default function WaiterDashboard() {
   const myTables = tables.filter(t => t.waiter_id === me?.id)
   const otherTables = tables.filter(t => t.waiter_id !== me?.id)
 
+  // Is the logged-in user a manager or owner?
+  const isManager = (me?.roles || []).some(r =>
+    ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r)
+  )
+
   const filterMyOrUnassigned = (o: Order) => {
+    // Managers see all orders (optionally filtered by selected waiter)
+    if (isManager) {
+      if (!selectedWaiterId) return true
+      const waiterMatch =
+        o.waiter_id === selectedWaiterId ||
+        o.waiter?.id === selectedWaiterId ||
+        o.table?.waiter?.id === selectedWaiterId
+      return waiterMatch
+    }
+    // Regular waiters see only their own orders
     return o.waiter_id === me?.id || (o.table_id ? myTables.some(t => t.id === o.table_id) : true);
   }
 
@@ -765,100 +798,100 @@ export default function WaiterDashboard() {
   return (
     <div className="space-y-8 pb-24 md:pb-12 bg-[var(--background)] text-[var(--foreground)]  ">
       {/* Header and Stats */}
-      {activeTab === "home" && (
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight mb-1">Waiter Station</h1>
-            <p className="">
-              Active User: <strong className="">{me?.name || "Loading..."}</strong> • Manage your assigned tables and ready orders.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {!me?.branchId ? (
-              <>
-                {restaurants.length > 1 && (
-                  <select
-                    value={selectedRestId}
-                    onChange={e => handleRestaurantChange(e.target.value)}
-                    className=" border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold  focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  >
-                    {restaurants.map(r => (
-                      <option key={r.id} value={r.id} className="">{r.name}</option>
-                    ))}
-                  </select>
-                )}
-                <select
-                  value={selectedBranchId}
-                  onChange={e => handleBranchChange(e.target.value)}
-                  className=" border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
-                >
-                  <option value="" className="">— Select Branch —</option>
-                  {branches
-                    .filter(b => b.restaurant_id === selectedRestId)
-                    .map(b => (
-                      <option key={b.id} value={b.id} className="">{b.name}</option>
-                    ))
-                  }
-                </select>
-              </>
-            ) : (
-              <span className="text-xs font-bold  border border-[var(--surface-border)] px-3 py-1.5 rounded-lg">
-                {branches.find(b => b.id === me.branchId)?.name || "Assigned Branch"}
-              </span>
-            )}
-          </div>
+      {/* {activeTab === "home" && ( */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight mb-1">Waiter Station</h1>
+          <p className="">
+            Active User: <strong className="">{me?.name || "Loading..."}</strong> • Manage your assigned tables and ready orders.
+          </p>
         </div>
-      )}
+
+        <div className="flex items-center gap-3">
+          {!me?.branchId ? (
+            <>
+              {restaurants.length > 1 && (
+                <select
+                  value={selectedRestId}
+                  onChange={e => handleRestaurantChange(e.target.value)}
+                  className=" border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold  focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  {restaurants.map(r => (
+                    <option key={r.id} value={r.id} className="">{r.name}</option>
+                  ))}
+                </select>
+              )}
+              <select
+                value={selectedBranchId}
+                onChange={e => handleBranchChange(e.target.value)}
+                className=" border border-[var(--surface-border)] rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="" className="">— Select Branch —</option>
+                {branches
+                  .filter(b => b.restaurant_id === selectedRestId)
+                  .map(b => (
+                    <option key={b.id} value={b.id} className="">{b.name}</option>
+                  ))
+                }
+              </select>
+            </>
+          ) : (
+            <span className="text-xs font-bold  border border-[var(--surface-border)] px-3 py-1.5 rounded-lg">
+              {branches.find(b => b.id === me.branchId)?.name || "Assigned Branch"}
+            </span>
+          )}
+        </div>
+      </div>
+      {/* // )} */}
 
       {/* Compact Status Bar */}
-      {activeTab === "home" && (
-        <div className=" border border-[var(--surface-border)] backdrop-blur-md rounded-2xl p-4 flex items-center justify-between gap-4 text-xs font-semibold shadow-sm">
-          <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
-            {/* Tables Status */}
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full" />
-              <span className="">Tables:</span>
-              <span className="font-bold">
-                {myTables.filter(t => getTableStatus(t.id) === "OCCUPIED").length}/{myTables.length}
-              </span>
-            </div>
-
-            <span className=" hidden sm:inline">|</span>
-
-            {/* Orders Status */}
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full " />
-              <span className="">Orders:</span>
-              <span className="text-[var(--foreground)] font-bold">
-                {orders.filter(filterMyOrUnassigned).length}
-              </span>
-            </div>
-
-            <span className=" hidden sm:inline">|</span>
-
-            {/* Ready to Serve Status */}
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="">Ready:</span>
-              <span className=" font-bold">
-                {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length}
-              </span>
-            </div>
+      {/* {activeTab === "home" && ( */}
+      <div className=" border border-[var(--surface-border)] backdrop-blur-md rounded-2xl p-4 flex items-center justify-between gap-4 text-xs font-semibold shadow-sm">
+        <div className="flex items-center flex-wrap gap-x-1 gap-y-2">
+          {/* Tables Status */}
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full" />
+            <span className="">Tables:</span>
+            <span className="font-bold">
+              {myTables.filter(t => getTableStatus(t.id) === "OCCUPIED").length}/{myTables.length}
+            </span>
           </div>
 
-          <div className="text-[10px]  uppercase tracking-wider font-bold  border border-[var(--surface-border)] px-2.5 py-1 rounded-full">
-            Live Station
+          <span className=" hidden sm:inline">|</span>
+
+          {/* Orders Status */}
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full " />
+            <span className="">Orders:</span>
+            <span className="text-[var(--foreground)] font-bold">
+              {orders.filter(filterMyOrUnassigned).length}
+            </span>
+          </div>
+
+          <span className=" hidden sm:inline">|</span>
+
+          {/* Ready to Serve Status */}
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="">Ready:</span>
+            <span className=" font-bold">
+              {orders.filter(o => filterMyOrUnassigned(o) && o.status === "READY").length}
+            </span>
           </div>
         </div>
-      )}
+
+        <div className="text-[10px]  uppercase tracking-wider font-bold  border border-[var(--surface-border)] px-2.5 py-1 rounded-full">
+          Live Station
+        </div>
+      </div>
+      {/* )} */}
 
       {/* Main Layout Area */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left/Middle Column: Tabs & Layouts */}
         <div className="lg:col-span-2 space-y-6">
           {/* Desktop/Tablet Tab buttons */}
-          <div className="hidden md:flex border-b border-[var(--surface-border)] overflow-x-auto scrollbar-none">
+          <div className="flex flex-row md:flex border-b border-[var(--surface-border)] overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveTab("home")}
               className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${activeTab === "home"
@@ -1106,6 +1139,23 @@ export default function WaiterDashboard() {
 
           {activeTab === "orders" && (
             <div className="space-y-3">
+              {isManager && (
+                <div className="flex items-center justify-between gap-4 p-3 bg-[var(--surface-hover)]/30 border border-[var(--surface-border)] rounded-xl">
+                  <span className="text-xs font-bold text-[var(--muted)]">Filter by Waiter:</span>
+                  <select
+                    value={selectedWaiterId}
+                    onChange={(e) => setSelectedWaiterId(e.target.value)}
+                    className="border border-[var(--surface-border)] text-xs text-[var(--foreground)] bg-[var(--surface)] rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary-500)] cursor-pointer"
+                  >
+                    <option value="">All Waiters</option>
+                    {branchWaiters.map(w => (
+                      <option key={w.id} value={w.id}>
+                        {w.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {orders.filter(filterMyOrUnassigned).map(order => (
                 <Card key={order.id} className=" border-[var(--surface-border)] overflow-hidden hover:border-blue-500/20 transition-all p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
@@ -1133,6 +1183,12 @@ export default function WaiterDashboard() {
                         <span className="text-[10px] ">
                           {new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </span>
+
+                        {(order.waiter?.full_name || order.table?.waiter?.full_name) && (
+                          <span className="text-[10px] font-medium bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded">
+                            Waiter: {order.waiter?.full_name || order.table?.waiter?.full_name}
+                          </span>
+                        )}
                       </div>
 
                       {/* Items Row: Inline Comma Separated */}

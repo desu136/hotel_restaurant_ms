@@ -1046,7 +1046,7 @@ export default function CustomerMenuPage() {
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       e.preventDefault()
-                                      const cartIdx = cart.findIndex(c => c.menuItem.id === item.id && Object.keys(c.selectedCustomizations).length === 0)
+                                      const cartIdx = cart.findIndex(c => c.menuItem.id === item.id)
                                       if (cartIdx >= 0) updateCartQty(cartIdx, -1)
                                     }}
                                     className="font-black text-sm w-4 h-4 flex items-center justify-center"
@@ -1058,7 +1058,12 @@ export default function CustomerMenuPage() {
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       e.preventDefault()
-                                      addToCartDirectly(item)
+                                      const cartIdx = cart.findIndex(c => c.menuItem.id === item.id)
+                                      if (cartIdx >= 0) {
+                                        updateCartQty(cartIdx, 1)
+                                      } else {
+                                        addToCartDirectly(item)
+                                      }
                                     }}
                                     className="font-black text-sm w-4 h-4 flex items-center justify-center"
                                   >

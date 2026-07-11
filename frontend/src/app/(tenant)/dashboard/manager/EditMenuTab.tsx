@@ -118,6 +118,10 @@ export function EditMenuTab() {
   const [branchCategories, setBranchCategories] = React.useState<Category[]>([])
   const [masterMenuItems, setMasterMenuItems] = React.useState<MasterMenuItem[]>([])
   const [branchMenuItems, setBranchMenuItems] = React.useState<MenuItem[]>([])
+  const [currentUser, setCurrentUser] = React.useState<{ branch_id?: string | null; roles?: string[] } | null>(null)
+
+  // A branch manager has a non-null branch_id; overall managers / owners do not
+  const isBranchManager = !!(currentUser?.branch_id)
 
   const [loading, setLoading] = React.useState(true)
   const [tables, setTables] = React.useState<RestaurantTable[]>([])
@@ -153,6 +157,12 @@ export function EditMenuTab() {
       const myRes = await fetch("/api/restaurant/my")
       const myData = myRes.ok ? await myRes.json() : null
       setRestaurant(myData)
+
+      // Get current user to determine role scope
+      const meRes = await fetch("/api/auth/me")
+      const meData = meRes.ok ? await meRes.json() : null
+      const user = meData?.user ?? null
+      setCurrentUser(user)
 
       if (myData) {
         const [branchRes, masterCatRes, branchCatRes, masterMenuRes, branchMenuRes, tablesRes] = await Promise.all([
@@ -240,8 +250,9 @@ export function EditMenuTab() {
       description: "",
       price: "",
       prepTime: "",
-      isMaster: true,
-      branchId: branches[0]?.id ?? "",
+      // Branch managers cannot create master/broadcasted items
+      isMaster: isBranchManager ? false : true,
+      branchId: currentUser?.branch_id ?? branches[0]?.id ?? "",
       categoryId: "",
       availability: true,
       imageUrl: "",
@@ -632,7 +643,8 @@ export function EditMenuTab() {
                   </select>
                 </div>
 
-                {!editMenuTarget && (
+                {/* Broadcast toggle — hidden for branch managers */}
+                {!editMenuTarget && !isBranchManager && (
                   <div className="flex items-center gap-2 pt-6">
                     <input
                       type="checkbox"
@@ -651,15 +663,22 @@ export function EditMenuTab() {
               {!menuForm.isMaster && !editMenuTarget && (
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Target Branch <span className="text-red-500">*</span></label>
-                  <select
-                    value={menuForm.branchId}
-                    onChange={e => setMenuForm(f => ({ ...f, branchId: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none"
-                  >
-                    {branches.map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
+                  {isBranchManager ? (
+                    // Branch managers are locked to their own branch
+                    <p className="px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm text-[var(--muted)]">
+                      {branches.find(b => b.id === menuForm.branchId)?.name ?? "Your Branch"}
+                    </p>
+                  ) : (
+                    <select
+                      value={menuForm.branchId}
+                      onChange={e => setMenuForm(f => ({ ...f, branchId: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none"
+                    >
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
 

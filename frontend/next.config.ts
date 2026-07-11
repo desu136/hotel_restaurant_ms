@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: [
     // Current active IPs
     '192.168.1.9',
+    '192.168.1.16',
     '192.168.1.13',
     '192.168.1.16',
     '10.167.172.97',
