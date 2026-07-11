@@ -23,6 +23,7 @@ import {
   Bell,
   GitBranchIcon,
   BarChart3,
+  Megaphone,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/ui/profile-dropdown"
 
@@ -98,6 +99,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
       { href: "/dashboard/manager/tables", label: "Tables", icon: Table2, exact: false },
       { href: "/dashboard/manager/qr", label: "QR Codes", icon: QrCode, exact: false },
       { href: "/dashboard/manager/staff", label: "Staff", icon: Users2, exact: false },
+      { href: "/dashboard/manager/promotions", label: "Promotions", icon: Megaphone, exact: false },
       { href: "/dashboard/manager/reports", label: "Reports", icon: BarChart3, exact: false }
     )
   }

@@ -62,7 +62,14 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
     // Try to parse as JSON, fall back to raw text
     try {
       const json = JSON.parse(data);
-      return NextResponse.json(json, { status: backendRes.status });
+      return NextResponse.json(json, { 
+        status: backendRes.status,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        }
+      });
     } catch {
       return new NextResponse(data, {
         status: backendRes.status,

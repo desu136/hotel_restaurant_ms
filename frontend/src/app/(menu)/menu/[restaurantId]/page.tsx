@@ -1,7 +1,7 @@
 "use client"
 import * as React from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
-import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon, Check, Store, Navigation, ChevronRight, Timer } from "lucide-react"
+import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon, Check, Store, Navigation, ChevronRight, Timer, Sparkles } from "lucide-react"
 import PaymentScreen from "./PaymentScreen"
 import { motion, AnimatePresence } from "framer-motion"
 import { setPreferredRestaurantId, getUserProfile, MiniAppUser } from "@/lib/miniapp-bridge"
@@ -154,6 +154,29 @@ function SlideshowImage({
   )
 }
 
+// Maps a category name to a representative food emoji
+const getCategoryEmoji = (name: string): string => {
+  const n = name.toLowerCase()
+  if (n.includes("burger") || n.includes("sandwich")) return "🍔"
+  if (n.includes("fry") || n.includes("potato") || n.includes("chip")) return "🍟"
+  if (n.includes("drink") || n.includes("beverage") || n.includes("soda") || n.includes("juice") || n.includes("coke") || n.includes("water")) return "🥤"
+  if (n.includes("dessert") || n.includes("ice") || n.includes("shake") || n.includes("sweet") || n.includes("cake")) return "🍦"
+  if (n.includes("pizza")) return "🍕"
+  if (n.includes("chicken") || n.includes("wing") || n.includes("nugget")) return "🍗"
+  if (n.includes("pasta") || n.includes("noodle")) return "🍝"
+  if (n.includes("salad") || n.includes("green") || n.includes("veg")) return "🥗"
+  if (n.includes("combo") || n.includes("deal") || n.includes("pack") || n.includes("offer")) return "🎁"
+  if (n.includes("breakfast") || n.includes("morning") || n.includes("egg")) return "🍳"
+  if (n.includes("coffee") || n.includes("tea") || n.includes("latte") || n.includes("espresso")) return "☕"
+  if (n.includes("fish") || n.includes("seafood") || n.includes("shrimp")) return "🐟"
+  if (n.includes("soup") || n.includes("hot")) return "🍲"
+  if (n.includes("wrap") || n.includes("roll") || n.includes("taco")) return "🌯"
+  if (n.includes("rice") || n.includes("grain")) return "🍚"
+  if (n.includes("steak") || n.includes("beef") || n.includes("meat")) return "🥩"
+  if (n.includes("snack") || n.includes("side")) return "🧆"
+  return "🍽️"
+}
+
 export default function CustomerMenuPage() {
   const params = useParams()
   const searchParams = useSearchParams()
@@ -184,6 +207,13 @@ export default function CustomerMenuPage() {
   const [showPayment, setShowPayment] = React.useState(false)
   const [orderType, setOrderType] = React.useState<"DINE_IN" | "TAKEAWAY" | "DELIVERY">("DINE_IN")
   const [deliveryAddress, setDeliveryAddress] = React.useState("")
+  const [promoEvaluation, setPromoEvaluation] = React.useState<{
+    promotion_id: string | null;
+    promotion_title: string | null;
+    discount_amount: number;
+    hints: string[];
+  }>({ promotion_id: null, promotion_title: null, discount_amount: 0, hints: [] })
+
 
   // Item detail page (fully covered screen)
   const [selectedItem, setSelectedItem] = React.useState<MenuItem | null>(null)
@@ -235,14 +265,67 @@ export default function CustomerMenuPage() {
 
       const cats: Category[] = catRes.ok ? await catRes.json() : []
       setCategories(cats)
-      setMenuItems(menuRes.ok ? await menuRes.json() : [])
+      const items = menuRes.ok ? await menuRes.json() : []
+      setMenuItems(items)
 
-      // Set initial parent category
-      const parents = cats.filter(c => !c.parent_id)
-      if (parents.length > 0) {
-        setActiveParentId(parents[0].id)
+      // Resolve deep link category/item if present
+      const targetCategoryId = searchParams.get("categoryId")
+      const targetMenuItemId = searchParams.get("menuItemId")
+
+      if (targetMenuItemId) {
+        const targetItem = items.find((item: MenuItem) => item.id === targetMenuItemId)
+        if (targetItem) {
+          setSelectedItem(targetItem)
+          const defaults: Record<string, string | string[]> = {}
+          if (targetItem.customizations && targetItem.customizations.length > 0) {
+            (targetItem.customizations as Customization[]).forEach((cust: Customization) => {
+              const recommendedVals = cust.values
+                .filter((v: CustomizationValue) => typeof v !== "string" && v.recommended)
+                .map((v: CustomizationValue) => typeof v === "string" ? v : v.name)
+              if (recommendedVals.length > 0) {
+                if (cust.multiple) {
+                  defaults[cust.key] = recommendedVals
+                } else {
+                  defaults[cust.key] = recommendedVals[0]
+                }
+              }
+            })
+          }
+          setItemCustomizations(defaults)
+          setItemNotes("")
+          setItemQty(1)
+
+          if (targetItem.category_id) {
+            const cat = cats.find(c => c.id === targetItem.category_id)
+            if (cat) {
+              if (cat.parent_id) {
+                setActiveParentId(cat.parent_id)
+                setActiveSubCategory(cat.id)
+              } else {
+                setActiveParentId(cat.id)
+                setActiveSubCategory("all")
+              }
+            }
+          }
+        }
+      } else if (targetCategoryId) {
+        const cat = cats.find(c => c.id === targetCategoryId)
+        if (cat) {
+          if (cat.parent_id) {
+            setActiveParentId(cat.parent_id)
+            setActiveSubCategory(cat.id)
+          } else {
+            setActiveParentId(cat.id)
+            setActiveSubCategory("all")
+          }
+        }
       } else {
-        setActiveParentId("")
+        const parents = cats.filter(c => !c.parent_id)
+        if (parents.length > 0) {
+          setActiveParentId(parents[0].id)
+        } else {
+          setActiveParentId("")
+        }
       }
 
       // Update active local state
@@ -482,6 +565,43 @@ export default function CustomerMenuPage() {
   // Cart total calculations
   const cartTotal = cart.reduce((sum, c) => sum + getCustomizedItemPrice(c.menuItem, c.selectedCustomizations) * c.quantity, 0)
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0)
+  // Discounted final total (promotion engine result)
+  const promoDiscount = promoEvaluation.discount_amount ?? 0
+  const cartFinalTotal = Math.max(0, cartTotal - promoDiscount)
+
+  // Evaluate promotions whenever cart, orderType, or miniAppUser changes
+  React.useEffect(() => {
+    const tenantId = localStorage.getItem("hospitality_tenant_id") || ""
+    const customerId = miniAppUser?.id || null
+    const items = cart.map(c => ({
+      menu_item_id: c.menuItem.id,
+      quantity: c.quantity,
+      unit_price: getCustomizedItemPrice(c.menuItem, c.selectedCustomizations)
+    }))
+
+    if (items.length > 0 && tenantId) {
+      fetch("/api/promotions/public/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, customerId, items, orderType })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const r = data?.result
+        if (r) {
+          setPromoEvaluation({
+            promotion_id: r.promotion_id || null,
+            promotion_title: r.promotion_title || null,
+            discount_amount: r.discount_amount || 0,
+            hints: r.hints || []
+          })
+        }
+      })
+      .catch(err => console.error("Error evaluating promotions:", err))
+    } else {
+      setPromoEvaluation({ promotion_id: null, promotion_title: null, discount_amount: 0, hints: [] })
+    }
+  }, [cart, orderType, miniAppUser])
 
   const selectedCustomizationBadges = React.useMemo(() => {
     if (!selectedItem || !selectedItem.customizations) return []
@@ -638,14 +758,14 @@ export default function CustomerMenuPage() {
     )
   }
 
-  const themeBg = theme === "dark" ? "bg-[#030712] text-white" : "bg-gray-50 text-gray-900"
-  const themePanel = theme === "dark" ? "bg-[#0b0f19] border-white/5" : "bg-white border-gray-200 shadow-sm"
-  const themeSidebar = theme === "dark" ? "bg-[#0b0f19] border-white/5" : "bg-gray-100 border-gray-200"
-  const themeCard = theme === "dark" ? "bg-[#0b0f19] border-white/5" : "bg-white border-gray-200 shadow-sm"
-  const themeFooter = theme === "dark" ? "bg-[#030712]/95 border-white/5" : "bg-white/95 border-gray-200 shadow-lg"
-  const themeTextMuted = theme === "dark" ? "text-gray-400" : "text-gray-500"
+  const themeBg = theme === "dark" ? "bg-[#0c0c0c] text-white" : "bg-[#f8f9fa] text-gray-900"
+  const themePanel = theme === "dark" ? "bg-[#1c1c1e] border-white/[0.08]" : "bg-white border-gray-200 shadow-md"
+  const themeSidebar = theme === "dark" ? "bg-[#141414] border-white/[0.06]" : "bg-gray-50 border-gray-200"
+  const themeCard = theme === "dark" ? "bg-[#1c1c1e] border-white/[0.08]" : "bg-white border-gray-200 shadow-sm"
+  const themeFooter = theme === "dark" ? "bg-[#0c0c0c]/95 border-white/[0.08]" : "bg-white/95 border-gray-200 shadow-xl"
+  const themeTextMuted = theme === "dark" ? "text-neutral-400" : "text-gray-500"
   const themeTextTitle = theme === "dark" ? "text-white" : "text-gray-900"
-  const themeBorder = theme === "dark" ? "border-white/5" : "border-gray-200"
+  const themeBorder = theme === "dark" ? "border-white/[0.08]" : "border-gray-200"
 
   return (
     <div className={`h-screen ${themeBg} font-sans overflow-hidden flex flex-col pb-9 relative transition-colors duration-200`}>
@@ -666,7 +786,11 @@ export default function CustomerMenuPage() {
         {showPayment && (
           <PaymentScreen
             theme={theme}
-            total={cartTotal}
+            total={cartFinalTotal}
+            subtotal={cartTotal}
+            discountAmount={promoDiscount}
+            promotionTitle={promoEvaluation.promotion_title}
+            promotionId={promoEvaluation.promotion_id}
             restaurantId={activeRestaurantId}
             branchId={activeBranchId}
             tableId={tableId}
@@ -713,11 +837,11 @@ export default function CustomerMenuPage() {
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-500 to-amber-600 z-0" />
               )}
 
-              {/* Dark/Light bottom gradient overlay */}
-              <div className={`absolute inset-0 z-0 pointer-events-none bg-gradient-to-t ${theme === "dark"
-                ? "from-[#030712] via-[#030712]/50 to-black/35"
-                : "from-gray-50 via-gray-50/50 to-black/10"
-                }`} />
+              <div className={`absolute inset-0 z-0 pointer-events-none bg-gradient-to-t ${
+                theme === "dark"
+                  ? "from-[#0c0c0c] via-[#0c0c0c]/50 to-black/30"
+                  : "from-[#f8f9fa] via-[#f8f9fa]/50 to-black/10"
+              }`} />
 
               <div className="absolute top-4 left-4 z-10">
                 <button
@@ -774,28 +898,39 @@ export default function CustomerMenuPage() {
                 preserveAspectRatio="none"
                 style={{ height: 16 }}
               >
-                <path d="M0,40 C480,0 960,0 1440,40 L1440,40 L0,40 Z" fill={theme === "dark" ? "#030712" : "#f9fafb"} />
+                <path d="M0,40 C480,0 960,0 1440,40 L1440,40 L0,40 Z" fill={theme === "dark" ? "#0c0c0c" : "#f8f9fa"} />
               </svg>
             </div>
 
-            {/* Dynamic Top Horizontal Parent category scroll bar */}
-            <div className={`sticky top-0 z-20 ${themeBg} pt-2 pb-1.5 border-b ${themeBorder}`}>
-              <div className="flex gap-2 overflow-x-auto px-4 scrollbar-none py-1">
+            {/* Dynamic Top Horizontal Parent category scroll bar — McDonald's circular bubbles */}
+            <div className={`sticky top-0 z-20 ${themeBg} pt-3 pb-2 border-b ${themeBorder}`}>
+              <div className="flex gap-4 overflow-x-auto px-4 scrollbar-none pb-1">
                 {parentCategories.map(pc => {
                   const isActive = activeParentId === pc.id
+                  const emoji = getCategoryEmoji(pc.name)
                   return (
                     <button
                       key={pc.id}
                       onClick={() => setActiveParentId(pc.id)}
-                      className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all relative flex items-center gap-1.5 ${isActive ? "bg-amber-50 text-black shadow-md shadow-amber-505/20" : `${theme === "dark" ? "bg-white/5 text-gray-300" : "bg-gray-200 text-gray-700"}`
-                        }`}
+                      className="shrink-0 flex flex-col items-center gap-1 outline-none group"
                     >
-                      {pc.name}
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all duration-200 ${
+                        isActive
+                          ? `bg-[#FFC72C] shadow-lg shadow-amber-500/25 scale-105 ${ theme === "dark" ? "ring-2 ring-[#FFC72C] ring-offset-2 ring-offset-[#0c0c0c]" : "ring-2 ring-[#FFC72C] ring-offset-2 ring-offset-[#f8f9fa]" }`
+                          : `${ theme === "dark" ? "bg-[#1c1c1e] border border-white/[0.08] group-hover:border-amber-500/30" : "bg-white border border-gray-200 shadow-sm group-hover:border-amber-300" }`
+                      }`}>
+                        {emoji}
+                      </div>
+                      <span className={`text-[9px] font-black truncate w-16 text-center leading-tight transition-colors ${
+                        isActive ? "text-[#FFC72C]" : `${ theme === "dark" ? "text-neutral-400" : "text-gray-500" }`
+                      }`}>
+                        {pc.name}
+                      </span>
                     </button>
                   )
                 })}
                 {parentCategories.length === 0 && (
-                  <p className="text-xs text-gray-400 py-1.5">No parent categories created yet.</p>
+                  <p className="text-xs text-gray-400 py-3">No categories yet.</p>
                 )}
               </div>
             </div>
@@ -803,16 +938,17 @@ export default function CustomerMenuPage() {
             <div className="flex-1 flex min-h-0 overflow-hidden">
               {/* Dynamic Left Vertical Sub-Categories List */}
               <div className={`w-24 sm:w-28 ${themeSidebar} overflow-y-auto flex-shrink-0 py-2 border-r ${themeBorder}`}>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {parentCategories.length > 0 && (
                     <button
                       onClick={() => scrollToSubCategory("all")}
-                      className={`w-full text-left px-3 py-3.5 text-xs font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${activeSubCategory === "all"
-                        ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
-                        : `${themeTextMuted} border-transparent hover:bg-white/5`
-                        }`}
+                      className={`w-full text-left px-3 py-3.5 text-[11px] font-semibold border-l-[3px] transition-all leading-snug ${
+                        activeSubCategory === "all"
+                          ? "bg-[#FFC72C]/10 text-[#FFC72C] border-[#FFC72C] font-black"
+                          : `${themeTextMuted} border-transparent ${ theme === "dark" ? "hover:bg-white/5" : "hover:bg-gray-100" }`
+                      }`}
                     >
-                      <span>All Items</span>
+                      All Items
                     </button>
                   )}
                   {filteredSubCategories.map(cat => {
@@ -821,12 +957,13 @@ export default function CustomerMenuPage() {
                       <button
                         key={cat.id}
                         onClick={() => scrollToSubCategory(cat.id)}
-                        className={`w-full text-left px-3 py-3.5 text-xs font-medium border-l-2 transition-all leading-snug flex items-center justify-between ${isActive
-                          ? "bg-amber-500/5 text-amber-500 border-amber-500 font-black"
-                          : `${themeTextMuted} border-transparent hover:bg-white/5`
-                          }`}
+                        className={`w-full text-left px-3 py-3.5 text-[11px] font-semibold border-l-[3px] transition-all leading-snug ${
+                          isActive
+                            ? "bg-[#FFC72C]/10 text-[#FFC72C] border-[#FFC72C] font-black"
+                            : `${themeTextMuted} border-transparent ${ theme === "dark" ? "hover:bg-white/5" : "hover:bg-gray-100" }`
+                        }`}
                       >
-                        <span>{cat.name}</span>
+                        {cat.name}
                       </button>
                     )
                   })}
@@ -856,9 +993,16 @@ export default function CustomerMenuPage() {
                       <div
                         key={item.id}
                         onClick={() => openItemDetail(item)}
-                        className={`w-full ${themeCard} rounded-xl flex gap-3 p-2.5 border hover:border-amber-500/30 active:scale-[0.99] transition-all cursor-pointer relative group`}
+                        className={`w-full ${themeCard} rounded-2xl flex gap-3 p-3 border hover:border-[#FFC72C]/30 active:scale-[0.99] transition-all cursor-pointer relative group overflow-hidden`}
                       >
-                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl shrink-0 bg-gray-200 dark:bg-gray-900 border border-white/5 flex items-center justify-center relative overflow-hidden">
+                        {/* Cart count badge */}
+                        {inCartCount > 0 && (
+                          <div className="absolute top-2 left-2 z-10 bg-[#FFC72C] text-black text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md">
+                            {inCartCount}
+                          </div>
+                        )}
+
+                        <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-xl shrink-0 flex items-center justify-center relative overflow-hidden border ${themeBorder}`}>
                           {(() => {
                             const allImgs = [item.image_url, ...(Array.isArray(item.image_urls) ? item.image_urls : [])].filter(Boolean) as string[]
                             return allImgs.length > 0 ? (
@@ -869,14 +1013,14 @@ export default function CustomerMenuPage() {
                                 interval={2500}
                               />
                             ) : (
-                              <span className="text-2xl">🍽️</span>
+                              <div className={`w-full h-full flex items-center justify-center text-3xl ${ theme === "dark" ? "bg-[#252525]" : "bg-gray-100" }`}>🍽️</div>
                             )
                           })()}
                         </div>
 
-                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                           <div>
-                            <h3 className={`font-bold text-sm ${themeTextTitle} leading-tight group-hover:text-amber-500 transition-colors line-clamp-1`}>
+                            <h3 className={`font-bold text-sm ${themeTextTitle} leading-tight line-clamp-2`}>
                               {item.display_name}
                             </h3>
                             {item.description && (
@@ -885,21 +1029,19 @@ export default function CustomerMenuPage() {
                               </p>
                             )}
                             {(item.prep_time ?? 0) > 0 && (
-                              <p className="flex items-center gap-0.5 mt-1">
-                                <span className="text-[9px] flex flex-row font-bold text-green-400/80 bg-green-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full leading-none">
-                                  <Timer className="" size={10} strokeWidth={3.5} />  ~{item.prep_time} min
-                                </span>
-                              </p>
+                              <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
+                                <Timer size={9} strokeWidth={3} /> ~{item.prep_time} min
+                              </span>
                             )}
                           </div>
 
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span className="text-amber-500 font-extrabold text-sm">${itemPrice.toFixed(2)}</span>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-[#FFC72C] font-extrabold text-sm">${itemPrice.toFixed(2)}</span>
 
                             {/* Direct add controls with explicit stopPropagation */}
                             <div onClick={e => e.stopPropagation()}>
                               {inCartCount > 0 ? (
-                                <div className="flex items-center gap-2 bg-amber-500 rounded-lg px-2 py-0.5 text-black shadow-sm">
+                                <div className="flex items-center gap-2 bg-[#FFC72C] rounded-xl px-2.5 py-1 text-black shadow-sm">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -911,7 +1053,7 @@ export default function CustomerMenuPage() {
                                   >
                                     −
                                   </button>
-                                  <span className="font-black text-xs min-w-[12px] text-center">{inCartCount}</span>
+                                  <span className="font-black text-xs min-w-[14px] text-center">{inCartCount}</span>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -935,9 +1077,9 @@ export default function CustomerMenuPage() {
                                     e.preventDefault()
                                     addToCartDirectly(item)
                                   }}
-                                  className="bg-amber-500 text-black border border-amber-500/20 hover:bg-amber-400 rounded-lg px-3.5 py-1 text-[10px] font-black transition-all shadow-sm flex items-center justify-center"
+                                  className="bg-[#FFC72C] hover:bg-yellow-400 active:scale-95 text-black rounded-xl px-4 py-1.5 text-[10px] font-black transition-all shadow-sm"
                                 >
-                                  Add
+                                  + Add
                                 </button>
                               )}
                             </div>
@@ -1007,48 +1149,48 @@ export default function CustomerMenuPage() {
                 <div className="flex-1 overflow-y-auto space-y-4 pr-1 pb-32 scrollbar-none">
                   {/* Cart Items */}
                   <div className="space-y-3">
-                    {cart.map((item, idx) => (
-                      <div key={idx} className={`flex gap-3 ${themeCard} rounded-xl p-3 border`}>
-                        <div className="w-14 h-14 rounded-lg bg-gray-200 dark:bg-gray-900 overflow-hidden shrink-0 border border-white/5 flex items-center justify-center">
+                      {cart.map((item, idx) => (
+                      <div key={idx} className={`flex gap-3 ${themeCard} rounded-2xl p-3 border`}>
+                        <div className={`w-14 h-14 rounded-xl overflow-hidden shrink-0 border ${themeBorder} flex items-center justify-center`}>
                           {item.menuItem.image_url ? (
                             <img src={item.menuItem.image_url} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-xl">🍽️</span>
+                            <div className={`w-full h-full flex items-center justify-center text-xl ${ theme === "dark" ? "bg-[#252525]" : "bg-gray-100" }`}>🍽️</div>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`font-bold text-sm ${themeTextTitle} leading-tight`}>{item.menuItem.display_name}</p>
                           {Object.entries(item.selectedCustomizations).map(([k, v]) => (
-                            <p key={k} className="text-[10px] text-amber-500 mt-0.5 font-semibold">
+                            <p key={k} className="text-[10px] text-[#FFC72C] mt-0.5 font-semibold">
                               • {k}: {Array.isArray(v) ? v.join(", ") : v}
                             </p>
                           ))}
                           {item.notes && (
-                            <p className={`text-[10px] ${themeTextMuted} italic mt-1 bg-white/5 px-2 py-0.5 rounded border-l-2 border-amber-500/40`}>
+                            <p className={`text-[10px] ${themeTextMuted} italic mt-1 border-l-2 border-[#FFC72C]/40 pl-2`}>
                               "{item.notes}"
                             </p>
                           )}
                           {(item.menuItem.prep_time ?? 0) > 0 && (
-                            <p className="text-[10px] text-amber-500 font-semibold mt-1 flex items-center gap-1">
-                              <span>⏱ ~{item.menuItem.prep_time}m prep</span>
+                            <p className="text-[10px] text-emerald-400 font-semibold mt-1">
+                              ⏱ ~{item.menuItem.prep_time}m prep
                             </p>
                           )}
                         </div>
                         <div className="flex flex-col items-end justify-between shrink-0">
-                          <span className="text-amber-500 font-extrabold text-sm">
+                          <span className="text-[#FFC72C] font-extrabold text-sm">
                             ${(getCustomizedItemPrice(item.menuItem, item.selectedCustomizations) * item.quantity).toFixed(2)}
                           </span>
-                          <div className={`flex items-center gap-2 ${theme === "dark" ? "bg-gray-800" : "bg-gray-200"} rounded-lg px-2 py-0.5`}>
+                          <div className="flex items-center gap-2 bg-[#FFC72C] rounded-xl px-2.5 py-1 text-black">
                             <button
                               onClick={() => updateCartQty(idx, -1)}
-                              className="font-bold text-xs w-4 h-4 flex items-center justify-center"
+                              className="font-black text-sm w-4 h-4 flex items-center justify-center"
                             >
                               −
                             </button>
-                            <span className="font-bold text-xs min-w-[12px] text-center">{item.quantity}</span>
+                            <span className="font-black text-xs min-w-[14px] text-center">{item.quantity}</span>
                             <button
                               onClick={() => updateCartQty(idx, 1)}
-                              className="font-bold text-xs w-4 h-4 flex items-center justify-center"
+                              className="font-black text-sm w-4 h-4 flex items-center justify-center"
                             >
                               +
                             </button>
@@ -1063,23 +1205,24 @@ export default function CustomerMenuPage() {
                     {!tableId && (
                       <div className="space-y-2">
                         <label className={`block text-xs font-black uppercase tracking-wider ${themeTextMuted}`}>Order Option</label>
-                        <div className={`grid grid-cols-3 gap-2 p-1 rounded-xl ${theme === "dark" ? "bg-white/5 border border-white/10" : "bg-gray-100 border border-gray-200"}`}>
+                        <div className={`grid grid-cols-3 gap-1.5 p-1 rounded-2xl border ${ theme === "dark" ? "bg-[#1c1c1e] border-white/[0.08]" : "bg-gray-100 border-gray-200" }`}>
                           {(["DINE_IN", "TAKEAWAY", "DELIVERY"] as const).map(type => {
-                            const isActive = orderType === type;
-                            const label = type === "DINE_IN" ? "Dine-In" : type === "TAKEAWAY" ? "Takeaway" : "Delivery";
+                            const isActive = orderType === type
+                            const label = type === "DINE_IN" ? "🪑 Dine-In" : type === "TAKEAWAY" ? "🛍️ Takeaway" : "🚗 Delivery"
                             return (
                               <button
                                 key={type}
                                 type="button"
                                 onClick={() => setOrderType(type)}
-                                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${isActive
-                                  ? "bg-amber-500 text-black shadow-md"
-                                  : `${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-black"}`
-                                  }`}
+                                className={`py-2.5 px-2 rounded-xl text-[10px] font-black transition-all ${
+                                  isActive
+                                    ? "bg-[#FFC72C] text-black shadow-md shadow-amber-500/20"
+                                    : `${ theme === "dark" ? "text-neutral-400 hover:text-white" : "text-gray-500 hover:text-gray-900" }`
+                                }`}
                               >
                                 {label}
                               </button>
-                            );
+                            )
                           })}
                         </div>
                       </div>
@@ -1110,20 +1253,49 @@ export default function CustomerMenuPage() {
                       />
                     </div>
 
-                    <div className={`p-3 space-y-2 text-xs rounded-xl ${themeCard} border`}>
-                      <div className="flex justify-between opacity-75">
-                        <span>Subtotal</span>
-                        <span>${cartTotal.toFixed(2)}</span>
+                    {/* Promotion Hints */}
+                    {promoEvaluation.hints.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        {promoEvaluation.hints.map((hint, i) => (
+                          <div key={i} className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                            <p className="text-[11px] text-amber-300 leading-relaxed">{hint}</p>
+                          </div>
+                        ))}
                       </div>
-                      {Math.max(...cart.map(c => c.menuItem.prep_time ?? 0), 0) > 0 && (
-                        <div className="flex justify-between opacity-75">
-                          <span>Est. Prep Time</span>
-                          <span className="font-semibold text-amber-500">~{Math.max(...cart.map(c => c.menuItem.prep_time ?? 0), 0)} mins</span>
+                    )}
+
+                    {/* Applied Promotion Banner */}
+                    {promoDiscount > 0 && promoEvaluation.promotion_title && (
+                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/25 rounded-xl px-3 py-2">
+                        <Sparkles className="w-3.5 h-3.5 text-green-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold text-green-400 leading-snug">🎉 {promoEvaluation.promotion_title}</p>
+                          <p className="text-[10px] text-green-400/70">Saving ${promoDiscount.toFixed(2)} automatically applied</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className={`p-4 space-y-2 text-xs rounded-2xl ${themeCard} border`}>
+                      <div className={`flex justify-between ${themeTextMuted}`}>
+                        <span>Subtotal</span>
+                        <span className="font-semibold">${cartTotal.toFixed(2)}</span>
+                      </div>
+                      {promoDiscount > 0 && (
+                        <div className="flex justify-between text-green-400 font-bold">
+                          <span>Discount ({promoEvaluation.promotion_title})</span>
+                          <span>-${promoDiscount.toFixed(2)}</span>
                         </div>
                       )}
-                      <div className={`flex justify-between font-bold text-sm pt-1 border-t ${themeBorder}`}>
-                        <span>Total Amount</span>
-                        <span className="text-amber-500 text-base font-extrabold">${cartTotal.toFixed(2)}</span>
+                      {Math.max(...cart.map(c => c.menuItem.prep_time ?? 0), 0) > 0 && (
+                        <div className={`flex justify-between ${themeTextMuted}`}>
+                          <span>Est. Prep Time</span>
+                          <span className="font-bold text-emerald-400">~{Math.max(...cart.map(c => c.menuItem.prep_time ?? 0), 0)} mins</span>
+                        </div>
+                      )}
+                      <div className={`flex justify-between font-bold text-sm pt-2 border-t ${themeBorder}`}>
+                        <span className={themeTextTitle}>Total Amount</span>
+                        <span className="text-[#FFC72C] text-base font-extrabold">${cartFinalTotal.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -1133,9 +1305,8 @@ export default function CustomerMenuPage() {
           </div>
         )}
 
-        {/* ─── FULL COVERED MENU ITEM DETAIL PAGE ─── */}
         {selectedItem && (
-          <div className={`fixed inset-0 z-50 ${theme === "dark" ? "bg-[#030712] text-white" : "bg-white text-gray-900"} flex flex-col w-full h-[100dvh] overflow-hidden`}>
+          <div className={`fixed inset-0 z-50 ${theme === "dark" ? "bg-[#0c0c0c] text-white" : "bg-white text-gray-900"} flex flex-col w-full h-[100dvh] overflow-hidden`}>
             <div className="absolute top-4 left-4 z-30">
               <button
                 onClick={() => setSelectedItem(null)}
@@ -1399,17 +1570,24 @@ export default function CustomerMenuPage() {
 
         {/* Floating Bottom Cart Popup */}
         {cart.length > 0 && !showPayment && (
-          <div className={`fixed ${activeTab === "home" ? "bottom-16" : "bottom-4"} left-4 right-4 z-40 bg-amber-500 text-black p-3.5 rounded-2xl flex items-center justify-between shadow-2xl transform transition-all duration-300`}>
+          <div className={`fixed ${activeTab === "home" ? "bottom-16" : "bottom-4"} left-4 right-4 z-40 bg-[#FFC72C] text-black p-3.5 rounded-2xl flex items-center justify-between shadow-2xl transform transition-all duration-300`}>
             <div className="flex items-center gap-3">
               <div className="relative bg-black/10 p-2 rounded-xl">
                 <ShoppingCart className="w-5 h-5 text-black" />
-                <span className="absolute -top-1.5 -right-2 bg-black text-amber-500 text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border border-amber-500">
+                <span className="absolute -top-1.5 -right-2 bg-black text-[#FFC72C] text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border border-[#FFC72C]">
                   {cartCount}
                 </span>
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider opacity-85">Cart Total</p>
-                <p className="font-extrabold text-base">${cartTotal.toFixed(2)}</p>
+                {promoDiscount > 0 ? (
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-extrabold text-base">${cartFinalTotal.toFixed(2)}</p>
+                    <p className="text-[10px] line-through opacity-60">${cartTotal.toFixed(2)}</p>
+                  </div>
+                ) : (
+                  <p className="font-extrabold text-base">${cartTotal.toFixed(2)}</p>
+                )}
               </div>
             </div>
 
@@ -1421,7 +1599,7 @@ export default function CustomerMenuPage() {
                   setShowPayment(true)
                 }
               }}
-              className="bg-black text-amber-500 hover:bg-black/90 active:scale-95 font-black px-5 py-3 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all"
+              className="bg-black text-[#FFC72C] hover:bg-black/90 active:scale-95 font-black px-5 py-3 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all"
             >
               {activeTab === "home" ? "Confirm Order" : "Proceed to Payment"}
             </button>
@@ -1438,7 +1616,7 @@ export default function CustomerMenuPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             onClick={() => setPopupVisible(true)}
-            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500 hover:bg-amber-400 text-black font-black shadow-xl rounded-full px-15 py-0.5 flex items-center gap-2 text-xs transition-all active:scale-95"
+            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-[#FFC72C] hover:bg-yellow-400 text-black font-black shadow-xl rounded-full px-8 py-2.5 flex items-center gap-2 text-xs transition-all active:scale-95"
           >
             <Store className="w-3.5 h-3.5" />
             Change Restaurant
@@ -1466,20 +1644,24 @@ export default function CustomerMenuPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 320 }}
-              className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 bg-white rounded-t-[32px] shadow-2xl overflow-visible pb-8 pt-3 px-5 text-gray-900"
+              className={`fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 rounded-t-[32px] shadow-2xl overflow-visible pb-8 pt-3 px-5 border-t ${themeBorder} ${
+                theme === "dark" ? "bg-[#1c1c1e] text-white" : "bg-white text-gray-900"
+              }`}
             >
               {/* Overlapping top brand logo */}
-              <div className="absolute -top-7 right-6 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center z-50 border-2 border-white overflow-hidden">
+              <div className={`absolute -top-7 right-6 w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 border-2 overflow-hidden ${
+                theme === "dark" ? "bg-[#1c1c1e] border-white/[0.08]" : "bg-white border-gray-100"
+              }`}>
                 <img src="/dexel_logo.png" className="w-11 h-11 object-contain" alt="Dexel Logo" />
               </div>
 
               {/* Drag Handle */}
               <div className="flex justify-center pb-1">
-                <div className="w-10 h-1.5 rounded-full bg-gray-200" />
+                <div className={`w-10 h-1.5 rounded-full ${ theme === "dark" ? "bg-white/10" : "bg-gray-200" }`} />
               </div>
 
               {/* Title */}
-              <h2 className="text-sm font-black text-gray-900 leading-tight mb-4 pr-12">
+              <h2 className={`text-sm font-black leading-tight mb-4 pr-12 ${themeTextTitle}`}>
                 Which restaurant would you like to eat?
               </h2>
 
@@ -1540,13 +1722,14 @@ export default function CustomerMenuPage() {
                             setPopupVisible(false)
                           }
                         }}
-                        className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all text-left relative ${isSelected
-                          ? "border-amber-500 bg-amber-50/50 shadow-md shadow-amber-500/5"
-                          : "border-gray-100 bg-white hover:border-gray-200"
-                          }`}
+                        className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all text-left relative ${
+                          isSelected
+                            ? "border-[#FFC72C] bg-[#FFC72C]/10 shadow-md"
+                            : `${themeCard} hover:border-[#FFC72C]/20`
+                        }`}
                       >
                         {/* Thumbnail */}
-                        <div className="w-16 h-14 rounded-xl overflow-hidden shrink-0 bg-gray-100 border border-gray-100">
+                        <div className={`w-16 h-14 rounded-xl overflow-hidden shrink-0 border ${themeBorder} flex items-center justify-center`}>
                           {outlet.logo_url || outlet.banner_url ? (
                             <img
                               src={(outlet.logo_url || outlet.banner_url)!}
@@ -1554,7 +1737,7 @@ export default function CustomerMenuPage() {
                               alt=""
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xl bg-amber-50">🍽️</div>
+                            <div className="w-full h-full flex items-center justify-center text-xl">🍽️</div>
                           )}
                         </div>
 
@@ -1562,27 +1745,28 @@ export default function CustomerMenuPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 mb-1">
                             {isSelected ? (
-                              <span className="text-[9px] font-extrabold text-blue-600 flex items-center gap-0.5">
+                              <span className="text-[9px] font-black text-blue-400 flex items-center gap-0.5 uppercase tracking-wider">
                                 <Store className="w-2.5 h-2.5" /> Currently browsing
                               </span>
                             ) : (
-                              <span className="text-[9px] font-extrabold text-green-600 flex items-center gap-0.5">
+                              <span className="text-[9px] font-black text-[#FFC72C] flex items-center gap-0.5 uppercase tracking-wider">
                                 <Navigation className="w-2.5 h-2.5" /> Switch branch
                               </span>
                             )}
                           </div>
-                          <p className="font-extrabold text-xs text-gray-900 leading-snug line-clamp-2">
+                          <p className={`font-extrabold text-xs leading-snug line-clamp-2 ${themeTextTitle}`}>
                             {outlet.name}
                           </p>
                           {outlet.address && (
-                            <p className="text-[9px] text-gray-400 mt-0.5 line-clamp-1">{outlet.address}</p>
+                            <p className={`text-[9px] mt-0.5 line-clamp-1 ${themeTextMuted}`}>{outlet.address}</p>
                           )}
                         </div>
 
                         {/* Radio Selection Indicator */}
-                        <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${isSelected ? "border-amber-500 bg-amber-500" : "border-gray-200"
-                          }`}>
-                          {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3.5} />}
+                        <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${
+                          isSelected ? "border-[#FFC72C] bg-[#FFC72C]" : `${theme === "dark" ? "border-white/10" : "border-gray-200"}`
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 text-black" strokeWidth={3.5} />}
                         </div>
                       </button>
                     )

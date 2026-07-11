@@ -170,6 +170,7 @@ router.get('/public/list', async (req: Request, res: Response): Promise<void> =>
         logo_url: true,
         banner_url: true,
         parent_id: true,
+        tenant_id: true,
         branches: {
           where: { deleted_at: null },
           select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }
@@ -212,6 +213,7 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           logo_url: true,
           banner_url: true,
           parent_id: true,
+          tenant_id: true,
           branches: {
             where: { deleted_at: null },
             select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }
@@ -244,6 +246,7 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
           logo_url: true,
           banner_url: true,
           parent_id: true,
+          tenant_id: true,
           branches: {
             where: { deleted_at: null },
             select: { id: true, name: true, address: true, phone: true, logo_url: true, banner_url: true }

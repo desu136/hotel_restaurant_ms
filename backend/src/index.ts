@@ -17,6 +17,7 @@ import billingRoutes from './routes/billing';
 import uploadRoutes from './routes/upload';
 import qrRoutes from './routes/qr';
 import reportsRoutes from './routes/reports';
+import promotionsRoutes from './routes/promotions';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -54,6 +55,7 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/promotions', promotionsRoutes);
 
 // 404 handler
 app.use((_req, res) => {

@@ -38,6 +38,7 @@ model Tenant {
   users             User[]
   masterCategories  MasterCategory[]
   masterMenuItems   MasterMenuItem[]
+  promotions        Promotion[]
 
   @@map("tenants")
 }
@@ -144,6 +145,7 @@ model Branch {
   restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
 
   orders           Order[]
+  promotions       Promotion[]
   reservations     Reservation[]
   rooms            Room[]
   users            User[]
@@ -349,6 +351,7 @@ model Restaurant {
   
   masterCategories MasterCategory[]
   masterMenuItems  MasterMenuItem[]
+  promotions       Promotion[]
 
   @@map("restaurants")
 }
@@ -404,6 +407,7 @@ model Category {
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   menu_items   MenuItem[]
+  promotions   Promotion[]
 }
 
 model MasterMenuItem {
@@ -473,6 +477,7 @@ model MenuItem {
   tenant           Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   order_items  OrderItem[]
+  promotions   Promotion[]
 }
 
 model RestaurantTable {
@@ -514,9 +519,12 @@ model Order {
   table_id            String?          @db.Uuid
   room_id             String?          @db.Uuid
   waiter_id           String?          @db.Uuid
+  promotion_id        String?          @db.Uuid
   order_number        String?
   order_type          OrderType
   status              OrderStatus      @default(PENDING)
+  subtotal_amount     Decimal          @default(0) @db.Decimal(10, 2)
+  discount_amount     Decimal          @default(0) @db.Decimal(10, 2)
   total_amount        Decimal          @db.Decimal(10, 2)
   placed_by_staff     Boolean          @default(false)
   estimated_prep_time Int              @default(0)
@@ -533,6 +541,7 @@ model Order {
   room                Room?            @relation(fields: [room_id], references: [id])
   table               RestaurantTable? @relation(fields: [table_id], references: [id])
   tenant              Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  promotion           Promotion?       @relation(fields: [promotion_id], references: [id])
 
   @@map("orders")
 }
@@ -718,4 +727,89 @@ enum DeliveryStatus {
   PICKED_UP
   DELIVERED
   CANCELLED
+}
+
+enum PromotionStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+}
+
+enum PromotionType {
+  FIRST_ORDER
+  NEW_CUSTOMER
+  RETURNING_CUSTOMER
+  SEASONAL_CAMPAIGN
+  HOLIDAY_CAMPAIGN
+  HAPPY_HOUR
+  WEEKEND_PROMOTION
+  BUY_X_GET_Y
+  MINIMUM_SPEND
+  COMBO_OFFER
+  CATEGORY_PROMOTION
+  MENU_ITEM_PROMOTION
+  FREE_DELIVERY
+}
+
+enum RewardType {
+  PERCENTAGE_DISCOUNT
+  FIXED_DISCOUNT
+  FREE_ITEM
+  FREE_DRINK
+  FREE_DELIVERY
+  COMBO_PRICE
+  BOGO
+}
+
+enum PromotionScope {
+  RESTAURANT
+  CATEGORY
+  MENU_ITEM
+  COMBO
+}
+
+model Promotion {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenant_id        String   @db.Uuid
+  restaurant_id    String?  @db.Uuid
+  branch_id        String?  @db.Uuid
+  category_id      String?  @db.Uuid
+  menu_item_id     String?  @db.Uuid
+
+  title            String
+  description      String?
+  terms_conditions String?
+  code             String?
+  discount_value   String?
+  banner_url       String?
+  
+  type             PromotionType   @default(FIRST_ORDER)
+  reward_type      RewardType      @default(PERCENTAGE_DISCOUNT)
+  scope            PromotionScope  @default(RESTAURANT)
+  status           PromotionStatus @default(ACTIVE)
+  
+  eligibility_rules Json?
+  reward_config     Json?
+  schedule_config   Json?
+  
+  start_date       DateTime @default(now())
+  end_date         DateTime @default(dbgenerated("now() + interval '1 year'"))
+  is_active        Boolean  @default(true)
+  archived         Boolean  @default(false)
+  
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  tenant           Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  restaurant       Restaurant? @relation(fields: [restaurant_id], references: [id], onDelete: SetNull)
+  branch           Branch?     @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  category         Category?   @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  menu_item        MenuItem?   @relation(fields: [menu_item_id], references: [id], onDelete: SetNull)
+  orders           Order[]
+
+  @@index([tenant_id])
+  @@index([restaurant_id])
+  @@index([branch_id])
+  @@map("promotions")
 }
