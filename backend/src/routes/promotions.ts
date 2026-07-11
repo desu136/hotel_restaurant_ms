@@ -25,6 +25,7 @@ router.get('/public', async (req: Request, res: Response): Promise<void> => {
       where: { 
         tenant_id: tenantId, 
         is_active: true,
+        archived: false,
         status: { not: 'DRAFT' },
         start_date: { lte: now },
         end_date: { gte: now }
@@ -35,6 +36,36 @@ router.get('/public', async (req: Request, res: Response): Promise<void> => {
     res.json({ success: true, promotions });
   } catch (error) {
     console.error('GET /api/promotions/public error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/promotions/public/evaluate
+// Evaluates a cart and returns the best promotion and hints
+router.post('/public/evaluate', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { tenantId, customerId, items, orderType } = req.body;
+    
+    if (!tenantId || !isUuid(tenantId)) {
+      res.status(400).json({ error: 'Valid tenantId is required' });
+      return;
+    }
+    if (!items || !Array.isArray(items)) {
+      res.status(400).json({ error: 'Cart items array is required' });
+      return;
+    }
+
+    const { PromotionEngine } = await import('../services/promotionEngine');
+    const result = await PromotionEngine.evaluateCart(
+      tenantId,
+      customerId || null,
+      items,
+      orderType || 'DINE_IN'
+    );
+
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('POST /api/promotions/public/evaluate error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -57,7 +88,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     }
 
     const promotions = await prisma.promotion.findMany({
-      where: { tenant_id: tenantId },
+      where: { tenant_id: tenantId, archived: false },
       orderBy: { created_at: 'desc' },
     });
 
@@ -80,8 +111,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     const { 
       title, description, code, discount_value, banner_url, is_active,
-      start_date, end_date, type, scope, status, terms_conditions,
-      restaurant_id, branch_id, category_id, menu_item_id
+      start_date, end_date, type, reward_type, scope, status, terms_conditions,
+      restaurant_id, branch_id, category_id, menu_item_id,
+      eligibility_rules, reward_config, schedule_config, archived
     } = req.body;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
@@ -98,16 +130,21 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         code: code?.trim() ?? null,
         discount_value: discount_value?.trim() ?? null,
         banner_url: banner_url?.trim() ?? null,
-        type: type || 'PERCENTAGE_DISCOUNT',
+        type: type || 'FIRST_ORDER',
+        reward_type: reward_type || 'PERCENTAGE_DISCOUNT',
         scope: scope || 'RESTAURANT',
         status: status || 'ACTIVE',
         start_date: start_date ? new Date(start_date) : new Date(),
         end_date: end_date ? new Date(end_date) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         is_active: is_active !== undefined ? Boolean(is_active) : true,
+        archived: archived !== undefined ? Boolean(archived) : false,
         restaurant_id: restaurant_id || null,
         branch_id: branch_id || null,
         category_id: category_id || null,
         menu_item_id: menu_item_id || null,
+        eligibility_rules: eligibility_rules || null,
+        reward_config: reward_config || null,
+        schedule_config: schedule_config || null,
       },
     });
 
@@ -138,8 +175,9 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
 
     const { 
       title, description, code, discount_value, banner_url, is_active,
-      start_date, end_date, type, scope, status, terms_conditions,
-      restaurant_id, branch_id, category_id, menu_item_id 
+      start_date, end_date, type, reward_type, scope, status, terms_conditions,
+      restaurant_id, branch_id, category_id, menu_item_id,
+      eligibility_rules, reward_config, schedule_config, archived
     } = req.body;
 
     const promotion = await prisma.promotion.update({
@@ -152,15 +190,20 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
         ...(discount_value !== undefined && { discount_value: discount_value?.trim() ?? null }),
         ...(banner_url !== undefined && { banner_url: banner_url?.trim() ?? null }),
         ...(type !== undefined && { type }),
+        ...(reward_type !== undefined && { reward_type }),
         ...(scope !== undefined && { scope }),
         ...(status !== undefined && { status }),
         ...(start_date !== undefined && { start_date: new Date(start_date) }),
         ...(end_date !== undefined && { end_date: new Date(end_date) }),
         ...(is_active !== undefined && { is_active: Boolean(is_active) }),
+        ...(archived !== undefined && { archived: Boolean(archived) }),
         ...(restaurant_id !== undefined && { restaurant_id: restaurant_id || null }),
         ...(branch_id !== undefined && { branch_id: branch_id || null }),
         ...(category_id !== undefined && { category_id: category_id || null }),
         ...(menu_item_id !== undefined && { menu_item_id: menu_item_id || null }),
+        ...(eligibility_rules !== undefined && { eligibility_rules: eligibility_rules || null }),
+        ...(reward_config !== undefined && { reward_config: reward_config || null }),
+        ...(schedule_config !== undefined && { schedule_config: schedule_config || null }),
       },
     });
 
@@ -189,8 +232,8 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    await prisma.promotion.delete({ where: { id } });
-    res.json({ success: true, message: 'Promotion deleted' });
+    await prisma.promotion.update({ where: { id }, data: { archived: true, is_active: false } });
+    res.json({ success: true, message: 'Promotion archived' });
   } catch (error) {
     console.error('DELETE /api/promotions/:id error:', error);
     res.status(500).json({ error: 'Internal server error' });

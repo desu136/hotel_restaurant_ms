@@ -7,6 +7,10 @@ import type { MiniAppUser } from "@/lib/miniapp-bridge"
 interface PaymentScreenProps {
   theme: "light" | "dark"
   total: number
+  subtotal?: number
+  discountAmount?: number
+  promotionTitle?: string | null
+  promotionId?: string | null
   onBack: () => void
   onSuccess: (orderId: string) => void
   restaurantId: string
@@ -33,7 +37,24 @@ const STATUS_STEPS = [
   { key: "COMPLETED", label: "Delivered",        icon: <CheckCircle className="w-5 h-5" />, desc: "Enjoy your meal! Thank you for dining with us." },
 ]
 
-export default function PaymentScreen({ theme, total, onBack, onSuccess, restaurantId, branchId, tableId, cartPayload, orderNotes, orderType, deliveryAddress, miniAppUser }: PaymentScreenProps) {
+export default function PaymentScreen({
+  theme,
+  total,
+  subtotal = total,
+  discountAmount = 0,
+  promotionTitle = null,
+  promotionId = null,
+  onBack,
+  onSuccess,
+  restaurantId,
+  branchId,
+  tableId,
+  cartPayload,
+  orderNotes,
+  orderType,
+  deliveryAddress,
+  miniAppUser
+}: PaymentScreenProps) {
   const themeBg = theme === "dark" ? "bg-[#030712] text-white" : "bg-gray-50 text-gray-900"
   const themeCard = theme === "dark" ? "bg-[#0b0f19] border-white/10" : "bg-white border-gray-200 shadow-sm"
   const themeTextMuted = theme === "dark" ? "text-gray-400" : "text-gray-500"
@@ -225,6 +246,18 @@ export default function PaymentScreen({ theme, total, onBack, onSuccess, restaur
               <span className={themeTextMuted}>Transaction</span>
               <span className={`font-mono text-xs ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>{transactionId}</span>
             </div>
+            {discountAmount > 0 && (
+              <>
+                <div className="flex justify-between text-xs">
+                  <span className={themeTextMuted}>Subtotal</span>
+                  <span>${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-green-400">
+                  <span>Discount ({promotionTitle})</span>
+                  <span>-${discountAmount.toFixed(2)}</span>
+                </div>
+              </>
+            )}
             <div className={`flex justify-between border-t ${themeBorder} pt-2 mt-1`}>
               <span className={`font-semibold ${themeTextMuted}`}>Amount Paid</span>
               <span className="font-extrabold text-green-400 text-base">${total.toFixed(2)}</span>
@@ -316,7 +349,24 @@ export default function PaymentScreen({ theme, total, onBack, onSuccess, restaur
 
           <div className={`${themeCard} border rounded-2xl p-4 space-y-2`}>
             <p className={`text-xs font-bold ${themeTextMuted} uppercase tracking-wider`}>Order Total</p>
-            <p className="text-3xl font-black text-amber-400">${total.toFixed(2)}</p>
+            {discountAmount > 0 ? (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className={themeTextMuted}>Subtotal</span>
+                  <span className={`font-bold ${themeTextTitle}`}>${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-green-400">
+                  <span>Discount ({promotionTitle})</span>
+                  <span className="font-bold">-${discountAmount.toFixed(2)}</span>
+                </div>
+                <div className={`flex justify-between pt-1.5 border-t ${themeBorder}`}>
+                  <span className={`font-extrabold ${themeTextTitle}`}>Payable</span>
+                  <span className="text-3xl font-black text-amber-400">${total.toFixed(2)}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-3xl font-black text-amber-400">${total.toFixed(2)}</p>
+            )}
             <p className={`text-[10px] ${themeTextMuted}`}>Taxes and service charges included</p>
           </div>
 
@@ -347,8 +397,16 @@ export default function PaymentScreen({ theme, total, onBack, onSuccess, restaur
       </div>
 
       <div className="flex-1 flex flex-col p-5 gap-4 max-w-sm mx-auto w-full">
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
-          <p className="text-amber-400 font-black text-2xl">${total.toFixed(2)}</p>
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center space-y-1">
+          {discountAmount > 0 ? (
+            <>
+              <p className={`text-xs ${themeTextMuted}`}>Subtotal: <span className="line-through">${subtotal.toFixed(2)}</span></p>
+              <p className="text-green-400 text-xs font-bold">Saved ${discountAmount.toFixed(2)} with {promotionTitle}</p>
+              <p className="text-amber-400 font-black text-2xl">${total.toFixed(2)}</p>
+            </>
+          ) : (
+            <p className="text-amber-400 font-black text-2xl">${total.toFixed(2)}</p>
+          )}
           <p className={`text-[11px] ${themeTextMuted} mt-0.5`}>Total amount to pay</p>
         </div>
 

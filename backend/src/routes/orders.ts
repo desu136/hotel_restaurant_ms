@@ -234,6 +234,18 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
 
     const { estimatedPrepTimeMinutes, estimatedReadyAt } = await calculateEstimatedPrepTime(resolvedBranchId, orderItems);
 
+    // Evaluate Promotions
+    const { PromotionEngine } = await import('../services/promotionEngine');
+    const promoResult = await PromotionEngine.evaluateCart(
+      tenantId,
+      customerId,
+      orderItems,
+      order_type as any
+    );
+
+    const subtotal_amount = totalAmount;
+    const finalTotalAmount = Math.max(0, subtotal_amount - promoResult.discount_amount);
+
     const orderData: any = {
       tenant_id: tenantId,
       branch_id: resolvedBranchId,
@@ -242,7 +254,10 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
       table_id: table_id || null,
       order_type: order_type as any,
       status: 'PENDING',
-      total_amount: totalAmount,
+      subtotal_amount: subtotal_amount,
+      discount_amount: promoResult.discount_amount,
+      total_amount: finalTotalAmount,
+      promotion_id: promoResult.promotion_id,
       estimated_prep_time: estimatedPrepTimeMinutes,
       estimated_ready_at: estimatedReadyAt,
       items: {
@@ -641,6 +656,18 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
 
     const { estimatedPrepTimeMinutes, estimatedReadyAt } = await calculateEstimatedPrepTime(resolvedBranchId, orderItems);
 
+    // Evaluate Promotions
+    const { PromotionEngine } = await import('../services/promotionEngine');
+    const promoResult = await PromotionEngine.evaluateCart(
+      tenantId!,
+      walkInCustomer.id,
+      orderItems,
+      order_type as any
+    );
+
+    const subtotal_amount = totalAmount;
+    const finalTotalAmount = Math.max(0, subtotal_amount - promoResult.discount_amount);
+
     const order = await prisma.order.create({
       data: {
         tenant_id: tenantId!,
@@ -651,7 +678,10 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
         waiter_id: waiterId,
         order_type,
         status: 'PENDING',
-        total_amount: totalAmount,
+        subtotal_amount: subtotal_amount,
+        discount_amount: promoResult.discount_amount,
+        total_amount: finalTotalAmount,
+        promotion_id: promoResult.promotion_id,
         placed_by_staff: true,
         estimated_prep_time: estimatedPrepTimeMinutes,
         estimated_ready_at: estimatedReadyAt,

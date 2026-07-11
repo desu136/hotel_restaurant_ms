@@ -1,7 +1,7 @@
 "use client"
 import * as React from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
-import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon, Check, Store, Navigation, ChevronRight, Timer } from "lucide-react"
+import { ArrowLeft, ShoppingCart, Home, Clock, Plus, Minus, AlertCircle, CheckCircle, Sun, Moon, Check, Store, Navigation, ChevronRight, Timer, Sparkles } from "lucide-react"
 import PaymentScreen from "./PaymentScreen"
 import { motion, AnimatePresence } from "framer-motion"
 import { setPreferredRestaurantId, getUserProfile, MiniAppUser } from "@/lib/miniapp-bridge"
@@ -207,6 +207,13 @@ export default function CustomerMenuPage() {
   const [showPayment, setShowPayment] = React.useState(false)
   const [orderType, setOrderType] = React.useState<"DINE_IN" | "TAKEAWAY" | "DELIVERY">("DINE_IN")
   const [deliveryAddress, setDeliveryAddress] = React.useState("")
+  const [promoEvaluation, setPromoEvaluation] = React.useState<{
+    promotion_id: string | null;
+    promotion_title: string | null;
+    discount_amount: number;
+    hints: string[];
+  }>({ promotion_id: null, promotion_title: null, discount_amount: 0, hints: [] })
+
 
   // Item detail page (fully covered screen)
   const [selectedItem, setSelectedItem] = React.useState<MenuItem | null>(null)
@@ -558,6 +565,43 @@ export default function CustomerMenuPage() {
   // Cart total calculations
   const cartTotal = cart.reduce((sum, c) => sum + getCustomizedItemPrice(c.menuItem, c.selectedCustomizations) * c.quantity, 0)
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0)
+  // Discounted final total (promotion engine result)
+  const promoDiscount = promoEvaluation.discount_amount ?? 0
+  const cartFinalTotal = Math.max(0, cartTotal - promoDiscount)
+
+  // Evaluate promotions whenever cart, orderType, or miniAppUser changes
+  React.useEffect(() => {
+    const tenantId = localStorage.getItem("hospitality_tenant_id") || ""
+    const customerId = miniAppUser?.id || null
+    const items = cart.map(c => ({
+      menu_item_id: c.menuItem.id,
+      quantity: c.quantity,
+      unit_price: getCustomizedItemPrice(c.menuItem, c.selectedCustomizations)
+    }))
+
+    if (items.length > 0 && tenantId) {
+      fetch("/api/promotions/public/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, customerId, items, orderType })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const r = data?.result
+        if (r) {
+          setPromoEvaluation({
+            promotion_id: r.promotion_id || null,
+            promotion_title: r.promotion_title || null,
+            discount_amount: r.discount_amount || 0,
+            hints: r.hints || []
+          })
+        }
+      })
+      .catch(err => console.error("Error evaluating promotions:", err))
+    } else {
+      setPromoEvaluation({ promotion_id: null, promotion_title: null, discount_amount: 0, hints: [] })
+    }
+  }, [cart, orderType, miniAppUser])
 
   const selectedCustomizationBadges = React.useMemo(() => {
     if (!selectedItem || !selectedItem.customizations) return []
@@ -742,7 +786,11 @@ export default function CustomerMenuPage() {
         {showPayment && (
           <PaymentScreen
             theme={theme}
-            total={cartTotal}
+            total={cartFinalTotal}
+            subtotal={cartTotal}
+            discountAmount={promoDiscount}
+            promotionTitle={promoEvaluation.promotion_title}
+            promotionId={promoEvaluation.promotion_id}
             restaurantId={activeRestaurantId}
             branchId={activeBranchId}
             tableId={tableId}
@@ -1200,11 +1248,40 @@ export default function CustomerMenuPage() {
                       />
                     </div>
 
+                    {/* Promotion Hints */}
+                    {promoEvaluation.hints.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        {promoEvaluation.hints.map((hint, i) => (
+                          <div key={i} className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                            <p className="text-[11px] text-amber-300 leading-relaxed">{hint}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Applied Promotion Banner */}
+                    {promoDiscount > 0 && promoEvaluation.promotion_title && (
+                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/25 rounded-xl px-3 py-2">
+                        <Sparkles className="w-3.5 h-3.5 text-green-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold text-green-400 leading-snug">🎉 {promoEvaluation.promotion_title}</p>
+                          <p className="text-[10px] text-green-400/70">Saving ${promoDiscount.toFixed(2)} automatically applied</p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className={`p-4 space-y-2 text-xs rounded-2xl ${themeCard} border`}>
                       <div className={`flex justify-between ${themeTextMuted}`}>
                         <span>Subtotal</span>
                         <span className="font-semibold">${cartTotal.toFixed(2)}</span>
                       </div>
+                      {promoDiscount > 0 && (
+                        <div className="flex justify-between text-green-400 font-bold">
+                          <span>Discount ({promoEvaluation.promotion_title})</span>
+                          <span>-${promoDiscount.toFixed(2)}</span>
+                        </div>
+                      )}
                       {Math.max(...cart.map(c => c.menuItem.prep_time ?? 0), 0) > 0 && (
                         <div className={`flex justify-between ${themeTextMuted}`}>
                           <span>Est. Prep Time</span>
@@ -1213,7 +1290,7 @@ export default function CustomerMenuPage() {
                       )}
                       <div className={`flex justify-between font-bold text-sm pt-2 border-t ${themeBorder}`}>
                         <span className={themeTextTitle}>Total Amount</span>
-                        <span className="text-[#FFC72C] text-base font-extrabold">${cartTotal.toFixed(2)}</span>
+                        <span className="text-[#FFC72C] text-base font-extrabold">${cartFinalTotal.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -1498,7 +1575,14 @@ export default function CustomerMenuPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider opacity-85">Cart Total</p>
-                <p className="font-extrabold text-base">${cartTotal.toFixed(2)}</p>
+                {promoDiscount > 0 ? (
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-extrabold text-base">${cartFinalTotal.toFixed(2)}</p>
+                    <p className="text-[10px] line-through opacity-60">${cartTotal.toFixed(2)}</p>
+                  </div>
+                ) : (
+                  <p className="font-extrabold text-base">${cartTotal.toFixed(2)}</p>
+                )}
               </div>
             </div>
 
