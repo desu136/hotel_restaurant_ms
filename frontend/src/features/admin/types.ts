@@ -4,7 +4,7 @@ export interface Tenant {
   owner_name: string;
   email: string;
   phone: string;
-  business_type: "HOTEL" | "RESTAURANT" | "HOTEL_RESTAURANT";
+  business_type: "RESTAURANT" | "COFFEE_SHOP" | "FAST_FOOD";
   status: "PENDING" | "ACTIVE" | "SUSPENDED" | "REJECTED";
   address?: string | null;
   license_info?: string | null;

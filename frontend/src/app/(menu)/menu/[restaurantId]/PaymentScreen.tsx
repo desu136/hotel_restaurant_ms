@@ -1,8 +1,10 @@
 "use client"
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, CheckCircle, Loader2, Clock, ChefHat, Bell, Home } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import type { MiniAppUser } from "@/lib/miniapp-bridge"
+import PaymentSuccessView from "./components/PaymentSuccessView"
+import PaymentConfirmationView from "./components/PaymentConfirmationView"
 
 interface PaymentScreenProps {
   theme: "light" | "dark"
@@ -30,35 +32,13 @@ const PAYMENT_METHODS = [
   { id: "amole", name: "Amole", logo: "💰", color: "#8B2FC9", description: "Dashen Bank digital wallet" },
 ]
 
-const STATUS_STEPS = [
-  { key: "PENDING",   label: "Order Received",  icon: <Clock className="w-5 h-5" />,    desc: "Your order is confirmed and waiting for the kitchen." },
-  { key: "PREPARING", label: "Being Prepared",  icon: <ChefHat className="w-5 h-5" />,  desc: "The kitchen is working on your food right now." },
-  { key: "READY",     label: "Ready to Serve",  icon: <Bell className="w-5 h-5" />,     desc: "Your order is ready! A staff member is on the way." },
-  { key: "COMPLETED", label: "Delivered",        icon: <CheckCircle className="w-5 h-5" />, desc: "Enjoy your meal! Thank you for dining with us." },
-]
-
 export default function PaymentScreen({
-  theme,
-  total,
-  subtotal = total,
-  discountAmount = 0,
-  promotionTitle = null,
-  promotionId = null,
-  onBack,
-  onSuccess,
-  restaurantId,
-  branchId,
-  tableId,
-  cartPayload,
-  orderNotes,
-  orderType,
-  deliveryAddress,
-  miniAppUser
+  theme, total, subtotal = total, discountAmount = 0, promotionTitle = null, promotionId = null,
+  onBack, onSuccess, restaurantId, branchId, tableId, cartPayload, orderNotes, orderType, deliveryAddress, miniAppUser
 }: PaymentScreenProps) {
   const themeBg = theme === "dark" ? "bg-[#030712] text-white" : "bg-gray-50 text-gray-900"
   const themeCard = theme === "dark" ? "bg-[#0b0f19] border-white/10" : "bg-white border-gray-200 shadow-sm"
   const themeTextMuted = theme === "dark" ? "text-gray-400" : "text-gray-500"
-  const themeTextTitle = theme === "dark" ? "text-white" : "text-gray-900"
   const themeBorder = theme === "dark" ? "border-white/5" : "border-gray-200"
 
   const router = useRouter()
@@ -72,7 +52,6 @@ export default function PaymentScreen({
   const [estimatedPrepTime, setEstimatedPrepTime] = React.useState<number>(0)
   const [transactionId] = React.useState(() => `TXN${Date.now().toString(36).toUpperCase()}`)
 
-  // Poll order status every 8s after success
   React.useEffect(() => {
     if (step !== "success" || !orderId) return
     const poll = async () => {
@@ -94,23 +73,14 @@ export default function PaymentScreen({
     setPaying(true)
     try {
       const orderBody: Record<string, any> = {
-        restaurant_id: restaurantId,
-        branch_id: branchId || null,
-        table_id: tableId || null,
-        items: cartPayload,
-        notes: orderNotes,
-        order_type: orderType,
-        delivery_address: deliveryAddress,
+        restaurant_id: restaurantId, branch_id: branchId || null, table_id: tableId || null,
+        items: cartPayload, notes: orderNotes, order_type: orderType, delivery_address: deliveryAddress,
       }
       if (miniAppUser?.id) {
-        orderBody.userId = miniAppUser.id
-        orderBody.userName = miniAppUser.name
-        orderBody.userEmail = miniAppUser.email
+        orderBody.userId = miniAppUser.id; orderBody.userName = miniAppUser.name; orderBody.userEmail = miniAppUser.email
       }
       const res = await fetch("/api/orders/public", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderBody),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(orderBody),
       })
       if (res.ok) {
         const order = await res.json()
@@ -130,260 +100,27 @@ export default function PaymentScreen({
   }
 
   const method = PAYMENT_METHODS.find(m => m.id === selectedMethod)
-  const currentStatusIdx = STATUS_STEPS.findIndex(s => s.key === orderStatus)
-  const currentStep = STATUS_STEPS[currentStatusIdx] || STATUS_STEPS[0]
 
   if (step === "success") {
     return (
-      <div className={`fixed inset-0 z-[60] flex flex-col ${themeBg} overflow-y-auto`}>
-        {/* Header */}
-        <div className={`flex items-center justify-between px-4 py-4 border-b ${themeBorder} shrink-0`}>
-          <button
-            onClick={onBack}
-            className={`flex items-center gap-2 ${themeTextMuted} hover:${themeTextTitle} transition-colors text-xs font-semibold`}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Menu
-          </button>
-          <button
-            onClick={() => {
-              onSuccess(orderId)
-              router.push("/home")
-            }}
-            className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors text-xs font-semibold"
-          >
-            <Home className="w-4 h-4" />
-            Home
-          </button>
-        </div>
-
-        <div className="flex-1 flex flex-col p-5 gap-5 max-w-sm mx-auto w-full pb-10">
-          {/* Success Banner */}
-          <div className="flex flex-col items-center text-center pt-4 pb-2">
-            <div className="w-20 h-20 rounded-full bg-green-500/10 border-2 border-green-500/30 flex items-center justify-center mb-4">
-              <CheckCircle className="w-10 h-10 text-green-400" />
-            </div>
-            <h1 className={`text-xl font-black ${themeTextTitle}`}>Order Placed!</h1>
-            <p className={`text-xs ${themeTextMuted} mt-1`}>The kitchen has been notified.</p>
-            <p className="text-[10px] text-amber-400 font-mono font-bold mt-1.5 bg-amber-500/10 px-3 py-1 rounded-full">
-              #{orderId.slice(0, 8).toUpperCase()}
-            </p>
-          </div>
-
-          {/* Estimated Ready Time Card */}
-          {estimatedPrepTime > 0 && (
-            <div className={`${themeCard} border rounded-2xl p-4 flex items-center gap-3`}>
-              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
-                <Clock className="w-5 h-5 text-amber-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-[10px] font-bold ${themeTextMuted} uppercase tracking-wider`}>Estimated Ready Time</p>
-                <p className="text-amber-400 font-black text-lg leading-tight">
-                  ~{estimatedPrepTime} min
-                </p>
-                {estimatedReadyAt && (
-                  <p className={`text-[10px] ${themeTextMuted} mt-0.5`}>
-                    Ready by {new Date(estimatedReadyAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className={`text-[10px] ${themeTextMuted}`}>Accounts for</p>
-                <p className={`text-[10px] ${themeTextMuted}`}>kitchen queue</p>
-              </div>
-            </div>
-          )}
-
-          {/* Live Status Tracker */}
-          <div className={`${themeCard} border rounded-2xl p-4`}>
-            <p className={`text-[10px] font-bold ${themeTextMuted} uppercase tracking-wider mb-4`}>Order Status</p>
-            <div className="flex flex-col gap-0">
-              {STATUS_STEPS.map((s, idx) => {
-                const isDone = idx < currentStatusIdx
-                const isCurrent = idx === currentStatusIdx
-                const isLast = idx === STATUS_STEPS.length - 1
-                return (
-                  <div key={s.key} className="flex gap-3">
-                    {/* Timeline dot + line */}
-                    <div className="flex flex-col items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
-                        isDone ? "bg-green-500/20 text-green-400 border border-green-500/30" :
-                        isCurrent ? "bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse" :
-                        theme === "dark" ? "bg-white/5 text-gray-600 border border-white/10" : "bg-gray-100 text-gray-400 border border-gray-200"
-                      }`}>
-                        {s.icon}
-                      </div>
-                      {!isLast && (
-                        <div className={`w-px flex-1 my-1 ${isDone ? "bg-green-500/30" : theme === "dark" ? "bg-white/10" : "bg-gray-200"}`} style={{ minHeight: 20 }} />
-                      )}
-                    </div>
-                    {/* Label */}
-                    <div className={`pb-4 flex-1 ${isLast ? "" : ""}`}>
-                      <p className={`text-xs font-bold leading-snug ${
-                        isCurrent ? "text-amber-400" : isDone ? "text-green-400" : themeTextMuted
-                      }`}>
-                        {s.label}
-                        {isCurrent && <span className="ml-1.5 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 px-1.5 py-0.5 rounded-full">Now</span>}
-                      </p>
-                      {isCurrent && (
-                        <p className={`text-[10px] ${themeTextMuted} mt-0.5 leading-relaxed`}>{s.desc}</p>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Payment Summary */}
-          <div className={`${themeCard} border rounded-2xl p-4 space-y-2.5 text-sm`}>
-            <p className={`text-[10px] font-bold ${themeTextMuted} uppercase tracking-wider`}>Payment Details</p>
-            <div className="flex justify-between">
-              <span className={themeTextMuted}>Method</span>
-              <span className="font-semibold">{method?.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={themeTextMuted}>Transaction</span>
-              <span className={`font-mono text-xs ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>{transactionId}</span>
-            </div>
-            {discountAmount > 0 && (
-              <>
-                <div className="flex justify-between text-xs">
-                  <span className={themeTextMuted}>Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-green-400">
-                  <span>Discount ({promotionTitle})</span>
-                  <span>-${discountAmount.toFixed(2)}</span>
-                </div>
-              </>
-            )}
-            <div className={`flex justify-between border-t ${themeBorder} pt-2 mt-1`}>
-              <span className={`font-semibold ${themeTextMuted}`}>Amount Paid</span>
-              <span className="font-extrabold text-green-400 text-base">${total.toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col gap-2.5 mt-auto">
-            <button
-              onClick={() => {
-                onSuccess(orderId)
-                router.push("/home?tab=account")
-              }}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3.5 rounded-xl transition-all text-sm"
-            >
-              View in Account →
-            </button>
-            <button
-              onClick={onBack}
-              className={`w-full ${theme === "dark" ? "bg-white/5 hover:bg-white/10 border-white/10 text-white" : "bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-800"} border font-bold py-3 rounded-xl transition-all text-sm`}
-            >
-              Back to Menu
-            </button>
-          </div>
-        </div>
-      </div>
+      <PaymentSuccessView
+        onBack={onBack} onSuccess={onSuccess} router={router} orderId={orderId}
+        estimatedPrepTime={estimatedPrepTime} estimatedReadyAt={estimatedReadyAt} orderStatus={orderStatus}
+        methodName={method?.name} transactionId={transactionId} discountAmount={discountAmount} subtotal={subtotal}
+        promotionTitle={promotionTitle} total={total} themeBg={themeBg} themeCard={themeCard} themeBorder={themeBorder}
+        themeTextMuted={themeTextMuted} themeTextTitle={theme === "dark" ? "text-white" : "text-gray-900"} theme={theme}
+      />
     )
   }
 
-
   if (step === "confirm" && method) {
     return (
-      <div className={`fixed inset-0 z-[60] flex flex-col ${themeBg} overflow-y-auto`}>
-        <div className={`flex items-center gap-3 p-4 border-b ${themeBorder} shrink-0`}>
-          <button onClick={() => setStep("select")} className={`p-2 ${theme === "dark" ? "hover:bg-white/5" : "hover:bg-black/5"} rounded-lg`}>
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h2 className="font-black text-base">Confirm Payment</h2>
-        </div>
-        <div className="flex-1 flex flex-col p-5 gap-5 max-w-sm mx-auto w-full">
-          <div className={`flex items-center gap-3 ${themeCard} border rounded-2xl p-4`}>
-            <span className="text-3xl">{method.logo}</span>
-            <div>
-              <p className="font-bold">{method.name}</p>
-              <p className={`text-xs ${themeTextMuted}`}>{method.description}</p>
-            </div>
-          </div>
-
-          {(selectedMethod === "telebirr" || selectedMethod === "cbe" || selectedMethod === "amole") && (
-            <div>
-              <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>Mobile Phone Number</label>
-              <div className="flex gap-2">
-                <span className={`flex items-center px-3 ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-gray-300" : "bg-white border-gray-300 text-gray-700"} border rounded-xl text-sm font-semibold`}>+251</span>
-                <input
-                  type="tel"
-                  placeholder="9XXXXXXXX"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value.replace(/\D/, ""))}
-                  maxLength={9}
-                  className={`flex-1 ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
-                />
-              </div>
-              <p className="text-[10px] text-gray-500 mt-1.5">You will receive a push notification to approve the payment.</p>
-            </div>
-          )}
-
-          {selectedMethod === "chapa" && (
-            <div className="space-y-3">
-              <div>
-                <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>Card Number</label>
-                <input
-                  type="text"
-                  placeholder="4242 4242 4242 4242"
-                  className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
-                />
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>Expiry</label>
-                  <input type="text" placeholder="MM/YY" className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`} />
-                </div>
-                <div className="flex-1">
-                  <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>CVV</label>
-                  <input type="text" placeholder="123" maxLength={3} className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className={`${themeCard} border rounded-2xl p-4 space-y-2`}>
-            <p className={`text-xs font-bold ${themeTextMuted} uppercase tracking-wider`}>Order Total</p>
-            {discountAmount > 0 ? (
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className={themeTextMuted}>Subtotal</span>
-                  <span className={`font-bold ${themeTextTitle}`}>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-green-400">
-                  <span>Discount ({promotionTitle})</span>
-                  <span className="font-bold">-${discountAmount.toFixed(2)}</span>
-                </div>
-                <div className={`flex justify-between pt-1.5 border-t ${themeBorder}`}>
-                  <span className={`font-extrabold ${themeTextTitle}`}>Payable</span>
-                  <span className="text-3xl font-black text-amber-400">${total.toFixed(2)}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-3xl font-black text-amber-400">${total.toFixed(2)}</p>
-            )}
-            <p className={`text-[10px] ${themeTextMuted}`}>Taxes and service charges included</p>
-          </div>
-
-          <button
-            onClick={handlePay}
-            disabled={paying || ((selectedMethod === "telebirr" || selectedMethod === "cbe" || selectedMethod === "amole") && phone.length !== 9)}
-            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm mt-auto"
-            style={{ backgroundColor: method?.color, color: "white" }}
-          >
-            {paying ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Processing Payment…</>
-            ) : (
-              `Pay ${method?.name} · $${total.toFixed(2)}`
-            )}
-          </button>
-        </div>
-      </div>
+      <PaymentConfirmationView
+        method={method} onBack={() => setStep("select")} phone={phone} setPhone={setPhone} handlePay={handlePay}
+        paying={paying} discountAmount={discountAmount} subtotal={subtotal} promotionTitle={promotionTitle} total={total}
+        themeBg={themeBg} themeCard={themeCard} themeBorder={themeBorder} themeTextMuted={themeTextMuted}
+        themeTextTitle={theme === "dark" ? "text-white" : "text-gray-900"} theme={theme}
+      />
     )
   }
 
@@ -415,8 +152,7 @@ export default function PaymentScreen({
         <div className="space-y-3">
           {PAYMENT_METHODS.map(pm => (
             <button
-              key={pm.id}
-              onClick={() => setSelectedMethod(pm.id)}
+              key={pm.id} onClick={() => setSelectedMethod(pm.id)}
               className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all text-left ${
                 selectedMethod === pm.id
                   ? "border-amber-500/60 bg-amber-500/5"
@@ -434,8 +170,7 @@ export default function PaymentScreen({
         </div>
 
         <button
-          onClick={() => selectedMethod && setStep("confirm")}
-          disabled={!selectedMethod}
+          onClick={() => selectedMethod && setStep("confirm")} disabled={!selectedMethod}
           className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3.5 rounded-xl transition-all disabled:opacity-40 text-sm mt-auto"
         >
           Continue to Pay

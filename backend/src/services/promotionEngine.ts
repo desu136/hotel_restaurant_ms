@@ -229,7 +229,11 @@ export class PromotionEngine {
 
       // ─── PART B: REWARD CALCULATION ───
       let potentialDiscount = 0;
-      const discountVal = reward?.discount_value || Number(promo.discount_value) || 0;
+      let discountVal = reward?.discount_value ?? 0;
+      if (!discountVal && promo.discount_value) {
+        const parsed = parseFloat(String(promo.discount_value).replace(/[^0-9.]/g, ''));
+        discountVal = isNaN(parsed) ? 0 : parsed;
+      }
 
       switch (promo.reward_type) {
         case RewardType.PERCENTAGE_DISCOUNT:

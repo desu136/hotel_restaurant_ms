@@ -68,8 +68,10 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Backend API running on http://0.0.0.0:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Backend API running on http://0.0.0.0:${PORT}`);
+  });
+}
 
 export default app;

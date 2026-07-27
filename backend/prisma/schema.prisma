@@ -636,9 +636,9 @@ model DexelSyncLog {
 }
 
 enum BusinessType {
-  HOTEL
   RESTAURANT
-  HOTEL_RESTAURANT
+  COFFEE_SHOP
+  FAST_FOOD
 }
 
 enum TenantStatus {

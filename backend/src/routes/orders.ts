@@ -178,7 +178,7 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
 
     // Calculate total amount and prepare items
     let totalAmount = 0;
-    const orderItems: { menu_item_id: string; quantity: number; unit_price: number; customizations: any }[] = [];
+    const orderItems: { menu_item_id: string; category_id?: string; quantity: number; unit_price: number; customizations: any }[] = [];
     
     interface CustomizationValue {
       name: string;
@@ -226,6 +226,7 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
       totalAmount += unit_price * qty;
       orderItems.push({
         menu_item_id: item.menu_item_id,
+        category_id: menuItem.category_id || undefined,
         quantity: qty,
         unit_price,
         customizations: item.customizations || null,
@@ -646,7 +647,7 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
 
     // Calculate total
     let totalAmount = 0;
-    const orderItems: { menu_item_id: string; quantity: number; unit_price: number }[] = [];
+    const orderItems: { menu_item_id: string; category_id?: string; quantity: number; unit_price: number }[] = [];
     for (const item of items) {
       const menuItem = await prisma.menuItem.findUnique({ where: { id: item.menu_item_id } });
       if (!menuItem) {
@@ -655,7 +656,7 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
       }
       const unit_price = parseFloat(item.unit_price);
       totalAmount += unit_price * item.quantity;
-      orderItems.push({ menu_item_id: item.menu_item_id, quantity: item.quantity, unit_price });
+      orderItems.push({ menu_item_id: item.menu_item_id, category_id: menuItem.category_id || undefined, quantity: item.quantity, unit_price });
     }
 
     const { estimatedPrepTimeMinutes, estimatedReadyAt } = await calculateEstimatedPrepTime(resolvedBranchId, orderItems);

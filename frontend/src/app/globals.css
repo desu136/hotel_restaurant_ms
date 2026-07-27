@@ -23,8 +23,9 @@
 
 /* ── Global defaults — public, menu & customer pages ───────── */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* --background: #f8fafc; */
+  --background: #ffffff;
+  --foreground: #000000;
   --surface: #ffffff;
   --surface-hover: #f1f5f9;
   --surface-border: #e2e8f0;
@@ -127,4 +128,29 @@ body {
   background: color-mix(in srgb, var(--surface) 80%, transparent);
   backdrop-filter: blur(12px);
   border: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+}
+
+/* Global input, select, and textarea styling */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+select,
+textarea {
+  background-color: var(--surface) !important;
+  color: var(--foreground) !important;
+  border: 1px solid var(--foreground) !important;
+}
+
+/* Ensure placeholder is visible but muted */
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted) !important;
+  opacity: 0.85;
 }

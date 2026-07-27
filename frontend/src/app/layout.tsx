@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "HospitalityHub SaaS",
-  description: "Next-generation management for Hotels and Restaurants",
+  title: "RMS – Restaurant Management System",
+  description: "Next-generation management for Restaurants, Coffee Shops, and Fast Food Centers",
 };
 
 export default function RootLayout({

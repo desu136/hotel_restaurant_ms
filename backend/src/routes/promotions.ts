@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { PromotionStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth';
 
@@ -26,8 +27,11 @@ router.get('/public', async (req: Request, res: Response): Promise<void> => {
         tenant_id: tenantId, 
         is_active: true,
         archived: false,
-        status: { not: 'DRAFT' },
-        start_date: { lte: now },
+        status: { not: PromotionStatus.DRAFT },
+        OR: [
+          { status: PromotionStatus.ACTIVE },
+          { start_date: { lte: now } }
+        ],
         end_date: { gte: now }
       },
       orderBy: { created_at: 'desc' },

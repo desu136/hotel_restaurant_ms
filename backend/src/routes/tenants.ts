@@ -57,6 +57,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
 // POST /api/tenants  — admin-initiated tenant creation with owner account
 router.post('/', async (req: Request, res: Response): Promise<void> => {
+  let tenantId: string | null = null;
+
   try {
     const { business_name, owner_name, email, phone, business_type, address, license_info, tax_info } = req.body;
 
@@ -65,62 +67,63 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Default password for admin-created accounts
     const DEFAULT_PASSWORD = 'Welcome@1234';
     const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
 
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Create tenant
-      const tenant = await tx.tenant.create({
-        data: {
-          business_name,
-          owner_name,
-          email,
-          phone,
-          business_type: business_type as BusinessType,
-          address,
-          license_info,
-          tax_info,
-          status: 'ACTIVE' as TenantStatus, // Admin-created tenants are immediately active
-        },
+    // ── Step 1: Create tenant ────────────────────────────────────────────────
+    const tenant = await prisma.tenant.create({
+      data: {
+        business_name,
+        owner_name,
+        email,
+        phone,
+        business_type: business_type as BusinessType,
+        address,
+        license_info,
+        tax_info,
+        status: 'ACTIVE' as TenantStatus,
+      },
+    });
+    tenantId = tenant.id;
+
+    // ── Step 2: Get owner role ───────────────────────────────────────────────
+    const ownerRole = await prisma.role.findUnique({ where: { code: 'HOTEL_OWNER' } });
+
+    // ── Step 3: Create owner user ────────────────────────────────────────────
+    const user = await prisma.user.create({
+      data: {
+        tenant_id: tenant.id,
+        full_name: owner_name,
+        email,
+        phone,
+        password_hash: passwordHash,
+        status: 'ACTIVE',
+        roles: ownerRole ? { create: { role_id: ownerRole.id } } : undefined,
+      },
+    });
+
+    // ── Step 4: Attach a trial subscription ──────────────────────────────────
+    let plan = await prisma.subscriptionPlan.findFirst({ where: { name: 'Trial Plan' } });
+    if (!plan) {
+      plan = await prisma.subscriptionPlan.create({
+        data: { name: 'Trial Plan', monthly_price: 0, annual_price: 0, trial_days: 14 },
       });
+    }
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(startDate.getDate() + plan.trial_days);
+    await prisma.tenantSubscription.create({
+      data: { tenant_id: tenant.id, plan_id: plan.id, start_date: startDate, end_date: endDate, status: 'TRIAL' },
+    });
 
-      // 2. Get HOTEL_OWNER role
-      const ownerRole = await tx.role.findUnique({ where: { code: 'HOTEL_OWNER' } });
-
-      // 3. Create the owner user account
-      const user = await tx.user.create({
-        data: {
-          tenant_id: tenant.id,
-          full_name: owner_name,
-          email,
-          phone,
-          password_hash: passwordHash,
-          status: 'ACTIVE',
-          roles: ownerRole ? { create: { role_id: ownerRole.id } } : undefined,
-        },
-      });
-
-      // 4. Attach a trial subscription
-      let plan = await tx.subscriptionPlan.findFirst({ where: { name: 'Trial Plan' } });
-      if (!plan) {
-        plan = await tx.subscriptionPlan.create({
-          data: { name: 'Trial Plan', monthly_price: 0, annual_price: 0, trial_days: 14 },
-        });
-      }
-      const startDate = new Date();
-      const endDate = new Date();
-      endDate.setDate(startDate.getDate() + plan.trial_days);
-      await tx.tenantSubscription.create({
-        data: { tenant_id: tenant.id, plan_id: plan.id, start_date: startDate, end_date: endDate, status: 'TRIAL' },
-      });
-
-      return { tenant, user };
-    }, { timeout: 30000 });
+    // ── Step 5: Auto-create root restaurant brand profile ────────────────────
+    await prisma.restaurant.create({
+      data: { tenant_id: tenant.id, name: business_name, parent_id: null },
+    });
 
     res.status(201).json({
       success: true,
-      tenant: result.tenant,
+      tenant,
       owner_credentials: {
         email,
         temporary_password: DEFAULT_PASSWORD,
@@ -129,6 +132,13 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     console.error('POST /api/tenants error:', error);
+
+    // Best-effort cleanup on failure
+    if (tenantId) {
+      try { await prisma.tenant.delete({ where: { id: tenantId } }); }
+      catch (cleanupErr) { console.error('Admin tenant cleanup error:', cleanupErr); }
+    }
+
     if (error.code === 'P2002') {
       res.status(409).json({ error: 'A user with this email already exists' });
       return;

@@ -257,9 +257,9 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
 
       res.json({
         tenantId: null,
-        business_name: "Hospitality Hub",
-        business_type: "HOTEL_RESTAURANT",
-        modules: ["RESTAURANT", "MENU", "DELIVERY", "HOTEL", "ROOMS"],
+        business_name: "RMS",
+        business_type: "RESTAURANT",
+        modules: ["RESTAURANT", "MENU", "DELIVERY"],
         restaurants,
       });
     }
@@ -394,6 +394,15 @@ router.get('/my', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGE
       select: {
         id: true, name: true, logo_url: true, banner_url: true, created_at: true,
         _count: { select: { children: true } },
+        tenant: {
+          select: {
+            owner_name: true,
+            email: true,
+            phone: true,
+            business_type: true,
+            status: true,
+          },
+        },
       },
     });
     res.json(restaurant ?? null);

@@ -6,8 +6,8 @@ const router = Router();
 
 const DEFAULT_ROLES = [
   { code: 'SUPER_ADMIN', name: 'Super Administrator' },
-  { code: 'HOTEL_OWNER', name: 'Hotel/Restaurant Owner' },
-  { code: 'HOTEL_MANAGER', name: 'Hotel Manager' },
+  { code: 'HOTEL_OWNER', name: 'Business Owner' },
+  { code: 'HOTEL_MANAGER', name: 'Business Manager' },
   { code: 'RECEPTIONIST', name: 'Receptionist' },
   { code: 'RESTAURANT_MANAGER', name: 'Restaurant Manager' },
   { code: 'WAITER', name: 'Waiter' },
@@ -93,12 +93,12 @@ router.get('/seed', async (_req: Request, res: Response): Promise<void> => {
     let systemTenant = await prisma.tenant.findFirst({ where: { business_name: 'System Admin' } });
     if (!systemTenant) {
       systemTenant = await prisma.tenant.create({
-        data: { business_name: 'System Admin', owner_name: 'System', phone: '0000000000', email: 'system@hospitalityhub.com', business_type: 'HOTEL_RESTAURANT', status: 'ACTIVE' },
+        data: { business_name: 'System Admin', owner_name: 'System', phone: '0000000000', email: 'system@rms.com', business_type: 'RESTAURANT', status: 'ACTIVE' },
       });
     }
 
     // 5. Super Admin user
-    const adminEmail = 'admin@hospitalityhub.com';
+    const adminEmail = 'admin@rms.com';
     const adminPassword = await hash('admin123', 10);
     await prisma.user.upsert({
       where: { email: adminEmail },
