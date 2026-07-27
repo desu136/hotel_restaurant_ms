@@ -151,7 +151,12 @@ export default function CartView({
                   <input
                     type="text" placeholder="Enter your complete delivery address..." value={deliveryAddress}
                     onChange={e => setDeliveryAddress(e.target.value)}
-                    className={`w-full ${theme === "dark" ? "bg-[#0b0f19] text-white" : "bg-white text-gray-900"} border ${themeBorder} rounded-xl px-3.5 py-2.5 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
+                    style={{
+                      backgroundColor: theme === "dark" ? "#1c1c1e" : "#ffffff",
+                      color: theme === "dark" ? "#ffffff" : "#111827",
+                      borderColor: theme === "dark" ? "rgba(255, 255, 255, 0.15)" : "#e5e7eb"
+                    }}
+                    className="w-full border rounded-xl px-3.5 py-2.5 text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
                     required
                   />
                 </div>
@@ -162,7 +167,12 @@ export default function CartView({
                 <textarea
                   rows={2} placeholder="E.g., no onion, extra spicy, deliver order items together..."
                   value={orderNotes} onChange={e => setOrderNotes(e.target.value)}
-                  className={`w-full ${theme === "dark" ? "bg-[#0b0f19] text-white" : "bg-white text-gray-900"} border ${themeBorder} rounded-xl px-3 py-2 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50 resize-none`}
+                  style={{
+                    backgroundColor: theme === "dark" ? "#1c1c1e" : "#ffffff",
+                    color: theme === "dark" ? "#ffffff" : "#111827",
+                    borderColor: theme === "dark" ? "rgba(255, 255, 255, 0.15)" : "#e5e7eb"
+                  }}
+                  className="w-full border rounded-xl px-3 py-2 text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50 resize-none"
                 />
               </div>
 

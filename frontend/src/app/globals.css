@@ -143,14 +143,14 @@ input[type="time"],
 input[type="datetime-local"],
 select,
 textarea {
-  background-color: var(--surface) !important;
-  color: var(--foreground) !important;
-  border: 1px solid var(--foreground) !important;
+  background-color: var(--surface);
+  color: var(--foreground);
+  border: 1px solid var(--surface-border);
 }
 
 /* Ensure placeholder is visible but muted */
 input::placeholder,
 textarea::placeholder {
-  color: var(--muted) !important;
+  color: var(--muted);
   opacity: 0.85;
 }

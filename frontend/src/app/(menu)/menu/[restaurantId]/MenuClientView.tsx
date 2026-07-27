@@ -109,8 +109,9 @@ export default function MenuClientView() {
             selectedItem={m.selectedItem} setSelectedItem={m.setSelectedItem} categories={m.categories}
             selectedCustomizationBadges={m.selectedCustomizationBadges} itemCustomizations={m.itemCustomizations}
             setItemCustomizations={m.setItemCustomizations} itemNotes={m.itemNotes} setItemNotes={m.setItemNotes}
-            itemQty={m.itemQty} setItemQty={m.setItemQty} addToCartFromDetail={m.addToCartFromDetail}
+            addToCartFromDetail={m.addToCartFromDetail}
             getCustomizedItemPrice={m.getCustomizedItemPrice} themeCard={themeCard} themeBorder={themeBorder} theme={m.theme}
+            cart={m.cart} updateCartQty={m.updateCartQty}
           />
         )}
 
@@ -124,7 +125,7 @@ export default function MenuClientView() {
       </div>
 
       <AnimatePresence>
-        {!m.popupVisible && m.activeTab === "home" && (
+        {!m.tableId && !m.popupVisible && m.activeTab === "home" && (
           <motion.button
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
             onClick={() => m.setPopupVisible(true)}

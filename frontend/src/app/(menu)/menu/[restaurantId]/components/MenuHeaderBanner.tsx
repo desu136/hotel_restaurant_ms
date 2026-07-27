@@ -60,15 +60,17 @@ export default function MenuHeaderBanner({
           : "from-[#f8f9fa] via-[#f8f9fa]/50 to-black/10"
           }`} />
 
-        <div className="absolute top-4 left-4 z-10">
-          <button
-            onClick={onBack}
-            className={`p-2.5 rounded-full border transition-all flex items-center justify-center shadow-md ${theme === "dark" ? "bg-black/45 border-white/10 text-white hover:bg-black/60" : "bg-white/85 border-gray-300 text-gray-700 hover:bg-white"
-              }`}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-        </div>
+        {!tableId && (
+          <div className="absolute top-4 left-4 z-10">
+            <button
+              onClick={onBack}
+              className={`p-2.5 rounded-full border transition-all flex items-center justify-center shadow-md ${theme === "dark" ? "bg-black/45 border-white/10 text-white hover:bg-black/60" : "bg-white/85 border-gray-300 text-gray-700 hover:bg-white"
+                }`}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
           <button

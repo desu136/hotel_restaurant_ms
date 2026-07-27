@@ -1,10 +1,9 @@
 "use client"
 import * as React from "react"
-import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft } from "lucide-react"
-import SlideshowImage from "./SlideshowImage"
 import CustomizationSelector from "./CustomizationSelector"
-import { MenuItem, Category, SLOTS } from "./types"
+import ItemHero from "./ItemHero"
+import { MenuItem, Category, CartItem, areCustsEqual } from "./types"
 
 interface Props {
   selectedItem: MenuItem
@@ -15,13 +14,14 @@ interface Props {
   setItemCustomizations: React.Dispatch<React.SetStateAction<Record<string, string | string[]>>>
   itemNotes: string
   setItemNotes: (notes: string) => void
-  itemQty: number
-  setItemQty: React.Dispatch<React.SetStateAction<number>>
+
   addToCartFromDetail: () => void
   getCustomizedItemPrice: (item: MenuItem, custs: Record<string, string | string[]>) => number
   themeCard: string
   themeBorder: string
   theme: "dark" | "light"
+  cart: CartItem[]
+  updateCartQty: (idx: number, delta: number) => void
 }
 
 export default function ItemDetailModal({
@@ -33,16 +33,22 @@ export default function ItemDetailModal({
   setItemCustomizations,
   itemNotes,
   setItemNotes,
-  itemQty,
-  setItemQty,
+
   addToCartFromDetail,
   getCustomizedItemPrice,
   themeCard,
   themeBorder,
   theme,
+  cart,
+  updateCartQty,
 }: Props) {
+  const cartItemIdx = (cart || []).findIndex(
+    c => c.menuItem.id === selectedItem.id &&
+      areCustsEqual(c.selectedCustomizations, itemCustomizations) &&
+      (c.notes || "") === (itemNotes || "")
+  )
   return (
-    <div className={`fixed inset-0 z-50 ${theme === "dark" ? " text-white" : "bg-white text-gray-900"} flex flex-col w-full h-[100dvh] overflow-hidden`}>
+    <div className={`fixed inset-0 z-50 ${theme === "dark" ? "bg-[#0c0c0c] text-white" : "bg-white text-gray-900"} flex flex-col w-full h-[100dvh] overflow-hidden`}>
       <div className="absolute top-4 left-4 z-30">
         <button
           onClick={() => setSelectedItem(null)}
@@ -52,61 +58,7 @@ export default function ItemDetailModal({
         </button>
       </div>
 
-      <div className="relative h-40 sm:h-80 bg-gray-950 w-full shrink-0 flex items-center justify-center border-b border-white/5 overflow-hidden">
-        {selectedItem.image_url ? (
-          <motion.div
-            className="w-full h-full"
-            animate={{ scale: selectedCustomizationBadges.length > 0 ? [1, 1.04, 1] : 1 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            key={selectedCustomizationBadges.length}
-          >
-            {(() => {
-              const allImgs = [selectedItem.image_url, ...(Array.isArray(selectedItem.image_urls) ? selectedItem.image_urls : [])].filter(Boolean) as string[]
-              return <SlideshowImage images={allImgs} alt={selectedItem.display_name} className="w-full h-full" interval={3000} />
-            })()}
-          </motion.div>
-        ) : (
-          <div className="text-center space-y-2 text-gray-500">
-            <span className="text-6xl block animate-pulse">🍽️</span>
-            <span className="text-xs font-semibold">No Image Available</span>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30 pointer-events-none" />
-
-        <AnimatePresence>
-          {selectedCustomizationBadges.map((choice, index) => {
-            const slot = SLOTS[index % SLOTS.length]
-            return (
-              <motion.div
-                key={choice.name}
-                initial={{ scale: 0.1, opacity: 1, y: 600, x: index % 2 === 0 ? 120 : -120 }}
-                animate={{ scale: 1, opacity: 1, y: 0, x: 0 }}
-                exit={{ scale: 0, opacity: 2, y: 150 }}
-                transition={{ type: "spring", stiffness: 300, damping: 10, delay: 0.05 * index }}
-                style={{ position: "absolute", ...slot }}
-                className="z-20 flex flex-col items-center pointer-events-none select-none"
-              >
-                {choice.image_url ? (
-                  <>
-                    <div className="bg-black/85 backdrop-blur-md border border-amber-500/30 text-white px-2 py-0.5 rounded-full text-[9px] font-black shadow-lg mb-1 whitespace-nowrap">
-                      {choice.name} {choice.extraPrice > 0 ? `(+$${choice.extraPrice.toFixed(2)})` : ""}
-                    </div>
-                    <div className="w-14 h-24 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-none bg-gray-900 shadow-2xl p-0.5">
-                      <img src={choice.image_url} alt="" className="w-full h-full object-cover rounded-full" />
-                    </div>
-                  </>
-                ) : (
-                  <div className="bg-amber-500 text-black px-3 py-1.5 rounded-full text-[10px] font-black shadow-2xl border border-black/10 flex items-center gap-1.5">
-                    <span>✨</span>
-                    <span className="whitespace-nowrap">{choice.name}</span>
-                    {choice.extraPrice > 0 && <span className="opacity-75">(+${choice.extraPrice.toFixed(2)})</span>}
-                  </div>
-                )}
-              </motion.div>
-            )
-          })}
-        </AnimatePresence>
-      </div>
+      <ItemHero selectedItem={selectedItem} selectedCustomizationBadges={selectedCustomizationBadges} />
 
       <div className="flex-1 overflow-y-auto px-6 py-5 max-w-xl mx-auto w-full space-y-3">
         <div className="flex items-start justify-between gap-4">
@@ -148,34 +100,56 @@ export default function ItemDetailModal({
         )}
 
         <div>
-          <label className=" text-xs font-semibold opacity-90 mb-1.5">Special Instructions</label>
+          <label className="text-xs font-semibold opacity-90 mb-1.5 block">Special Instructions</label>
           <textarea
             rows={2}
             placeholder="E.g., no onion, extra spicy, gluten allergy..."
             value={itemNotes}
             onChange={e => setItemNotes(e.target.value)}
-            className={`w-full px-1.5 py-2.5 text-xs placeholder-gray-500 `}
+            style={{
+              backgroundColor: theme === "dark" ? "#1c1c1e" : "#ffffff",
+              color: theme === "dark" ? "#ffffff" : "#111827",
+              borderColor: theme === "dark" ? "rgba(255, 255, 255, 0.15)" : "#e5e7eb"
+            }}
+            className="w-full border rounded-xl px-3 py-2.5 text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
           />
         </div>
       </div>
 
       <div className={`shrink-0 border-t ${themeBorder} ${theme === "dark" ? "bg-[#0b0f19]" : "bg-white"} px-5 py-4 w-full`}>
         <div className="max-w-xl mx-auto flex items-center gap-4">
-          <div className={`flex items-center gap-3 ${theme === "dark" ? "bg-white/5" : "bg-gray-100"} border ${themeBorder} rounded-xl px-3 py-2`}>
-            <button onClick={() => setItemQty(q => Math.max(1, q - 1))} className="font-bold text-base w-7 h-7 flex items-center justify-center hover:text-amber-500 transition-colors">
-              −
+          {cartItemIdx >= 0 ? (
+            <div className="flex-1 flex items-center justify-between bg-[#FFC72C] text-black font-black py-2 px-4 rounded-xl shadow-md">
+              <button
+                type="button"
+                onClick={() => updateCartQty(cartItemIdx, -1)}
+                className="w-10 h-10 rounded-lg bg-black/10 hover:bg-black/20 flex items-center justify-center font-black text-xl active:scale-95 transition-all"
+              >
+                −
+              </button>
+              <div className="flex flex-col items-center">
+                <span className="text-sm font-black leading-tight">{cart[cartItemIdx].quantity} in Cart</span>
+                <span className="text-[11px] font-extrabold opacity-85">
+                  ${(getCustomizedItemPrice(selectedItem, itemCustomizations) * cart[cartItemIdx].quantity).toFixed(2)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => updateCartQty(cartItemIdx, 1)}
+                className="w-10 h-10 rounded-lg bg-black/10 hover:bg-black/20 flex items-center justify-center font-black text-xl active:scale-95 transition-all"
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={addToCartFromDetail}
+              className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl transition-all shadow-md shadow-amber-500/10 text-xs sm:text-sm"
+            >
+              Add to Cart — ${getCustomizedItemPrice(selectedItem, itemCustomizations).toFixed(2)}
             </button>
-            <span className="font-extrabold text-sm w-5 text-center">{itemQty}</span>
-            <button onClick={() => setItemQty(q => q + 1)} className="font-bold text-base w-7 h-7 flex items-center justify-center hover:text-amber-500 transition-colors">
-              +
-            </button>
-          </div>
-          <button
-            onClick={addToCartFromDetail}
-            className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl transition-all shadow-md shadow-amber-500/10 text-xs sm:text-sm"
-          >
-            Add to Cart — ${(getCustomizedItemPrice(selectedItem, itemCustomizations) * itemQty).toFixed(2)}
-          </button>
+          )}
         </div>
       </div>
     </div>

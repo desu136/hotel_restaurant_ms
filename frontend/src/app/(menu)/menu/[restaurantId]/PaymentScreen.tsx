@@ -27,9 +27,9 @@ interface PaymentScreenProps {
 
 const PAYMENT_METHODS = [
   { id: "telebirr", name: "TeleBirr", logo: "📱", color: "#0066CC", description: "Pay with Ethio Telecom TeleBirr" },
-  { id: "cbe", name: "CBE Birr", logo: "🏦", color: "#007A3D", description: "Commercial Bank of Ethiopia" },
-  { id: "chapa", name: "Chapa", logo: "💳", color: "#F5A623", description: "Secure online payment gateway" },
-  { id: "amole", name: "Amole", logo: "💰", color: "#8B2FC9", description: "Dashen Bank digital wallet" },
+  // { id: "cbe", name: "CBE Birr", logo: "🏦", color: "#007A3D", description: "Commercial Bank of Ethiopia" },
+  // { id: "chapa", name: "Chapa", logo: "💳", color: "#F5A623", description: "Secure online payment gateway" },
+  // { id: "amole", name: "Amole", logo: "💰", color: "#8B2FC9", description: "Dashen Bank digital wallet" },
 ]
 
 export default function PaymentScreen({
@@ -61,7 +61,7 @@ export default function PaymentScreen({
           const data = await res.json()
           setOrderStatus(data.status || "PENDING")
         }
-      } catch (_) {}
+      } catch (_) { }
     }
     poll()
     const interval = setInterval(poll, 8000)
@@ -153,11 +153,10 @@ export default function PaymentScreen({
           {PAYMENT_METHODS.map(pm => (
             <button
               key={pm.id} onClick={() => setSelectedMethod(pm.id)}
-              className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all text-left ${
-                selectedMethod === pm.id
+              className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all text-left ${selectedMethod === pm.id
                   ? "border-amber-500/60 bg-amber-500/5"
                   : `${themeBorder} ${themeCard} ${theme === "dark" ? "hover:border-white/20" : "hover:border-gray-300"}`
-              }`}
+                }`}
             >
               <span className={`text-2xl w-10 h-10 flex items-center justify-center ${theme === "dark" ? "bg-white/5" : "bg-gray-100"} rounded-xl`}>{pm.logo}</span>
               <div className="flex-1">

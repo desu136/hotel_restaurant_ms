@@ -226,7 +226,6 @@ router.post('/public', async (req: Request, res: Response): Promise<void> => {
       totalAmount += unit_price * qty;
       orderItems.push({
         menu_item_id: item.menu_item_id,
-        category_id: menuItem.category_id || undefined,
         quantity: qty,
         unit_price,
         customizations: item.customizations || null,

@@ -106,3 +106,39 @@ export const getCategoryEmoji = (name: string): string => {
   if (n.includes("snack") || n.includes("side")) return "🧆"
   return "🍽️"
 }
+
+export const getDefaultCustomizations = (item: MenuItem): Record<string, string | string[]> => {
+  const defaults: Record<string, string | string[]> = {}
+  if (item.customizations) {
+    item.customizations.forEach(cust => {
+      const recs = cust.values
+        .filter(v => typeof v !== "string" && v.recommended)
+        .map(v => typeof v === "string" ? v : v.name)
+      if (recs.length > 0) defaults[cust.key] = cust.multiple ? recs : recs[0]
+    })
+  }
+  return defaults
+}
+
+export const areCustsEqual = (
+  a: Record<string, string | string[]> = {},
+  b: Record<string, string | string[]> = {}
+): boolean => {
+  const clean = (obj: Record<string, string | string[]>) =>
+    Object.fromEntries(
+      Object.entries(obj || {}).filter(([_, v]) => v !== undefined && v !== null && (Array.isArray(v) ? v.length > 0 : v !== ""))
+    )
+  const cleanA = clean(a)
+  const cleanB = clean(b)
+  const keysA = Object.keys(cleanA).sort()
+  const keysB = Object.keys(cleanB).sort()
+  if (keysA.length !== keysB.length) return false
+  return keysA.every(k => {
+    const vA = cleanA[k]
+    const vB = cleanB[k]
+    if (Array.isArray(vA) && Array.isArray(vB)) {
+      return vA.length === vB.length && vA.slice().sort().every((val, i) => val === vB.slice().sort()[i])
+    }
+    return vA === vB
+  })
+}

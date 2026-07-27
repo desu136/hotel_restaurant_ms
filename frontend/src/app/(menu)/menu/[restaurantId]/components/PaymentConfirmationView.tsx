@@ -61,14 +61,28 @@ export default function PaymentConfirmationView({
           <div>
             <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>Mobile Phone Number</label>
             <div className="flex gap-2">
-              <span className={`flex items-center px-3 ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-gray-300" : "bg-white border-gray-300 text-gray-700"} border rounded-xl text-sm font-semibold`}>+251</span>
+              <span
+                style={{
+                  backgroundColor: theme === "dark" ? "#1c1c1e" : "#ffffff",
+                  color: theme === "dark" ? "#d1d5db" : "#374151",
+                  borderColor: theme === "dark" ? "rgba(255, 255, 255, 0.15)" : "#d1d5db"
+                }}
+                className="flex items-center px-3 border rounded-xl text-sm font-semibold"
+              >
+                +251
+              </span>
               <input
                 type="tel"
                 placeholder="9XXXXXXXX"
                 value={phone}
                 onChange={e => setPhone(e.target.value.replace(/\D/, ""))}
                 maxLength={9}
-                className={`flex-1 ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
+                style={{
+                  backgroundColor: theme === "dark" ? "#1c1c1e" : "#ffffff",
+                  color: theme === "dark" ? "#ffffff" : "#111827",
+                  borderColor: theme === "dark" ? "rgba(255, 255, 255, 0.15)" : "#d1d5db"
+                }}
+                className="flex-1 border rounded-xl px-3 py-2.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
               />
             </div>
             <p className="text-[10px] text-gray-500 mt-1.5">You will receive a push notification to approve the payment.</p>
@@ -82,17 +96,41 @@ export default function PaymentConfirmationView({
               <input
                 type="text"
                 placeholder="4242 4242 4242 4242"
-                className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`}
+                style={{
+                  backgroundColor: theme === "dark" ? "#1c1c1e" : "#ffffff",
+                  color: theme === "dark" ? "#ffffff" : "#111827",
+                  borderColor: theme === "dark" ? "rgba(255, 255, 255, 0.15)" : "#d1d5db"
+                }}
+                className="w-full border rounded-xl px-3 py-2.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
               />
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>Expiry</label>
-                <input type="text" placeholder="MM/YY" className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`} />
+                <input
+                  type="text"
+                  placeholder="MM/YY"
+                  style={{
+                    backgroundColor: theme === "dark" ? "#1c1c1e" : "#ffffff",
+                    color: theme === "dark" ? "#ffffff" : "#111827",
+                    borderColor: theme === "dark" ? "rgba(255, 255, 255, 0.15)" : "#d1d5db"
+                  }}
+                  className="w-full border rounded-xl px-3 py-2.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                />
               </div>
               <div className="flex-1">
                 <label className={`block text-xs font-semibold ${themeTextMuted} mb-2`}>CVV</label>
-                <input type="text" placeholder="123" maxLength={3} className={`w-full ${theme === "dark" ? "bg-[#0b0f19] border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"} border rounded-xl px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50`} />
+                <input
+                  type="text"
+                  placeholder="123"
+                  maxLength={3}
+                  style={{
+                    backgroundColor: theme === "dark" ? "#1c1c1e" : "#ffffff",
+                    color: theme === "dark" ? "#ffffff" : "#111827",
+                    borderColor: theme === "dark" ? "rgba(255, 255, 255, 0.15)" : "#d1d5db"
+                  }}
+                  className="w-full border rounded-xl px-3 py-2.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                />
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 "use client"
 import * as React from "react"
-import { MenuItem, CartItem, Customization } from "./types"
+import { MenuItem, CartItem, Customization, getDefaultCustomizations } from "./types"
 
 export function useCartState(restaurantTenantId?: string | null, miniAppUser?: any) {
   const [cart, setCart] = React.useState<CartItem[]>([])
@@ -77,12 +77,13 @@ export function useCartState(restaurantTenantId?: string | null, miniAppUser?: a
   }, [cart, orderType, miniAppUser, restaurantTenantId])
 
   const addToCartDirectly = (item: MenuItem) => {
+    const defaults = getDefaultCustomizations(item)
     setCart(prev => {
-      const existingIdx = prev.findIndex(c => c.menuItem.id === item.id && Object.keys(c.selectedCustomizations).length === 0 && !c.notes)
+      const existingIdx = prev.findIndex(c => c.menuItem.id === item.id && JSON.stringify(c.selectedCustomizations) === JSON.stringify(defaults) && !c.notes)
       if (existingIdx >= 0) {
         return prev.map((c, i) => i === existingIdx ? { ...c, quantity: c.quantity + 1 } : c)
       }
-      return [...prev, { menuItem: item, quantity: 1, selectedCustomizations: {}, notes: "" }]
+      return [...prev, { menuItem: item, quantity: 1, selectedCustomizations: defaults, notes: "" }]
     })
   }
 

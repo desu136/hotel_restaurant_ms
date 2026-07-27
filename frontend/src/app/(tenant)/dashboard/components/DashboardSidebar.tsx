@@ -46,7 +46,11 @@ export function DashboardSidebar({ user, loading, onCloseMobile }: { user: any; 
       { href: "/dashboard/manager/menu", label: "Menu", icon: UtensilsCrossed, exact: false },
       { href: "/dashboard/manager/tables", label: "Tables", icon: Table2, exact: false },
       { href: "/dashboard/manager/qr", label: "QR Codes", icon: QrCode, exact: false },
-      { href: "/dashboard/manager/staff", label: "Staff", icon: Users2, exact: false },
+    )
+    if (!isOwner) {
+      operationsNav.push({ href: "/dashboard/manager/staff", label: "Staff", icon: Users2, exact: false })
+    }
+    operationsNav.push(
       { href: "/dashboard/manager/promotions", label: "Promotions", icon: Megaphone, exact: false },
       { href: "/dashboard/manager/reports", label: "Reports", icon: BarChart3, exact: false }
     )

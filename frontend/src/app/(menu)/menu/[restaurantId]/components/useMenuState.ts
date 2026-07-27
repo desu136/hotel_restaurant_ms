@@ -1,7 +1,7 @@
 "use client"
 import * as React from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
-import { MenuItem } from "./types"
+import { MenuItem, getDefaultCustomizations, areCustsEqual } from "./types"
 import { useMenuFetchers } from "./useMenuFetchers"
 import { useCartState } from "./useCartState"
 
@@ -144,24 +144,28 @@ export function useMenuState() {
 
   const openItemDetail = (item: MenuItem) => {
     setSelectedItem(item)
-    const defaults: Record<string, string | string[]> = {}
-    if (item.customizations) {
-      item.customizations.forEach(cust => {
-        const recs = cust.values.filter(v => typeof v !== "string" && v.recommended).map(v => typeof v === "string" ? v : v.name)
-        if (recs.length > 0) defaults[cust.key] = cust.multiple ? recs : recs[0]
-      })
-    }
-    setItemCustomizations(defaults); setItemNotes(""); setItemQty(1)
+    const defaults = getDefaultCustomizations(item)
+    setItemCustomizations(defaults)
+    setItemNotes("")
+    const existingInCart = cartState.cart.find(
+      c => c.menuItem.id === item.id && areCustsEqual(c.selectedCustomizations, defaults) && !c.notes
+    )
+    const totalInCart = cartState.cart.filter(c => c.menuItem.id === item.id).reduce((sum, c) => sum + c.quantity, 0)
+    setItemQty(existingInCart ? existingInCart.quantity : (totalInCart > 0 ? totalInCart : 1))
   }
 
   const addToCartFromDetail = () => {
     if (!selectedItem) return
     cartState.setCart(prev => {
-      const idx = prev.findIndex(c => c.menuItem.id === selectedItem.id && JSON.stringify(c.selectedCustomizations) === JSON.stringify(itemCustomizations) && c.notes === itemNotes)
-      if (idx >= 0) return prev.map((c, i) => i === idx ? { ...c, quantity: c.quantity + itemQty } : c)
-      return [...prev, { menuItem: selectedItem, quantity: itemQty, selectedCustomizations: itemCustomizations, notes: itemNotes }]
+      const idx = prev.findIndex(
+        c => c.menuItem.id === selectedItem.id &&
+        areCustsEqual(c.selectedCustomizations, itemCustomizations) &&
+        (c.notes || "") === (itemNotes || "")
+      )
+      if (idx >= 0) return prev.map((c, i) => i === idx ? { ...c, quantity: c.quantity + 1 } : c)
+      return [...prev, { menuItem: selectedItem, quantity: 1, selectedCustomizations: itemCustomizations, notes: itemNotes }]
     })
-    setSelectedItem(null)
+    // do NOT close the modal — UI transitions to +/- bar automatically via cartItemIdx
   }
 
   return {

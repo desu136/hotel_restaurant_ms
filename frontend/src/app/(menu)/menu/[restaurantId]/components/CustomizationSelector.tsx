@@ -27,7 +27,7 @@ export default function CustomizationSelector({
         return (
           <div key={cust.key} className={`space-y-3.5 ${themeCard} p-3`}>
             <p className="text-xs font-bold flex items-center gap-1.5">
-              <span>{cust.label}</span>
+              <span className="uppercase">{cust.label}</span>
               {cust.multiple && (
                 <span className="text-[10px] text-green-500 px-1.5 py-0.5  font-bold">
                   Multi-select
@@ -119,7 +119,7 @@ export default function CustomizationSelector({
                       }}
                       className={`px-3 py-1.5  text-xs font-bold transition-all flex items-center gap-1 ${selected
                         ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/10"
-                        : `hover:opacity-85`
+                        : `hover:opacity-85 bg-red-50 text-background`
                         }`}
                     >
                       {valRecommended && <span className="text-amber-500">✨</span>}
