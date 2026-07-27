@@ -42,7 +42,7 @@ export default function ItemDetailModal({
   theme,
 }: Props) {
   return (
-    <div className={`fixed inset-0 z-50 ${theme === "dark" ? "bg-[#0c0c0c] text-white" : "bg-white text-gray-900"} flex flex-col w-full h-[100dvh] overflow-hidden`}>
+    <div className={`fixed inset-0 z-50 ${theme === "dark" ? " text-white" : "bg-white text-gray-900"} flex flex-col w-full h-[100dvh] overflow-hidden`}>
       <div className="absolute top-4 left-4 z-30">
         <button
           onClick={() => setSelectedItem(null)}
@@ -52,7 +52,7 @@ export default function ItemDetailModal({
         </button>
       </div>
 
-      <div className="relative h-52 sm:h-80 bg-gray-950 w-full shrink-0 flex items-center justify-center border-b border-white/5 overflow-hidden">
+      <div className="relative h-40 sm:h-80 bg-gray-950 w-full shrink-0 flex items-center justify-center border-b border-white/5 overflow-hidden">
         {selectedItem.image_url ? (
           <motion.div
             className="w-full h-full"
@@ -108,27 +108,31 @@ export default function ItemDetailModal({
         </AnimatePresence>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-6 max-w-xl mx-auto w-full space-y-5">
+      <div className="flex-1 overflow-y-auto px-6 py-5 max-w-xl mx-auto w-full space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-black">{selectedItem.display_name}</h2>
-            <p className="text-[10px] text-amber-500 font-bold mt-1 uppercase tracking-wider">
+            <p className="text-[10px]  font-bold mt-1 uppercase tracking-wider">
               {categories.find(c => c.id === selectedItem.category_id)?.name || "Dish"}
             </p>
+
+          </div>
+          <div className="flex items-center flex-col">
+            <span className="text-amber-500 font-extrabold text-xl shrink-0">
+              ${parseFloat(selectedItem.price.toString()).toFixed(2)}
+            </span>
             {(selectedItem.prep_time ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold text-amber-400 bg-[#FFC72C]/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-bold text-green-400 px-2 py-0.5 rounded-full">
                 ⏱ ~{selectedItem.prep_time} min prep
               </span>
             )}
           </div>
-          <span className="text-amber-500 font-extrabold text-xl shrink-0">
-            ${parseFloat(selectedItem.price.toString()).toFixed(2)}
-          </span>
+
         </div>
 
         {selectedItem.description && (
-          <div className={`space-y-1 ${theme === "dark" ? "bg-white/5" : "bg-gray-100"} rounded-xl p-3.5`}>
-            <h4 className="text-xs font-semibold uppercase tracking-widest opacity-60">Description</h4>
+          <div className={`space-y-1 p-0.5`}>
+            <h4 className="text-xs font-semibold uppercase tracking-widest opacity-90">Description</h4>
             <p className="text-xs leading-relaxed opacity-90">{selectedItem.description}</p>
           </div>
         )}
@@ -144,13 +148,13 @@ export default function ItemDetailModal({
         )}
 
         <div>
-          <label className="block text-xs font-semibold opacity-60 mb-1.5">Special Instructions</label>
+          <label className=" text-xs font-semibold opacity-90 mb-1.5">Special Instructions</label>
           <textarea
             rows={2}
             placeholder="E.g., no onion, extra spicy, gluten allergy..."
             value={itemNotes}
             onChange={e => setItemNotes(e.target.value)}
-            className={`w-full ${theme === "dark" ? "bg-[#0b0f19]" : "bg-white"} border ${themeBorder} rounded-xl px-3.5 py-2.5 text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50 resize-none`}
+            className={`w-full px-1.5 py-2.5 text-xs placeholder-gray-500 `}
           />
         </div>
       </div>

@@ -19,17 +19,17 @@ export default function CustomizationSelector({
   theme,
 }: Props) {
   return (
-    <div className="space-y-4">
-      <h3 className="text-xs font-bold uppercase tracking-wider opacity-60">Customizations</h3>
+    <div className="space-y-2">
+      <h3 className="text-xs font-bold uppercase tracking-wider opacity-90">Customizations</h3>
       {customizations.map((cust) => {
         const hasImages = cust.values.some((val) => typeof val !== "string" && val.image_url)
 
         return (
-          <div key={cust.key} className={`space-y-3.5 ${themeCard} rounded-2xl p-4 border`}>
+          <div key={cust.key} className={`space-y-3.5 ${themeCard} p-3`}>
             <p className="text-xs font-bold flex items-center gap-1.5">
               <span>{cust.label}</span>
               {cust.multiple && (
-                <span className="text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] text-green-500 px-1.5 py-0.5  font-bold">
                   Multi-select
                 </span>
               )}
@@ -60,13 +60,12 @@ export default function CustomizationSelector({
                           setItemCustomizations((prev) => ({ ...prev, [cust.key]: selected ? "" : valName }))
                         }
                       }}
-                      className={`flex h-25 w-full flex-col rounded-xl overflow-hidden border text-left transition-all active:scale-[0.98] ${
-                        selected
-                          ? "border-amber-500 bg-amber-500/5 ring-1 ring-amber-500"
-                          : `${theme === "dark" ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-300"} hover:opacity-90`
-                      }`}
+                      className={`flex h-25 w-full flex-col  overflow-hidden text-left transition-all active:scale-[0.98] ${selected
+                        ? " bg-amber-500/5"
+                        : `hover:opacity-90`
+                        }`}
                     >
-                      <div className="h-18 w-full bg-gray-900 border-b border-white/5 relative flex items-center justify-center shrink-0">
+                      <div className="h-18 w-full bg-gray-900 relative flex items-center justify-center shrink-0">
                         {valImg ? (
                           <img src={valImg} alt="" className="w-full h-full object-cover" />
                         ) : (
@@ -118,15 +117,14 @@ export default function CustomizationSelector({
                           setItemCustomizations((prev) => ({ ...prev, [cust.key]: selected ? "" : valName }))
                         }
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1 ${
-                        selected
-                          ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/10"
-                          : `${theme === "dark" ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-300"} text-gray-300 hover:opacity-85`
-                      }`}
+                      className={`px-3 py-1.5  text-xs font-bold transition-all flex items-center gap-1 ${selected
+                        ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/10"
+                        : `hover:opacity-85`
+                        }`}
                     >
                       {valRecommended && <span className="text-amber-500">✨</span>}
                       <span>{valName}</span>
-                      <span className={`text-[9px] font-extrabold ${selected ? "text-black/80" : "text-amber-500"}`}>
+                      <span className={`text-[9px] font-extrabold ${selected ? "text-green-500" : "text-red-500"}`}>
                         {valPrice > 0 ? `(+$${valPrice.toFixed(2)})` : ""}
                       </span>
                     </button>

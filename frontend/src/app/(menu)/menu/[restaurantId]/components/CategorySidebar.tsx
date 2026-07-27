@@ -24,16 +24,15 @@ export default function CategorySidebar({
   theme,
 }: Props) {
   return (
-    <div className={`w-24 sm:w-28 ${themeSidebar} overflow-y-auto flex-shrink-0 py-2 border-r ${themeBorder}`}>
+    <div className={`w-19 sm:w-28 ${themeSidebar} overflow-y-auto flex-shrink-0 py-2 border-r ${themeBorder}`}>
       <div className="space-y-0.5">
         {parentCategories.length > 0 && (
           <button
             onClick={() => scrollToSubCategory("all")}
-            className={`w-full text-left px-3 py-3.5 text-[11px] font-semibold border-l-[3px] transition-all leading-snug ${
-              activeSubCategory === "all"
-                ? "bg-[#FFC72C]/10 text-[#FFC72C] border-[#FFC72C] font-black"
-                : `${themeTextMuted} border-transparent ${ theme === "dark" ? "hover:bg-white/5" : "hover:bg-gray-100" }`
-            }`}
+            className={`w-full text-left px-3 py-3.5 text-[11px] font-semibold border-l-[3px] transition-all leading-snug ${activeSubCategory === "all"
+              ? "bg-background text-foreground border-[#FFC72C] font-black"
+              : `${themeTextMuted} border-transparent ${theme === "dark" ? "hover:bg-white/5" : "hover:bg-gray-100"}`
+              }`}
           >
             All Items
           </button>
@@ -44,11 +43,10 @@ export default function CategorySidebar({
             <button
               key={cat.id}
               onClick={() => scrollToSubCategory(cat.id)}
-              className={`w-full text-left px-3 py-3.5 text-[11px] font-semibold border-l-[3px] transition-all leading-snug ${
-                isActive
-                  ? "bg-[#FFC72C]/10 text-[#FFC72C] border-[#FFC72C] font-black"
-                  : `${themeTextMuted} border-transparent ${ theme === "dark" ? "hover:bg-white/5" : "hover:bg-gray-100" }`
-              }`}
+              className={`w-full text-left px-3 py-3.5 text-[11px] font-semibold border-l-[3px] transition-all leading-snug ${isActive
+                ? "bg-background text-foreground border-[#FFC72C] font-black"
+                : `${themeTextMuted} border-transparent ${theme === "dark" ? "hover:bg-white/5" : "hover:bg-gray-100"}`
+                }`}
             >
               {cat.name}
             </button>

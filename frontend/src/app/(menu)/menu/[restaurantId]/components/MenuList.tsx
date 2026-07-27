@@ -63,7 +63,7 @@ export default function MenuList({
       <div
         key={item.id}
         onClick={() => openItemDetail(item)}
-        className={`w-full ${themeCard} rounded-2xl flex gap-3 p-3 border hover:border-[#FFC72C]/30 active:scale-[0.99] transition-all cursor-pointer relative group overflow-hidden`}
+        className={`w-full ${themeCard}  flex gap-3 p-2 hover:border-[#FFC72C]/30 active:scale-[0.99] transition-all cursor-pointer relative group overflow-hidden`}
       >
         {inCartCount > 0 && (
           <div className="absolute top-2 left-2 z-10 bg-[#FFC72C] text-black text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md">
@@ -71,7 +71,7 @@ export default function MenuList({
           </div>
         )}
 
-        <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-xl shrink-0 flex items-center justify-center relative overflow-hidden border ${themeBorder}`}>
+        <div className={`w-25 h-23 sm:w-24 sm:h-24  shrink-0 flex items-center justify-center relative overflow-hidden  ${themeBorder}`}>
           {(() => {
             const allImgs = [item.image_url, ...(Array.isArray(item.image_urls) ? item.image_urls : [])].filter(Boolean) as string[]
             return allImgs.length > 0 ? (
@@ -82,7 +82,7 @@ export default function MenuList({
                 interval={2500}
               />
             ) : (
-              <div className={`w-full h-full flex items-center justify-center text-3xl ${ theme === "dark" ? "bg-[#252525]" : "bg-gray-100" }`}>🍽️</div>
+              <div className={`w-full h-full flex items-center justify-center text-3xl ${theme === "dark" ? "bg-[#252525]" : "bg-gray-100"}`}>🍽️</div>
             )
           })()}
         </div>
@@ -105,7 +105,7 @@ export default function MenuList({
           </div>
 
           <div className="flex items-center justify-between mt-2">
-            <span className="text-[#FFC72C] font-extrabold text-sm">${itemPrice.toFixed(2)}</span>
+            <span className="text-blue-600 font-extrabold text-base">${itemPrice.toFixed(2)}</span>
 
             <div onClick={e => e.stopPropagation()}>
               {inCartCount > 0 ? (
