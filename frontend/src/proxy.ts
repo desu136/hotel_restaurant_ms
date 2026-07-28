@@ -53,7 +53,7 @@ export default async function proxy(request: NextRequest) {
     const isChef = payload.roles.includes('CHEF');
     const isWaiter = payload.roles.includes('WAITER');
     const isCashier = payload.roles.includes('CASHIER');
-    const isOwner = payload.roles.includes('HOTEL_OWNER');
+    const isOwner = payload.roles.includes('OWNER');
     const isManager = payload.roles.some(r => ['HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
 
     if (path === '/dashboard') {

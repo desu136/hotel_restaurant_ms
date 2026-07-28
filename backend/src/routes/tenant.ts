@@ -34,7 +34,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     tenantId = tenant.id;
 
     // ── Step 2: Look up the owner role ───────────────────────────────────────
-    const ownerRole = await prisma.role.findUnique({ where: { code: 'HOTEL_OWNER' } });
+    const ownerRole = await prisma.role.findUnique({ where: { code: 'OWNER' } });
 
     // ── Step 3: Create owner user ────────────────────────────────────────────
     await prisma.user.create({

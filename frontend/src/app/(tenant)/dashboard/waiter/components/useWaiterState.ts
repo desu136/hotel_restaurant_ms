@@ -81,7 +81,7 @@ export function useWaiterState() {
       let activeRestId = finalMe?.branchId ? branchData.find((b: any) => b.id === finalMe!.branchId)?.restaurant_id || restData[0]?.id || "" : restData[0]?.id || ""
       let activeBranchId = finalMe?.branchId || branchData.filter((b: any) => b.restaurant_id === activeRestId)[0]?.id || ""
       setSelectedRestId(activeRestId); setSelectedBranchId(activeBranchId)
-      const isManagerOrOwner = (finalMe?.roles || []).some((r: string) => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r))
+      const isManagerOrOwner = (finalMe?.roles || []).some((r: string) => ['OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r))
       if (isManagerOrOwner && activeBranchId) {
         const empRes = await fetch(`/api/employees?branch_id=${activeBranchId}`)
         const empData = empRes.ok ? await empRes.json() : []

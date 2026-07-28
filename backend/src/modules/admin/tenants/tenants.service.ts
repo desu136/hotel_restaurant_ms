@@ -126,7 +126,7 @@ export async function approveTenant(tenantId: string, planId: string | undefined
   if (!plan) throw Object.assign(new Error("Subscription plan not found"), { statusCode: 404 });
 
   // Resolve role
-  const ownerRole = await prisma.role.findUnique({ where: { code: "HOTEL_OWNER" } });
+  const ownerRole = await prisma.role.findUnique({ where: { code: "OWNER" } });
   const tenantAdminRole = await prisma.role.findUnique({ where: { code: "TENANT_ADMIN" } });
   const roleIdToAssign = ownerRole?.id || tenantAdminRole?.id;
   if (!roleIdToAssign) throw Object.assign(new Error("System roles not configured"), { statusCode: 500 });

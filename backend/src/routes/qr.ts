@@ -2,24 +2,16 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
-import os from 'os';
 import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
 
-const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
+const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'OWNER', 'HOTEL_MANAGER'];
 
-function getLocalIp(): string {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name] || []) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return 'localhost';
+// Reads FRONTEND_URL from environment, no IP substitution — set it explicitly in .env
+function getFrontendBase(): string {
+  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
 }
 
 // POST /api/qr/generate
@@ -44,7 +36,7 @@ router.post(
       }
 
       // Non-owners can only generate QR codes for tables in their own branch
-      const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+      const isOwner = req.user!.roles.includes('OWNER');
       if (!isOwner && req.user!.branchId !== table.branch_id) {
         return res.status(403).json({ error: 'You do not have access to this branch.' });
       }
@@ -56,13 +48,7 @@ router.post(
       }
 
       const token = crypto.randomUUID();
-      let baseUrl = process.env.FRONTEND_URL || `http://${getLocalIp()}:3000`;
-      if (baseUrl.includes('0.0.0.0') || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
-        baseUrl = baseUrl
-          .replace('0.0.0.0', getLocalIp())
-          .replace('localhost', getLocalIp())
-          .replace('127.0.0.1', getLocalIp());
-      }
+      const baseUrl = getFrontendBase();
       const qrString = `${baseUrl}/menu/${table.branch.restaurant_id}?tableId=${table_id}&qrToken=${token}`;
 
       const qrCodeDataUrl = await QRCode.toDataURL(qrString, {
@@ -93,7 +79,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction): Promise<any> => {
     try {
       const restaurantId = req.params.restaurantId as string;
-      const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+      const isOwner = req.user!.roles.includes('OWNER');
 
       const whereFilter = isOwner
         ? { table: { branch: { restaurant_id: restaurantId } } }
@@ -105,13 +91,7 @@ router.get(
         orderBy: { created_at: 'desc' },
       });
 
-      let baseUrl = process.env.FRONTEND_URL || `http://${getLocalIp()}:3000`;
-      if (baseUrl.includes('0.0.0.0') || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
-        baseUrl = baseUrl
-          .replace('0.0.0.0', getLocalIp())
-          .replace('localhost', getLocalIp())
-          .replace('127.0.0.1', getLocalIp());
-      }
+      const baseUrl = getFrontendBase();
 
       const qrCodesWithUrls = await Promise.all(
         qrCodes.map(async (qr) => {
@@ -150,7 +130,7 @@ router.delete(
       }
 
       // Non-owners can only delete QR codes for tables in their own branch
-      const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+      const isOwner = req.user!.roles.includes('OWNER');
       if (!isOwner && req.user!.branchId !== qrCode.table.branch_id) {
         return res.status(403).json({ error: 'You do not have access to this branch.' });
       }

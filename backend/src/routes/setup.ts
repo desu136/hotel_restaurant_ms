@@ -6,7 +6,7 @@ const router = Router();
 
 const DEFAULT_ROLES = [
   { code: 'SUPER_ADMIN', name: 'Super Administrator' },
-  { code: 'HOTEL_OWNER', name: 'Business Owner' },
+  { code: 'OWNER', name: 'Business Owner' },
   { code: 'HOTEL_MANAGER', name: 'Business Manager' },
   { code: 'RECEPTIONIST', name: 'Receptionist' },
   { code: 'RESTAURANT_MANAGER', name: 'Restaurant Manager' },
@@ -42,7 +42,7 @@ const PERMISSIONS = [
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['tenant.create','tenant.view','tenant.update','tenant.approve','tenant.reject','tenant.suspend','tenant.activate','subscription.create','subscription.update','subscription.delete','subscription.extend','subscription.grant_trial','subscription.suspend','subscription.view','plan.create','plan.update','plan.delete','plan.view','module.enable','module.disable','module.assign','platform.settings.view','platform.settings.update','platform.analytics.view'],
-  HOTEL_OWNER: ['hotel.view','hotel.update','branch.create','branch.view','branch.update','branch.delete','employee.create','employee.view','employee.update','employee.activate','employee.deactivate','role.create','role.view','role.update','role.assign','report.view','analytics.view','billing.view','subscription.view'],
+  OWNER: ['hotel.view','hotel.update','branch.create','branch.view','branch.update','branch.delete','employee.create','employee.view','employee.update','employee.activate','employee.deactivate','role.create','role.view','role.update','role.assign','report.view','analytics.view','billing.view','subscription.view'],
   HOTEL_MANAGER: ['hotel.view','branch.view','room.create','room.view','room.update','room.delete','reservation.create','reservation.view','reservation.update','reservation.confirm','reservation.cancel','guest.create','guest.view','guest.update','report.view'],
   RECEPTIONIST: ['guest.create','guest.view','guest.update','guest.checkin','guest.checkout','reservation.create','reservation.view','reservation.update','reservation.confirm','reservation.cancel','room.assign','room.transfer'],
   RESTAURANT_MANAGER: ['category.create','category.view','category.update','category.delete','menu.create','menu.view','menu.update','menu.delete','table.create','table.view','table.update','table.delete','qr.create','qr.view','qr.regenerate','order.view','order.update','order.cancel','kitchen.view','restaurant.report.view'],

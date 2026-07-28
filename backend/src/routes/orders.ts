@@ -505,10 +505,10 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.user!.tenantId;
     const { status, limit = '50' } = req.query;
 
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     const branchId = req.user!.branchId;
     const isWaiter = req.user!.roles.includes('WAITER') &&
-      !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+      !req.user!.roles.some(r => ['OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
 
     const whereClause: any = {
       tenant_id: tenantId as string,
@@ -556,7 +556,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.user!.tenantId;
 
     const isWaiter = req.user!.roles.includes('WAITER') &&
-      !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+      !req.user!.roles.some(r => ['OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
 
     const order = await prisma.order.findFirst({
       where: {
@@ -581,7 +581,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     if (!isOwner && order.branch_id !== req.user!.branchId) {
       res.status(403).json({ error: 'Forbidden: You do not have access to this order' });
       return;
@@ -594,7 +594,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 });
 
 // POST /api/orders  – Waiter creates a new order
-router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     const branchId = req.user!.branchId;
@@ -606,7 +606,7 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
       return;
     }
     let resolvedBranchId = branchId;
-    if (!resolvedBranchId && req.user!.roles.includes('HOTEL_OWNER')) {
+    if (!resolvedBranchId && req.user!.roles.includes('OWNER')) {
       if (table_id) {
         const table = await prisma.restaurantTable.findUnique({
           where: { id: table_id },
@@ -622,7 +622,7 @@ router.post('/', requireRole('WAITER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOT
     }
 
     const isWaiter = req.user!.roles.includes('WAITER') &&
-      !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+      !req.user!.roles.some(r => ['OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
 
     if (isWaiter && table_id) {
       const table = await prisma.restaurantTable.findFirst({
@@ -733,14 +733,14 @@ router.patch('/:id/status', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     if (!isOwner && existingOrder.branch_id !== req.user!.branchId) {
       res.status(403).json({ error: 'Forbidden: You cannot modify orders from another branch' });
       return;
     }
 
     const isWaiter = req.user!.roles.includes('WAITER') &&
-      !req.user!.roles.some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
+      !req.user!.roles.some(r => ['OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
 
     if (isWaiter) {
       // Waiter can only modify orders within their own branch

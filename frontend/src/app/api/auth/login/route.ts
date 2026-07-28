@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "https://hospitalityhub-backend.onrender.com";
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     
     // Proxy the request to the backend
-    const res = await fetch("http://localhost:4000/api/auth/login", {
+    const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

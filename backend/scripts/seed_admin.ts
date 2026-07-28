@@ -26,7 +26,7 @@ const prisma = new PrismaClient({ log: ['error', 'warn'] })
 
 const DEFAULT_ROLES = [
   { code: 'SUPER_ADMIN',        name: 'Super Administrator' },
-  { code: 'HOTEL_OWNER',        name: 'Hotel/Restaurant Owner' },
+  { code: 'OWNER',        name: 'Hotel/Restaurant Owner' },
   { code: 'HOTEL_MANAGER',      name: 'Hotel Manager' },
   { code: 'RECEPTIONIST',       name: 'Receptionist' },
   { code: 'RESTAURANT_MANAGER', name: 'Restaurant Manager' },
@@ -97,7 +97,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'module.enable', 'module.disable', 'module.assign',
     'platform.settings.view', 'platform.settings.update', 'platform.analytics.view',
   ],
-  HOTEL_OWNER: [
+  OWNER: [
     'hotel.view', 'hotel.update',
     'branch.create', 'branch.view', 'branch.update', 'branch.delete',
     'employee.create', 'employee.view', 'employee.update',

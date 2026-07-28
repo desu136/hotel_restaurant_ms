@@ -6,10 +6,10 @@ const router = Router();
 router.use(authenticate);
 
 // GET /api/billing/unpaid  – Orders with no paid bill yet
-router.get('/unpaid', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.get('/unpaid', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     const branchId = req.user!.branchId;
 
     const orders = await prisma.order.findMany({
@@ -36,7 +36,7 @@ router.get('/unpaid', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER'
 });
 
 // POST /api/billing/bill  – Create a bill for an order
-router.post('/bill', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
+router.post('/bill', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { order_id, amount, discount_percent = 0 } = req.body;
     if (!order_id || !amount) {
@@ -51,7 +51,7 @@ router.post('/bill', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER')
       res.status(404).json({ error: 'Order not found' });
       return;
     }
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     if (!isOwner && req.user!.branchId && existingOrder.branch_id !== req.user!.branchId) {
       res.status(403).json({ error: 'Forbidden: You do not have access to this branch.' });
       return;
@@ -71,7 +71,7 @@ router.post('/bill', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER')
 });
 
 // POST /api/billing/bill/:id/pay  – Record a payment
-router.post('/bill/:id/pay', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
+router.post('/bill/:id/pay', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
 
@@ -83,7 +83,7 @@ router.post('/bill/:id/pay', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL
       res.status(404).json({ error: 'Bill not found' });
       return;
     }
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     if (!isOwner && req.user!.branchId && bill.order?.branch_id !== req.user!.branchId) {
       res.status(403).json({ error: 'Forbidden: You do not have access to this branch.' });
       return;
@@ -106,10 +106,10 @@ router.post('/bill/:id/pay', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL
 });
 
 // GET /api/billing/history  – Paid bills today
-router.get('/history', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.get('/history', requireRole('CASHIER', 'RESTAURANT_MANAGER', 'OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     const branchId = req.user!.branchId;
 
     const startOfDay = new Date();

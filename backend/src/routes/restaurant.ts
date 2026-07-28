@@ -271,8 +271,8 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
 
 router.use(authenticate);
 
-const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
-const OWNER_ROLES = ['HOTEL_OWNER'];
+const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'OWNER', 'HOTEL_MANAGER'];
+const OWNER_ROLES = ['OWNER'];
 
 /**
  * Returns true if the authenticated user is an owner (cross-branch visibility).
@@ -385,7 +385,7 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
 });
 
 // GET /api/restaurant/my — Returns the root restaurant (brand) for the authenticated owner
-router.get('/my', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.get('/my', requireRole('OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -412,7 +412,7 @@ router.get('/my', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGE
 });
 
 // POST /api/restaurant/my — Creates the root restaurant (brand) for the owner — only once
-router.post('/my', requireRole('HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
+router.post('/my', requireRole('OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -439,7 +439,7 @@ router.post('/my', requireRole('HOTEL_OWNER'), async (req: Request, res: Respons
 });
 
 // PUT /api/restaurant/my — Updates the root restaurant (brand) profile
-router.put('/my', requireRole('HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
+router.put('/my', requireRole('OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -467,7 +467,7 @@ router.put('/my', requireRole('HOTEL_OWNER'), async (req: Request, res: Response
 
 
 // POST /api/restaurant/list
-router.post('/list', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.post('/list', requireRole('OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -497,7 +497,7 @@ router.post('/list', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Re
 });
 
 // PUT /api/restaurant/list/:id
-router.put('/list/:id', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.put('/list/:id', requireRole('OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -529,7 +529,7 @@ router.put('/list/:id', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req:
 });
 
 // DELETE /api/restaurant/list/:id  (soft delete)
-router.delete('/list/:id', requireRole('HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/list/:id', requireRole('OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }

@@ -66,10 +66,8 @@ export function useHomeFetchers(hostIp: string, showToast: (msg: string, icon?: 
         res = await fetch(url)
         if (!res.ok) throw new Error("Relative fetch failed")
       } catch {
-        const useProxy = !hostIp || hostIp === "localhost" || hostIp === "127.0.0.1"
-        const fallbackUrl = useProxy
-          ? url
-          : `http://${hostIp}:4000/api/promotions/public?tenantId=${encodeURIComponent(tId)}&_t=${Date.now()}`
+        const backendBase = (process.env.NEXT_PUBLIC_BACKEND_URL || "https://hospitalityhub-backend.onrender.com").replace(/\/$/, "")
+        const fallbackUrl = `${backendBase}/api/promotions/public?tenantId=${encodeURIComponent(tId)}&_t=${Date.now()}`
         res = await fetch(fallbackUrl)
       }
       if (res.ok) {
@@ -90,8 +88,8 @@ export function useHomeFetchers(hostIp: string, showToast: (msg: string, icon?: 
         res = await fetch(url)
         if (!res.ok) throw new Error("Relative fetch failed")
       } catch {
-        const useProxy = !ip || ip === "localhost" || ip === "127.0.0.1"
-        let fallbackUrl = useProxy ? `/api/restaurant/public/config` : `http://${ip}:4000/api/restaurant/public/config`
+        const backendBase = (process.env.NEXT_PUBLIC_BACKEND_URL || "https://hospitalityhub-backend.onrender.com").replace(/\/$/, "")
+        let fallbackUrl = `${backendBase}/api/restaurant/public/config`
         if (tenant) fallbackUrl += `?tenantId=${tenant}`
         res = await fetch(fallbackUrl)
       }

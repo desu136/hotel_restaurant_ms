@@ -13,7 +13,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     const branchFilter = isOwner ? {} : { id: req.user!.branchId || '' };
 
     const branches = await prisma.branch.findMany({
@@ -60,7 +60,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     if (!isOwner) {
       res.status(403).json({ error: 'Forbidden: Only owners can create branches.' });
       return;
@@ -195,7 +195,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     if (!isOwner && req.params.id !== req.user!.branchId) {
       res.status(403).json({ error: 'Forbidden: You do not have access to this branch.' });
       return;
@@ -232,7 +232,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     if (!isOwner && req.params.id !== req.user!.branchId) {
       res.status(403).json({ error: 'Forbidden: You do not have access to this branch.' });
       return;
@@ -282,7 +282,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     if (!isOwner) {
       res.status(403).json({ error: 'Forbidden: Only owners can delete branches.' });
       return;

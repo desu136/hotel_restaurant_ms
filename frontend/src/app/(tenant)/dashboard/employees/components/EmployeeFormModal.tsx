@@ -75,7 +75,7 @@ export function EmployeeFormModal({ show, editTarget, form, setForm, branches, r
                 className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none">
                 <option value="">Select Role</option>
                 {roles?.filter(r => {
-                  if (r.code === "SUPER_ADMIN" || r.code === "HOTEL_OWNER") return false
+                  if (r.code === "SUPER_ADMIN" || r.code === "OWNER") return false
                   if (currentUser?.tenant?.business_type === "RESTAURANT" && r.code === "RECEPTIONIST") return false
                   return true
                 }).map(r => <option key={r.id} value={r.code}>{r.name}</option>)}

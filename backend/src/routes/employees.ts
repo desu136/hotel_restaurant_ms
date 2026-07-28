@@ -14,7 +14,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Tenant ID is required' });
       return;
     }
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     const branchFilter = isOwner ? {} : { branch_id: req.user!.branchId || '' };
 
     const employees = await prisma.user.findMany({
@@ -64,19 +64,19 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const passwordHash = await hash(password, 10);
 
     // Enforce branchId requirement for non-owners
-    const isOwner = roles && roles.includes('HOTEL_OWNER');
+    const isOwner = roles && roles.includes('OWNER');
     if (!isOwner && !branchId) {
       res.status(400).json({ error: 'Branch is required for all employees' });
       return;
     }
 
-    const isOwnerUser = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwnerUser = req.user!.roles.includes('OWNER');
     if (!isOwnerUser) {
       if (branchId !== req.user!.branchId) {
         res.status(403).json({ error: 'Forbidden: You can only create employees for your own branch.' });
         return;
       }
-      if (roles && (roles.includes('HOTEL_OWNER') || roles.includes('SUPER_ADMIN'))) {
+      if (roles && (roles.includes('OWNER') || roles.includes('SUPER_ADMIN'))) {
         res.status(403).json({ error: 'Forbidden: You cannot assign owner or super admin roles.' });
         return;
       }
@@ -166,7 +166,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isOwner = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwner = req.user!.roles.includes('OWNER');
     // Non-owners can only view employees in their own branch
     const branchFilter = isOwner ? {} : { branch_id: req.user!.branchId || '' };
 
@@ -220,7 +220,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isOwnerUser = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwnerUser = req.user!.roles.includes('OWNER');
     if (!isOwnerUser) {
       if (employee.branch_id !== req.user!.branchId) {
         res.status(403).json({ error: 'Forbidden: You can only update employees from your own branch.' });
@@ -230,7 +230,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
         res.status(403).json({ error: 'Forbidden: You can only assign employees to your own branch.' });
         return;
       }
-      if (roles !== undefined && (roles.includes('HOTEL_OWNER') || roles.includes('SUPER_ADMIN'))) {
+      if (roles !== undefined && (roles.includes('OWNER') || roles.includes('SUPER_ADMIN'))) {
         res.status(403).json({ error: 'Forbidden: You cannot assign owner or super admin roles.' });
         return;
       }
@@ -256,13 +256,13 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
 
     let isOwner = false;
     if (roles !== undefined && Array.isArray(roles)) {
-      isOwner = roles.includes('HOTEL_OWNER');
+      isOwner = roles.includes('OWNER');
     } else {
       const userWithRoles = await prisma.user.findUnique({
         where: { id: employee.id },
         include: { roles: { include: { role: true } } }
       });
-      isOwner = userWithRoles?.roles.some(ur => ur.role.code === 'HOTEL_OWNER') || false;
+      isOwner = userWithRoles?.roles.some(ur => ur.role.code === 'OWNER') || false;
     }
 
     if (!isOwner) {
@@ -369,7 +369,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isOwnerUser = req.user!.roles.includes('HOTEL_OWNER');
+    const isOwnerUser = req.user!.roles.includes('OWNER');
     if (!isOwnerUser && employee.branch_id !== req.user!.branchId) {
       res.status(403).json({ error: 'Forbidden: You can only delete employees from your own branch.' });
       return;

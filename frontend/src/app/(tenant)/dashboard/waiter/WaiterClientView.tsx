@@ -17,7 +17,7 @@ export default function WaiterClientView() {
   const state = useWaiterState()
   const { me, restaurants, selectedRestId, setSelectedRestId, branches, selectedBranchId, setSelectedBranchId, tables, menuItems, categories, orders, setOrders, activeTab, setActiveTab, showScannerModal, setShowScannerModal, scannerError, setScannerError, activeQrOrder, setActiveQrOrder, branchWaiters, selectedWaiterId, setSelectedWaiterId, activityLogs, setActivityLogs, orderModalView, setOrderModalView, loading, error, setError, showOrderModal, setShowOrderModal, selectedTable, setSelectedTable, cart, setCart, orderNotes, setOrderNotes, activeParentId, setActiveParentId, activeSubCatId, setActiveSubCatId, searchTerm, setSearchTerm, selectedItem, setSelectedItem, itemCustomizations, setItemCustomizations, itemNotes, setItemNotes, itemQty, setItemQty, fetchRestaurantData, fetchActiveOrders } = state
 
-  const isManager = (me?.roles || []).some(r => ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r))
+  const isManager = (me?.roles || []).some(r => ['OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r))
   const myTables = tables.filter(t => t.waiter_id === me?.id)
   const otherTables = tables.filter(t => t.waiter_id !== me?.id)
   const getTableStatus = (tableId: string) => orders.some(o => o.table_id === tableId) ? "OCCUPIED" : "AVAILABLE"
