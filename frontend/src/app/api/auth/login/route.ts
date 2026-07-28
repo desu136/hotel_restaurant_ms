@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-
-// BACKEND_URL is set via environment variables.
-// For Vercel: add BACKEND_URL=https://hospitalityhub-backend.onrender.com in Vercel dashboard.
-// For local dev: set BACKEND_URL=http://localhost:4000 in .env.local
-const BACKEND_URL = process.env.BACKEND_URL || "https://hospitalityhub-backend.onrender.com";
+import { getBackendUrl } from "@/lib/backend-url";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const backendUrl = getBackendUrl();
 
     // Proxy the request to the backend
-    const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+    const res = await fetch(`${backendUrl}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text || "Invalid response from backend server" };
+    }
 
     if (!res.ok) {
       return NextResponse.json({ error: data.error || "Login failed" }, { status: res.status });
@@ -36,8 +39,11 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, redirectUrl: data.redirectUrl });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Frontend Login Proxy Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: error?.message || "Failed to communicate with authentication server" },
+      { status: 500 }
+    );
   }
 }

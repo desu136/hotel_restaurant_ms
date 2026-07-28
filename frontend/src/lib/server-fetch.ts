@@ -1,6 +1,5 @@
 import { cookies } from "next/headers"
-
-const BACKEND_URL = process.env.BACKEND_URL || "https://hospitalityhub-backend.onrender.com"
+import { getBackendUrl } from "./backend-url"
 
 /**
  * Server-side fetch helper: injects the HTTP-only auth cookie
@@ -10,7 +9,7 @@ export async function serverFetch(path: string, options: RequestInit = {}) {
   const cookieStore = await cookies()
   const token = cookieStore.get("token")?.value ?? ""
 
-  return fetch(`${BACKEND_URL}${path}`, {
+  return fetch(`${getBackendUrl()}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",

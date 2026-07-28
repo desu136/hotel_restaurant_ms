@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-
-const BACKEND_URL = process.env.BACKEND_URL || "https://hospitalityhub-backend.onrender.com";
+import { getBackendUrl } from "@/lib/backend-url";
 
 async function proxyRequest(req: Request, params: { path: string[] }) {
   let joinedPath = params.path.join("/");
@@ -10,7 +9,7 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
   }
   const pathname = `/api/${joinedPath}`;
   const { search } = new URL(req.url);
-  const targetUrl = `${BACKEND_URL}${pathname}${search}`;
+  const targetUrl = `${getBackendUrl()}${pathname}${search}`;
 
   // Read the HttpOnly token cookie server-side
   const cookieStore = await cookies();
