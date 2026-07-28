@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "https://hospitalityhub-backend.onrender.com";
+// const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "https://hospitalityhub-backend.onrender.com";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hospitalityhub-backend.onrender.com";
+
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    
-    const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:4000";
+
+    // const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:4000";
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+
     // Proxy the request to the backend
     const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
       method: "POST",
