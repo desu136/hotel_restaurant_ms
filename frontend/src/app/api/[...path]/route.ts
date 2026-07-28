@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "https://hospitalityhub-backend.onrender.com";
+const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:4000";
 
 async function proxyRequest(req: Request, params: { path: string[] }) {
   let joinedPath = params.path.join("/");
@@ -62,7 +62,7 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
     // Try to parse as JSON, fall back to raw text
     try {
       const json = JSON.parse(data);
-      return NextResponse.json(json, { 
+      return NextResponse.json(json, {
         status: backendRes.status,
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
