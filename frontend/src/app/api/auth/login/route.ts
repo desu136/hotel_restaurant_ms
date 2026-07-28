@@ -5,8 +5,9 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     
+    const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:4000";
     // Proxy the request to the backend
-    const res = await fetch("http://localhost:4000/api/auth/login", {
+    const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

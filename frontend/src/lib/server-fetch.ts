@@ -1,6 +1,6 @@
 import { cookies } from "next/headers"
 
-const BACKEND_URL = "http://localhost:4000"
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:4000"
 
 /**
  * Server-side fetch helper: injects the HTTP-only auth cookie
