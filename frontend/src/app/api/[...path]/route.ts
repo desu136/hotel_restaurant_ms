@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:4000";
+const BACKEND_URL = process.env.BACKEND_URL || "https://hospitalityhub-backend.onrender.com";
 
 async function proxyRequest(req: Request, params: { path: string[] }) {
   let joinedPath = params.path.join("/");
