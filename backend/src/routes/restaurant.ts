@@ -94,6 +94,90 @@ async function resolveBranchId(restaurantId: string, req: Request): Promise<stri
   return firstBranch?.id ?? null;
 }
 
+async function ensureMasterSyncedToBranch(branchId: string, restaurantId: string, tenantId: string) {
+  try {
+    const masterCategories = await prisma.masterCategory.findMany({
+      where: { restaurant_id: restaurantId, deleted_at: null }
+    });
+
+    const existingBranchCats = await prisma.category.findMany({
+      where: { branch_id: branchId, deleted_at: null }
+    });
+
+    const categoryMap = new Map<string, string>();
+    for (const bc of existingBranchCats) {
+      if (bc.master_category_id) {
+        categoryMap.set(bc.master_category_id, bc.id);
+      }
+    }
+
+    const existingMasterCatIds = new Set(existingBranchCats.map(c => c.master_category_id).filter(Boolean));
+    const missingMasterCats = masterCategories.filter(mc => !existingMasterCatIds.has(mc.id));
+
+    if (missingMasterCats.length > 0) {
+      for (const mc of missingMasterCats) {
+        const created = await prisma.category.create({
+          data: {
+            name: mc.name,
+            tenant_id: tenantId,
+            branch_id: branchId,
+            master_category_id: mc.id
+          }
+        });
+        categoryMap.set(mc.id, created.id);
+      }
+    }
+
+    for (const mc of masterCategories) {
+      if (mc.parent_id) {
+        const branchCatId = categoryMap.get(mc.id);
+        const branchParentId = categoryMap.get(mc.parent_id);
+        if (branchCatId && branchParentId) {
+          const currentCat = existingBranchCats.find(c => c.id === branchCatId);
+          if (!currentCat || currentCat.parent_id !== branchParentId) {
+            await prisma.category.update({
+              where: { id: branchCatId },
+              data: { parent_id: branchParentId }
+            });
+          }
+        }
+      }
+    }
+
+    const masterMenuItems = await prisma.masterMenuItem.findMany({
+      where: { restaurant_id: restaurantId, deleted_at: null }
+    });
+
+    if (masterMenuItems.length > 0) {
+      const existingBranchMenuItems = await prisma.menuItem.findMany({
+        where: { branch_id: branchId }
+      });
+      const existingMasterMenuIds = new Set(existingBranchMenuItems.map(m => m.master_menu_item_id).filter(Boolean));
+      const missingMasterMenuItems = masterMenuItems.filter(mmi => !existingMasterMenuIds.has(mmi.id));
+
+      for (const mmi of missingMasterMenuItems) {
+        const localCatId = mmi.master_category_id ? categoryMap.get(mmi.master_category_id) : null;
+        await prisma.menuItem.create({
+          data: {
+            tenant_id: tenantId,
+            branch_id: branchId,
+            master_menu_item_id: mmi.id,
+            category_id: localCatId || null,
+            display_name: mmi.display_name,
+            description: mmi.description,
+            price: mmi.price,
+            availability: mmi.availability,
+            customizations: mmi.customizations || undefined,
+            image_url: mmi.image_url
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error syncing master items to branch:', err);
+  }
+}
+
 router.get('/public/categories/:restaurantId', async (req: Request, res: Response): Promise<void> => {
   try {
     const restaurantId = req.params.restaurantId as string;
@@ -103,12 +187,11 @@ router.get('/public/categories/:restaurantId', async (req: Request, res: Respons
       return;
     }
 
-    // Fetch the branch to get tenant_id for master categories
-    const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { tenant_id: true } });
+    const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { tenant_id: true, restaurant_id: true } });
     if (!branch) { res.json([]); return; }
 
-    // Get branch-specific categories AND master categories for this tenant (which were broadcast-created)
-    // The master-broadcasted categories have branch_id set to the specific branch when broadcast
+    await ensureMasterSyncedToBranch(branchId, branch.restaurant_id, branch.tenant_id);
+
     const categories = await prisma.category.findMany({
       where: { branch_id: branchId, deleted_at: null },
       orderBy: { created_at: 'asc' },
@@ -128,7 +211,11 @@ router.get('/public/menu/:restaurantId', async (req: Request, res: Response): Pr
       return;
     }
 
-    // Get both branch-specific items AND master menu items broadcast to this branch
+    const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { tenant_id: true, restaurant_id: true } });
+    if (branch) {
+      await ensureMasterSyncedToBranch(branchId, branch.restaurant_id, branch.tenant_id);
+    }
+
     const items = await prisma.menuItem.findMany({
       where: { branch_id: branchId, availability: true },
       include: {
@@ -271,8 +358,8 @@ router.get('/public/config', async (req: Request, res: Response): Promise<void> 
 
 router.use(authenticate);
 
-const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'OWNER', 'HOTEL_MANAGER'];
-const OWNER_ROLES = ['OWNER'];
+const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
+const OWNER_ROLES = ['HOTEL_OWNER', 'HOTEL_OWNER'];
 
 /**
  * Returns true if the authenticated user is an owner (cross-branch visibility).
@@ -344,18 +431,22 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
 
-    const branchFilter = isOwnerUser(req)
+    const isOwner = isOwnerUser(req);
+    const userBranchId = req.user!.branchId;
+    if (!isOwner && !userBranchId) {
+      res.json([]);
+      return;
+    }
+    const branchFilter = isOwner
       ? {} // owners see all
-      : req.user!.branchId
-        ? {
-            branches: {
-              some: {
-                id: req.user!.branchId,
-                deleted_at: null,
-              }
+      : {
+          branches: {
+            some: {
+              id: userBranchId!,
+              deleted_at: null,
             }
-          } // non-owners see only their branch's restaurant
-        : { id: '' }; // no branch assigned → empty result
+          }
+        };
 
     const restaurants = await prisma.restaurant.findMany({
       where: { tenant_id: tenantId, deleted_at: null, ...branchFilter },
@@ -385,7 +476,7 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
 });
 
 // GET /api/restaurant/my — Returns the root restaurant (brand) for the authenticated owner
-router.get('/my', requireRole('OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.get('/my', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -412,7 +503,7 @@ router.get('/my', requireRole('OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'), a
 });
 
 // POST /api/restaurant/my — Creates the root restaurant (brand) for the owner — only once
-router.post('/my', requireRole('OWNER'), async (req: Request, res: Response): Promise<void> => {
+router.post('/my', requireRole('HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -439,7 +530,7 @@ router.post('/my', requireRole('OWNER'), async (req: Request, res: Response): Pr
 });
 
 // PUT /api/restaurant/my — Updates the root restaurant (brand) profile
-router.put('/my', requireRole('OWNER'), async (req: Request, res: Response): Promise<void> => {
+router.put('/my', requireRole('HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -467,7 +558,7 @@ router.put('/my', requireRole('OWNER'), async (req: Request, res: Response): Pro
 
 
 // POST /api/restaurant/list
-router.post('/list', requireRole('OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.post('/list', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -497,7 +588,7 @@ router.post('/list', requireRole('OWNER', 'HOTEL_MANAGER'), async (req: Request,
 });
 
 // PUT /api/restaurant/list/:id
-router.put('/list/:id', requireRole('OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
+router.put('/list/:id', requireRole('HOTEL_OWNER', 'HOTEL_MANAGER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
@@ -529,7 +620,7 @@ router.put('/list/:id', requireRole('OWNER', 'HOTEL_MANAGER'), async (req: Reque
 });
 
 // DELETE /api/restaurant/list/:id  (soft delete)
-router.delete('/list/:id', requireRole('OWNER'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/list/:id', requireRole('HOTEL_OWNER'), async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }

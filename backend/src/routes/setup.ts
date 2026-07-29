@@ -6,7 +6,7 @@ const router = Router();
 
 const DEFAULT_ROLES = [
   { code: 'SUPER_ADMIN', name: 'Super Administrator' },
-  { code: 'OWNER', name: 'Business Owner' },
+  { code: 'HOTEL_OWNER', name: 'Business Owner' },
   { code: 'HOTEL_MANAGER', name: 'Business Manager' },
   { code: 'RECEPTIONIST', name: 'Receptionist' },
   { code: 'RESTAURANT_MANAGER', name: 'Restaurant Manager' },

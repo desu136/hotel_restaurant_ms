@@ -78,7 +78,7 @@ router.post('/public/evaluate', async (req: Request, res: Response): Promise<voi
 
 router.use(
   authenticate,
-  requireRole('OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER')
+  requireRole('HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER')
 );
 
 // GET /api/promotions

@@ -7,7 +7,7 @@ import { authenticate, requireRole } from '../middleware/auth';
 const router = Router();
 router.use(authenticate);
 
-const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'OWNER', 'HOTEL_MANAGER'];
+const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
 
 // Reads FRONTEND_URL from environment, no IP substitution — set it explicitly in .env
 function getFrontendBase(): string {
@@ -36,7 +36,7 @@ router.post(
       }
 
       // Non-owners can only generate QR codes for tables in their own branch
-      const isOwner = req.user!.roles.includes('OWNER');
+      const isOwner = req.user!.roles.includes('HOTEL_OWNER');
       if (!isOwner && req.user!.branchId !== table.branch_id) {
         return res.status(403).json({ error: 'You do not have access to this branch.' });
       }
@@ -79,7 +79,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction): Promise<any> => {
     try {
       const restaurantId = req.params.restaurantId as string;
-      const isOwner = req.user!.roles.includes('OWNER');
+      const isOwner = req.user!.roles.includes('HOTEL_OWNER');
 
       const whereFilter = isOwner
         ? { table: { branch: { restaurant_id: restaurantId } } }
@@ -130,7 +130,7 @@ router.delete(
       }
 
       // Non-owners can only delete QR codes for tables in their own branch
-      const isOwner = req.user!.roles.includes('OWNER');
+      const isOwner = req.user!.roles.includes('HOTEL_OWNER');
       if (!isOwner && req.user!.branchId !== qrCode.table.branch_id) {
         return res.status(403).json({ error: 'You do not have access to this branch.' });
       }

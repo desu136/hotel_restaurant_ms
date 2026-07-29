@@ -53,7 +53,7 @@ export default async function proxy(request: NextRequest) {
     const isChef = payload.roles.includes('CHEF');
     const isWaiter = payload.roles.includes('WAITER');
     const isCashier = payload.roles.includes('CASHIER');
-    const isOwner = payload.roles.includes('OWNER');
+    const isOwner = payload.roles.includes('HOTEL_OWNER');
     const isManager = payload.roles.some(r => ['HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r));
 
     if (path === '/dashboard') {
@@ -67,6 +67,8 @@ export default async function proxy(request: NextRequest) {
     }
 
     const isManagementPath = path.startsWith('/dashboard/branches') ||
+                             path.startsWith('/dashboard/manager/branches') ||
+                             path.startsWith('/dashboard/restaurants') ||
                              path.startsWith('/dashboard/employees') ||
                              path.startsWith('/dashboard/roles');
 

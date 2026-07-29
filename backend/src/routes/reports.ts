@@ -5,10 +5,10 @@ import { authenticate, requireRole } from '../middleware/auth';
 const router = Router();
 router.use(authenticate);
 
-const MANAGER_ROLES = ['OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'] as const;
+const MANAGER_ROLES = ['HOTEL_OWNER', 'HOTEL_MANAGER', 'RESTAURANT_MANAGER'] as const;
 
 const isOwnerUser = (req: Request) =>
-  req.user!.roles.includes('OWNER');
+  req.user!.roles.includes('HOTEL_OWNER');
 
 // GET /api/reports/summary
 // Returns revenue, order counts, top items, and daily trends for the tenant/branch

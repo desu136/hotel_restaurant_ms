@@ -22,7 +22,7 @@ export function DashboardSidebar({ user, loading, onCloseMobile }: { user: any; 
     router.refresh()
   }
 
-  const isOwner = user?.roles?.includes('OWNER')
+  const isOwner = user?.roles?.includes('HOTEL_OWNER')
   const isManager = user?.roles?.some((r: string) => ['HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r))
   const isChef = user?.roles?.includes('CHEF')
   const isWaiter = user?.roles?.includes('WAITER')

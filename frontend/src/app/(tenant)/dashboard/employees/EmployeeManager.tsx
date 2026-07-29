@@ -11,7 +11,7 @@ const emptyForm = (defaultBranchId = ""): EmployeeFormData => ({
 })
 
 export default function EmployeeManager({ initialEmployees, branches, roles, currentUser }: Props) {
-  const isOwner = currentUser?.roles?.includes('OWNER') ?? true
+  const isOwner = (currentUser?.roles?.includes('HOTEL_OWNER')) ?? true
   const myBranchId = currentUser?.branch_id ?? ""
   const myUserId = currentUser?.id ?? ""
 

@@ -21,7 +21,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
       .finally(() => setLoading(false))
   }, [router])
 
-  const isOwner = user?.roles?.includes('OWNER')
+  const isOwner = user?.roles?.includes('HOTEL_OWNER')
   const isManager = user?.roles?.some(r => ['HOTEL_MANAGER', 'RESTAURANT_MANAGER'].includes(r))
   const isAdmin = user?.roles?.includes('SUPER_ADMIN')
   const showSidebar = !!(isOwner || isManager || isAdmin)

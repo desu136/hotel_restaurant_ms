@@ -16,8 +16,9 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: cleanEmail, mode: 'insensitive' } },
       include: {
         tenant: true,
         roles: { include: { role: true } },
@@ -55,8 +56,11 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     });
 
     let redirectUrl = '/dashboard';
+    const isOwnerRole = roleCodes.includes('HOTEL_OWNER');
     if (roleCodes.includes('SUPER_ADMIN')) {
       redirectUrl = '/tenants';
+    } else if (isOwnerRole) {
+      redirectUrl = '/dashboard';
     } else if (roleCodes.includes('HOTEL_MANAGER') || roleCodes.includes('RESTAURANT_MANAGER')) {
       redirectUrl = '/dashboard/manager/category';
     } else if (roleCodes.includes('CHEF')) {

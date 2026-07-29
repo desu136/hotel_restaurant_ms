@@ -70,12 +70,14 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const DEFAULT_PASSWORD = 'Welcome@1234';
     const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
 
+    const cleanEmail = email.trim().toLowerCase();
+
     // ── Step 1: Create tenant ────────────────────────────────────────────────
     const tenant = await prisma.tenant.create({
       data: {
         business_name,
         owner_name,
-        email,
+        email: cleanEmail,
         phone,
         business_type: business_type as BusinessType,
         address,
@@ -87,20 +89,53 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     tenantId = tenant.id;
 
     // ── Step 2: Get owner role ───────────────────────────────────────────────
-    const ownerRole = await prisma.role.findUnique({ where: { code: 'OWNER' } });
-
-    // ── Step 3: Create owner user ────────────────────────────────────────────
-    const user = await prisma.user.create({
-      data: {
-        tenant_id: tenant.id,
-        full_name: owner_name,
-        email,
-        phone,
-        password_hash: passwordHash,
-        status: 'ACTIVE',
-        roles: ownerRole ? { create: { role_id: ownerRole.id } } : undefined,
-      },
+    let ownerRole = await prisma.role.findFirst({
+      where: { code: 'HOTEL_OWNER' }
     });
+    if (!ownerRole) {
+      ownerRole = await prisma.role.create({
+        data: { code: 'HOTEL_OWNER', name: 'Owner' }
+      });
+    }
+
+    // ── Step 3: Create or update owner user account ───────────────────────────
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: cleanEmail, mode: 'insensitive' } }
+    });
+
+    if (existingUser) {
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          tenant_id: tenant.id,
+          full_name: owner_name,
+          email: cleanEmail,
+          phone,
+          password_hash: passwordHash,
+          status: 'ACTIVE',
+        },
+      });
+      const hasRole = await prisma.userRole.findFirst({
+        where: { user_id: existingUser.id, role_id: ownerRole.id },
+      });
+      if (!hasRole) {
+        await prisma.userRole.create({
+          data: { user_id: existingUser.id, role_id: ownerRole.id },
+        });
+      }
+    } else {
+      await prisma.user.create({
+        data: {
+          tenant_id: tenant.id,
+          full_name: owner_name,
+          email: cleanEmail,
+          phone,
+          password_hash: passwordHash,
+          status: 'ACTIVE',
+          roles: { create: { role_id: ownerRole.id } },
+        },
+      });
+    }
 
     // ── Step 4: Attach a trial subscription ──────────────────────────────────
     let plan = await prisma.subscriptionPlan.findFirst({ where: { name: 'Trial Plan' } });
@@ -240,26 +275,29 @@ router.post('/:id/approve', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Resolve role
-    const ownerRole = await prisma.role.findUnique({ where: { code: 'OWNER' } });
-    const tenantAdminRole = await prisma.role.findUnique({ where: { code: 'TENANT_ADMIN' } });
-    const roleIdToAssign = ownerRole?.id || tenantAdminRole?.id;
-    if (!roleIdToAssign) {
-      res.status(500).json({ error: 'System roles not configured' });
-      return;
+    // Resolve role (fallback to HOTEL_OWNER / TENANT_ADMIN, or auto-create HOTEL_OWNER if missing)
+    let role = await prisma.role.findFirst({
+      where: { code: { in: ['HOTEL_OWNER', 'TENANT_ADMIN'] } }
+    });
+
+    if (!role) {
+      role = await prisma.role.create({
+        data: {
+          code: 'HOTEL_OWNER',
+          name: 'Owner',
+        }
+      });
     }
+
+    const roleIdToAssign = role.id;
 
     const startDate = new Date();
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + (plan.trial_days > 0 ? plan.trial_days : 30));
 
-    const existingUser = await prisma.user.findUnique({ where: { email: tenant.email } });
-    let tempPassword: string | null = null;
-    let passwordHash: string | null = null;
-    if (!existingUser) {
-      tempPassword = Math.random().toString(36).slice(-10);
-      passwordHash = await bcrypt.hash(tempPassword, 10);
-    }
+    // Always generate a fresh temp password on approval so admin has credentials to share
+    const tempPassword = 'Welcome@1234';
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Activate tenant
@@ -291,12 +329,26 @@ router.post('/:id/approve', async (req: Request, res: Response): Promise<void> =
         }
       }
 
-      // 4. User: activate existing or create new
+      // 4. User: activate + reset password for existing, or create new
+      const cleanTenantEmail = tenant.email.trim().toLowerCase();
+      const existingUser = await tx.user.findFirst({
+        where: { email: { equals: cleanTenantEmail, mode: 'insensitive' } },
+      });
       if (existingUser) {
+        // Activate the account and reset password so admin can share credentials
         await tx.user.update({
           where: { id: existingUser.id },
-          data: { status: 'ACTIVE', tenant_id: tenantId },
+          data: { status: 'ACTIVE', tenant_id: tenantId, password_hash: passwordHash },
         });
+        // Ensure they have the HOTEL_OWNER role
+        const hasRole = await tx.userRole.findFirst({
+          where: { user_id: existingUser.id, role_id: roleIdToAssign },
+        });
+        if (!hasRole) {
+          await tx.userRole.create({
+            data: { user_id: existingUser.id, role_id: roleIdToAssign },
+          });
+        }
       } else {
         await tx.user.create({
           data: {
@@ -304,7 +356,7 @@ router.post('/:id/approve', async (req: Request, res: Response): Promise<void> =
             full_name: tenant.owner_name,
             email: tenant.email,
             phone: tenant.phone,
-            password_hash: passwordHash!,
+            password_hash: passwordHash,
             status: 'ACTIVE',
             roles: { create: { role_id: roleIdToAssign } },
           },
@@ -328,9 +380,11 @@ router.post('/:id/approve', async (req: Request, res: Response): Promise<void> =
       success: true,
       message: 'Tenant approved successfully',
       tenant: result.updatedTenant,
-      credentials: result.tempPassword
-        ? { email: result.userEmail, password: result.tempPassword }
-        : null,
+      credentials: {
+        email: result.userEmail,
+        password: tempPassword,
+        message: 'Share these credentials with the business owner. They should change the password after first login.',
+      },
     });
   } catch (error: any) {
     console.error('POST /api/tenants/:id/approve error:', error);

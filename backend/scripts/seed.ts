@@ -8,7 +8,7 @@ const prisma = new PrismaClient({
 
 const DEFAULT_ROLES = [
   { code: 'SUPER_ADMIN', name: 'Super Administrator' },
-  { code: 'OWNER', name: 'Hotel/Restaurant Owner' },
+  { code: 'HOTEL_OWNER', name: 'Hotel/Restaurant Owner' },
   { code: 'HOTEL_MANAGER', name: 'Hotel Manager' },
   { code: 'RECEPTIONIST', name: 'Receptionist' },
   { code: 'RESTAURANT_MANAGER', name: 'Restaurant Manager' },
@@ -260,7 +260,7 @@ async function main() {
       status: 'ACTIVE',
       roles: {
         create: {
-          role_id: roleMap['OWNER']
+          role_id: roleMap['HOTEL_OWNER']
         }
       }
     }

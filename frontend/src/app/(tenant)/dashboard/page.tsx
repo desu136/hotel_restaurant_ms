@@ -29,7 +29,7 @@ export default async function DashboardOverviewPage() {
       label: "Total Branches",
       value: branches.length,
       icon: GitBranch,
-      href: "/dashboard/branches",
+      href: "/dashboard/manager/branches",
       gradient: "from-blue-500 to-cyan-500",
     },
     {
@@ -49,7 +49,7 @@ export default async function DashboardOverviewPage() {
   ]
 
   const quickLinks = [
-    { href: "/dashboard/branches", label: "Add a Branch", desc: "Set up a new restaurant or outlet location.", icon: GitBranch },
+    { href: "/dashboard/manager/branches", label: "Add a Branch", desc: "Set up a new restaurant or outlet location.", icon: GitBranch },
     { href: "/dashboard/employees", label: "Add an Employee", desc: "Register staff and assign them to a branch.", icon: Users2 },
     { href: "/dashboard/roles", label: "Manage Permissions", desc: "Review and fine-tune what each role can do.", icon: ShieldCheck },
   ]
