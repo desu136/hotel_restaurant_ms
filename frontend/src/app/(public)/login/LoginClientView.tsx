@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowRight, AlertCircle, Utensils } from "lucide-react"
 import { PasswordInput } from "@/components/ui/password-input"
+import { ForgotPasswordModal } from "./components/ForgotPasswordModal"
 
 export default function LoginClientView() {
   const router = useRouter()
@@ -14,6 +15,7 @@ export default function LoginClientView() {
   const [password, setPassword] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState("")
+  const [isForgotModalOpen, setIsForgotModalOpen] = React.useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,7 +85,13 @@ export default function LoginClientView() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <label className="text-sm font-medium">Password</label>
-                  <a href="#" className="text-xs text-[var(--color-primary-600)] hover:underline">Forgot password?</a>
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotModalOpen(true)}
+                    className="text-xs text-[var(--color-primary-600)] hover:underline"
+                  >
+                    Forgot password?
+                  </button>
                 </div>
                 <PasswordInput
                   placeholder="••••••••"
@@ -104,6 +112,11 @@ export default function LoginClientView() {
           </CardFooter>
         </Card>
       </div>
+
+      <ForgotPasswordModal
+        isOpen={isForgotModalOpen}
+        onClose={() => setIsForgotModalOpen(false)}
+      />
     </div>
   )
 }

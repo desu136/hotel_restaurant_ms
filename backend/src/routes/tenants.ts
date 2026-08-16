@@ -404,9 +404,66 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: 'Tenant not found' });
       return;
     }
-    // Cascade delete via Prisma (schema has onDelete: Cascade on User -> Tenant)
-    await prisma.tenant.delete({ where: { id: req.params.id as string } });
-    res.json({ success: true, message: `Tenant "${tenant.business_name}" has been permanently deleted.` });
+    const tenantId = req.params.id as string;
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete user roles for all users belonging to this tenant
+      const tenantUsers = await tx.user.findMany({ where: { tenant_id: tenantId }, select: { id: true } });
+      const userIds = tenantUsers.map(u => u.id);
+      if (userIds.length > 0) {
+        await tx.userRole.deleteMany({ where: { user_id: { in: userIds } } });
+      }
+
+      // 2. Delete all users belonging to this tenant
+      await tx.user.deleteMany({ where: { tenant_id: tenantId } });
+
+      // 3. Delete order items for orders belonging to this tenant
+      const tenantOrders = await tx.order.findMany({ where: { tenant_id: tenantId }, select: { id: true } });
+      const orderIds = tenantOrders.map(o => o.id);
+      if (orderIds.length > 0) {
+        await tx.orderItem.deleteMany({ where: { order_id: { in: orderIds } } });
+      }
+
+      // 4. Delete orders
+      await tx.order.deleteMany({ where: { tenant_id: tenantId } });
+
+      // 5. Delete QR codes for tables belonging to this tenant
+      const tenantTables = await tx.restaurantTable.findMany({ where: { tenant_id: tenantId }, select: { id: true } });
+      const tableIds = tenantTables.map(t => t.id);
+      if (tableIds.length > 0) {
+        await tx.qRCode.deleteMany({ where: { table_id: { in: tableIds } } });
+      }
+
+      // 6. Delete tables, promotions, reservations, rooms, room_types
+      await tx.restaurantTable.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.promotion.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.reservation.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.room.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.roomType.deleteMany({ where: { tenant_id: tenantId } });
+
+      // 7. Delete menu items & master menu items
+      await tx.menuItem.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.masterMenuItem.deleteMany({ where: { tenant_id: tenantId } });
+
+      // 8. Delete categories & master categories
+      await tx.category.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.masterCategory.deleteMany({ where: { tenant_id: tenantId } });
+
+      // 9. Delete branches & restaurants
+      await tx.branch.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.restaurant.deleteMany({ where: { tenant_id: tenantId } });
+
+      // 10. Delete subscriptions, modules, and logs
+      await tx.tenantSubscription.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.tenantModule.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.auditLog.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.activityLog.deleteMany({ where: { tenant_id: tenantId } });
+      await tx.dexelSyncLog.deleteMany({ where: { tenant_id: tenantId } });
+
+      // 11. Delete the tenant record itself
+      await tx.tenant.delete({ where: { id: tenantId } });
+    }, { timeout: 60000 });
+
+    res.json({ success: true, message: `Tenant "${tenant.business_name}" and all associated accounts/data have been permanently deleted.` });
   } catch (error: any) {
     console.error('DELETE /api/tenants/:id error:', error);
     res.status(500).json({ error: 'Internal server error' });

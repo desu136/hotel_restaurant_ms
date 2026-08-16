@@ -201,4 +201,107 @@ router.delete('/me', authenticate, async (req: Request, res: Response): Promise<
   }
 });
 
+// Memory store for active password reset codes (15-minute expiration)
+interface ResetCodeRecord {
+  email: string;
+  code: string;
+  expiresAt: number;
+}
+const resetCodeStore = new Map<string, ResetCodeRecord>();
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ error: 'Valid email address is required' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: cleanEmail, mode: 'insensitive' } },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'No account found with this email address' });
+      return;
+    }
+
+    if (user.status !== 'ACTIVE') {
+      res.status(403).json({ error: 'Account is suspended or inactive' });
+      return;
+    }
+
+    // Generate 6-digit verification code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+
+    resetCodeStore.set(cleanEmail, { email: cleanEmail, code: resetCode, expiresAt });
+
+    res.json({
+      success: true,
+      email: cleanEmail,
+      userName: user.full_name,
+      resetCode,
+      message: 'Password reset code generated.',
+    });
+  } catch (error) {
+    console.error('POST /forgot-password error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, resetCode, newPassword } = req.body;
+    if (!email || !resetCode || !newPassword) {
+      res.status(400).json({ error: 'Email, reset code, and new password are required' });
+      return;
+    }
+
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+      res.status(400).json({ error: 'New password must be at least 6 characters' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const record = resetCodeStore.get(cleanEmail);
+
+    if (!record || record.code !== resetCode.trim()) {
+      res.status(400).json({ error: 'Invalid verification code' });
+      return;
+    }
+
+    if (Date.now() > record.expiresAt) {
+      resetCodeStore.delete(cleanEmail);
+      res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+      return;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: cleanEmail, mode: 'insensitive' } },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password_hash: newHash },
+    });
+
+    resetCodeStore.delete(cleanEmail);
+
+    res.json({ success: true, message: 'Password has been reset successfully. You can now log in.' });
+  } catch (error) {
+    console.error('POST /reset-password error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
