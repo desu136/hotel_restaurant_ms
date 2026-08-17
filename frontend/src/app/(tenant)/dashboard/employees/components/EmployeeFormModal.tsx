@@ -75,7 +75,9 @@ export function EmployeeFormModal({ show, editTarget, form, setForm, branches, r
                 className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none">
                 <option value="">Select Role</option>
                 {roles?.filter(r => {
-                  if (r.code === "SUPER_ADMIN" || r.code === "OWNER") return false
+                  if (r.code === "SUPER_ADMIN" || r.code === "OWNER" || r.code === "HOTEL_OWNER") return false
+                  // Managers cannot create manager accounts — only owners can
+                  if (!isOwner && (r.code === "RESTAURANT_MANAGER" || r.code === "HOTEL_MANAGER" || r.code === "MANAGER")) return false
                   if (currentUser?.tenant?.business_type === "RESTAURANT" && r.code === "RECEPTIONIST") return false
                   return true
                 }).map(r => <option key={r.id} value={r.code}>{r.name}</option>)}
@@ -96,23 +98,36 @@ export function EmployeeFormModal({ show, editTarget, form, setForm, branches, r
           {form.role === "WAITER" && (
             <div className="border border-[var(--surface-border)] bg-[var(--surface-hover)]/30 rounded-xl p-4 space-y-2.5">
               <span className="block text-sm font-bold">Assign Tables for Waiter 🪑</span>
-              <p className="text-xs text-[var(--muted)]">Ready orders from these tables will be routed to this waiter.</p>
-              {allTables.length === 0 ? (
-                <p className="text-xs text-[var(--muted)] italic">No registered tables found. Please register tables first.</p>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
-                  {allTables.map(table => {
-                    const isChecked = form.tableIds.includes(table.id)
-                    return (
-                      <button key={table.id} type="button"
-                        onClick={() => setForm(f => ({ ...f, tableIds: isChecked ? f.tableIds.filter(id => id !== table.id) : [...f.tableIds, table.id] }))}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold select-none transition-all ${isChecked ? "bg-[var(--color-primary-600)] text-white border-[var(--color-primary-600)] shadow-sm" : "border-[var(--surface-border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--color-primary-500)]/40"}`}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />Table {table.table_number}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+              <p className="text-xs text-[var(--muted)]">Select available unassigned tables for this waiter.</p>
+              {(() => {
+                const availableTables = allTables.filter(t => {
+                  const tAny = t as any
+                  // If table is assigned to another waiter, do not show it
+                  if (tAny.waiter_id && tAny.waiter_id !== editTarget?.id) return false
+                  // If form has a branch selected, filter tables matching that branch
+                  if (form.branchId && tAny.branch_id && tAny.branch_id !== form.branchId) return false
+                  return true
+                })
+
+                if (availableTables.length === 0) {
+                  return <p className="text-xs text-[var(--muted)] italic">No available unassigned tables found for this branch.</p>
+                }
+
+                return (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
+                    {availableTables.map(table => {
+                      const isChecked = form.tableIds.includes(table.id)
+                      return (
+                        <button key={table.id} type="button"
+                          onClick={() => setForm(f => ({ ...f, tableIds: isChecked ? f.tableIds.filter(id => id !== table.id) : [...f.tableIds, table.id] }))}
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold select-none transition-all ${isChecked ? "bg-[var(--color-primary-600)] text-white border-[var(--color-primary-600)] shadow-sm" : "border-[var(--surface-border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--color-primary-500)]/40"}`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />Table {table.table_number}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
           )}
           {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}

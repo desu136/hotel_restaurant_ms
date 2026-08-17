@@ -81,8 +81,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         res.status(403).json({ error: 'Forbidden: You can only create employees for your own branch.' });
         return;
       }
-      if (roles && (roles.includes('HOTEL_OWNER') || roles.includes('SUPER_ADMIN'))) {
-        res.status(403).json({ error: 'Forbidden: You cannot assign owner or super admin roles.' });
+      const managerRoles = ['HOTEL_OWNER', 'SUPER_ADMIN', 'RESTAURANT_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'OWNER'];
+      if (roles && roles.some((r: string) => managerRoles.includes(r))) {
+        res.status(403).json({ error: 'Forbidden: Managers cannot create manager accounts. Only owners can do this.' });
         return;
       }
     }
@@ -235,8 +236,9 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
         res.status(403).json({ error: 'Forbidden: You can only assign employees to your own branch.' });
         return;
       }
-      if (roles !== undefined && (roles.includes('HOTEL_OWNER') || roles.includes('SUPER_ADMIN'))) {
-        res.status(403).json({ error: 'Forbidden: You cannot assign owner or super admin roles.' });
+      const managerRoles = ['HOTEL_OWNER', 'SUPER_ADMIN', 'RESTAURANT_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'OWNER'];
+      if (roles !== undefined && Array.isArray(roles) && roles.some((r: string) => managerRoles.includes(r))) {
+        res.status(403).json({ error: 'Forbidden: Managers cannot assign manager roles. Only owners can do this.' });
         return;
       }
     }

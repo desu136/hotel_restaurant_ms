@@ -60,14 +60,14 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   let tenantId: string | null = null;
 
   try {
-    const { business_name, owner_name, email, phone, business_type, address, license_info, tax_info } = req.body;
+    const { business_name, owner_name, email, phone, business_type, address, license_info, tax_info, password } = req.body;
 
     if (!business_name || !owner_name || !email || !phone || !business_type) {
       res.status(400).json({ error: 'business_name, owner_name, email, phone, and business_type are required' });
       return;
     }
 
-    const DEFAULT_PASSWORD = 'Welcome@1234';
+    const DEFAULT_PASSWORD = password || 'Welcome@1234';
     const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
 
     const cleanEmail = email.trim().toLowerCase();
@@ -104,16 +104,19 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     });
 
     if (existingUser) {
+      const userUpdateData: any = {
+        tenant_id: tenant.id,
+        full_name: owner_name,
+        email: cleanEmail,
+        phone,
+        status: 'ACTIVE',
+      };
+      if (password || !existingUser.password_hash) {
+        userUpdateData.password_hash = passwordHash;
+      }
       await prisma.user.update({
         where: { id: existingUser.id },
-        data: {
-          tenant_id: tenant.id,
-          full_name: owner_name,
-          email: cleanEmail,
-          phone,
-          password_hash: passwordHash,
-          status: 'ACTIVE',
-        },
+        data: userUpdateData,
       });
       const hasRole = await prisma.userRole.findFirst({
         where: { user_id: existingUser.id, role_id: ownerRole.id },
@@ -329,16 +332,20 @@ router.post('/:id/approve', async (req: Request, res: Response): Promise<void> =
         }
       }
 
-      // 4. User: activate + reset password for existing, or create new
+      // 4. User: activate existing user (PRESERVING their registration password) or create new user if missing
       const cleanTenantEmail = tenant.email.trim().toLowerCase();
       const existingUser = await tx.user.findFirst({
         where: { email: { equals: cleanTenantEmail, mode: 'insensitive' } },
       });
       if (existingUser) {
-        // Activate the account and reset password so admin can share credentials
+        // Activate account while preserving password set during self registration
+        const userUpdateData: any = { status: 'ACTIVE', tenant_id: tenantId };
+        if (!existingUser.password_hash) {
+          userUpdateData.password_hash = passwordHash;
+        }
         await tx.user.update({
           where: { id: existingUser.id },
-          data: { status: 'ACTIVE', tenant_id: tenantId, password_hash: passwordHash },
+          data: userUpdateData,
         });
         // Ensure they have the HOTEL_OWNER role
         const hasRole = await tx.userRole.findFirst({

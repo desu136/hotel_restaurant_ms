@@ -18,6 +18,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
     const passwordHash = await hash(password, 10);
 
     // ── Step 1: Create tenant ────────────────────────────────────────────────
@@ -26,7 +27,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
         business_name: businessName,
         business_type: businessType,
         owner_name: ownerName,
-        email,
+        email: cleanEmail,
         phone,
         status: 'PENDING',
       },
@@ -41,7 +42,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       data: {
         tenant_id: tenant.id,
         full_name: ownerName,
-        email,
+        email: cleanEmail,
         phone,
         password_hash: passwordHash,
         status: 'ACTIVE',

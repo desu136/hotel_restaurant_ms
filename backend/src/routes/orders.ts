@@ -734,7 +734,7 @@ router.patch('/:id/status', async (req: Request, res: Response): Promise<void> =
     }
 
     const isOwner = req.user!.roles.includes('HOTEL_OWNER');
-    if (!isOwner && existingOrder.branch_id !== req.user!.branchId) {
+    if (!isOwner && req.user!.branchId && existingOrder.branch_id !== req.user!.branchId) {
       res.status(403).json({ error: 'Forbidden: You cannot modify orders from another branch' });
       return;
     }
