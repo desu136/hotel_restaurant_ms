@@ -68,6 +68,8 @@ export function useMenuState() {
   React.useEffect(() => {
     const branchQuery = tableId ? `?tableId=${tableId}` : ""
     const interval = setInterval(async () => {
+      if (typeof document !== "undefined" && document.hidden) return
+      if (!fetchers.activeRestaurantId) return
       try {
         const [catRes, menuRes] = await Promise.all([
           fetch(`/api/restaurant/public/categories/${fetchers.activeRestaurantId}${branchQuery}`),
@@ -85,7 +87,7 @@ export function useMenuState() {
       } catch (e) {
         console.error("Background sync error:", e)
       }
-    }, 5000)
+    }, 25000)
     return () => clearInterval(interval)
   }, [fetchers.activeRestaurantId, activeParentId, fetchers.activeBranchId, tableId])
 

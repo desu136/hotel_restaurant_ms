@@ -99,10 +99,16 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
     }
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      include: {
-        tenant: true,
-        branch: true,
-        roles: { include: { role: true } }
+      select: {
+        id: true,
+        email: true,
+        full_name: true,
+        phone: true,
+        avatar_url: true,
+        branch_id: true,
+        tenant: { select: { id: true, business_name: true, business_type: true, status: true } },
+        branch: { select: { id: true, name: true } },
+        roles: { select: { role: { select: { code: true } } } },
       }
     });
     if (!user) {
@@ -204,10 +210,25 @@ router.delete('/me', authenticate, async (req: Request, res: Response): Promise<
 // Memory store for active password reset codes (15-minute expiration)
 interface ResetCodeRecord {
   email: string;
-  code: string;
+  codeHash: string;
   expiresAt: number;
 }
 const resetCodeStore = new Map<string, ResetCodeRecord>();
+const resetAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function allowResetAttempt(key: string, limit = 5, windowMs = 15 * 60 * 1000): boolean {
+  const now = Date.now();
+  const entry = resetAttempts.get(key);
+  if (!entry || now > entry.resetAt) {
+    resetAttempts.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= limit) return false;
+  entry.count += 1;
+  return true;
+}
+
+const GENERIC_RESET_MESSAGE = 'If an account exists for that email, a reset code has been generated.';
 
 // POST /api/auth/forgot-password
 router.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
@@ -219,32 +240,32 @@ router.post('/forgot-password', async (req: Request, res: Response): Promise<voi
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const attemptKey = `${req.ip || 'unknown'}:${cleanEmail}`;
+    if (!allowResetAttempt(attemptKey)) {
+      res.status(429).json({ error: 'Too many reset attempts. Try again later.' });
+      return;
+    }
+
     const user = await prisma.user.findFirst({
       where: { email: { equals: cleanEmail, mode: 'insensitive' } },
     });
 
-    if (!user) {
-      res.status(404).json({ error: 'No account found with this email address' });
+    if (!user || user.status !== 'ACTIVE') {
+      res.json({ success: true, message: GENERIC_RESET_MESSAGE });
       return;
     }
 
-    if (user.status !== 'ACTIVE') {
-      res.status(403).json({ error: 'Account is suspended or inactive' });
-      return;
-    }
-
-    // Generate 6-digit verification code
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
-
-    resetCodeStore.set(cleanEmail, { email: cleanEmail, code: resetCode, expiresAt });
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+    const codeHash = await bcrypt.hash(resetCode, 8);
+    resetCodeStore.set(cleanEmail, { email: cleanEmail, codeHash, expiresAt });
 
     res.json({
       success: true,
-      email: cleanEmail,
+      message: GENERIC_RESET_MESSAGE,
       userName: user.full_name,
+      // Returned so the client can dispatch EmailJS. Do not display this in the UI.
       resetCode,
-      message: 'Password reset code generated.',
     });
   } catch (error) {
     console.error('POST /forgot-password error:', error);
@@ -269,8 +290,8 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
     const cleanEmail = email.trim().toLowerCase();
     const record = resetCodeStore.get(cleanEmail);
 
-    if (!record || record.code !== resetCode.trim()) {
-      res.status(400).json({ error: 'Invalid verification code' });
+    if (!record) {
+      res.status(400).json({ error: 'Invalid or expired verification code' });
       return;
     }
 
@@ -280,12 +301,18 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
       return;
     }
 
+    const codeOk = await bcrypt.compare(String(resetCode).trim(), record.codeHash);
+    if (!codeOk) {
+      res.status(400).json({ error: 'Invalid verification code' });
+      return;
+    }
+
     const user = await prisma.user.findFirst({
       where: { email: { equals: cleanEmail, mode: 'insensitive' } },
     });
 
     if (!user) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(400).json({ error: 'Invalid or expired verification code' });
       return;
     }
 

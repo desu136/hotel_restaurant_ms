@@ -503,7 +503,7 @@ router.get('/my-ready', async (req: Request, res: Response): Promise<void> => {
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const tenantId = req.user!.tenantId;
-    const { status, limit = '50' } = req.query;
+    const { status, limit = '50', active } = req.query;
 
     const isOwner = req.user!.roles.includes('HOTEL_OWNER');
     const branchId = req.user!.branchId;
@@ -514,6 +514,10 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       tenant_id: tenantId as string,
       ...(status ? { status: status as any } : {}),
     };
+
+    if (active === '1' || active === 'true') {
+      whereClause.status = { notIn: ['COMPLETED', 'CANCELLED'] };
+    }
 
     if (!isOwner && branchId) {
       whereClause.branch_id = branchId;
@@ -530,17 +534,22 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const orders = await prisma.order.findMany({
       where: whereClause,
       include: {
-        items: { include: { menu_item: true } },
-        table: {
+        items: {
           include: {
+            menu_item: { select: { id: true, display_name: true, price: true } }
+          }
+        },
+        table: {
+          select: {
+            id: true,
+            table_number: true,
+            waiter_id: true,
             waiter: { select: { id: true, full_name: true } }
           }
         },
-        bills: true,
-        deliveries: true,
       },
       orderBy: { created_at: 'desc' },
-      take: parseInt(limit as string),
+      take: parseInt(limit as string, 10) || 50,
     });
     res.json(orders);
   } catch (e) {

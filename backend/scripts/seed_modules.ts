@@ -8,7 +8,7 @@ const DEFAULT_MODULES = [
 ];
 
 const DEFAULT_SETTINGS = [
-  { key: 'platform_name', value: 'HospitalityHub', description: 'The name of the platform' },
+  { key: 'platform_name', value: 'DFoodie', description: 'The name of the platform' },
   { key: 'allow_public_registration', value: 'true', description: 'Enable/disable public tenant registration' },
   { key: 'trial_days_default', value: '14', description: 'Default number of trial days' },
 ];

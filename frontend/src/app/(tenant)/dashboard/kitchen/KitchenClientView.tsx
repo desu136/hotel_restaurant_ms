@@ -44,11 +44,10 @@ export function KitchenClientView() {
   const fetchOrders = React.useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     try {
-      const res = await fetch("/api/orders?limit=60")
+      const res = await fetch("/api/orders?limit=60&active=1")
       if (!res.ok) throw new Error("Fetch failed")
       const data = await res.json()
-      const active = data.filter((o: any) => !["COMPLETED", "CANCELLED"].includes(o.status))
-      setOrders(active)
+      setOrders(data)
       setOnline(true)
     } catch {
       setOnline(false)
@@ -59,7 +58,10 @@ export function KitchenClientView() {
 
   React.useEffect(() => {
     fetchOrders()
-    const poll = setInterval(() => fetchOrders(true), 6000)
+    const poll = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return
+      fetchOrders(true)
+    }, 8000)
     return () => clearInterval(poll)
   }, [fetchOrders])
 

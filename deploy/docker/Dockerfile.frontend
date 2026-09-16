@@ -1,0 +1,28 @@
+FROM node:20-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+RUN npm ci
+COPY frontend ./frontend
+ARG NEXT_PUBLIC_BASE_PATH=/rms
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build --workspace=frontend
+
+FROM node:20-bookworm-slim
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_BASE_PATH=/rms
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+RUN npm ci --omit=dev
+COPY --from=build /app/frontend/.next ./frontend/.next
+COPY --from=build /app/frontend/public ./frontend/public
+COPY frontend/next.config.ts ./frontend/next.config.ts
+WORKDIR /app
+EXPOSE 3000
+CMD ["npm", "run", "start", "--workspace=frontend", "--", "-H", "0.0.0.0", "-p", "3000"]

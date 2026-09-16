@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getBackendUrl } from "@/lib/backend-url";
+import { cookiePath } from "@/lib/base-path";
 
 export async function POST(req: Request) {
   try {
@@ -31,10 +32,10 @@ export async function POST(req: Request) {
       const cookieStore = await cookies();
       cookieStore.set("token", data.token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: process.env.COOKIE_SECURE === "true",
         sameSite: "lax",
         maxAge: 60 * 60 * 24, // 24 hours
-        path: "/",
+        path: cookiePath(),
       });
     }
 

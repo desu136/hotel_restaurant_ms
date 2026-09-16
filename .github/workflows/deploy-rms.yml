@@ -1,0 +1,41 @@
+name: Deploy RMS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-rms
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to /opt/dexel/rms
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.RMS_HOST }}
+          username: ${{ secrets.RMS_USER }}
+          key: ${{ secrets.RMS_SSH_KEY }}
+          source: "."
+          target: "/opt/dexel/rms"
+          rm: false
+          overwrite: true
+          exclude: ".git,node_modules,**/node_modules,**/.next,backend/dist,frontend/.next"
+
+      - name: Build and reload RMS only
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.RMS_HOST }}
+          username: ${{ secrets.RMS_USER }}
+          key: ${{ secrets.RMS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/dexel/rms
+            chmod +x deploy/scripts/deploy.sh deploy/docker/entrypoint-backend.sh
+            bash deploy/scripts/deploy.sh
+            docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E '^rms-' || true

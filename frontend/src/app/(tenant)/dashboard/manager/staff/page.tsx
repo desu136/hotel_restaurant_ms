@@ -16,7 +16,6 @@ async function getEmployeesAndBranches() {
     const meData = meRes.ok ? await meRes.json() : null
     // /api/auth/me returns { success, user: { id, email, roles, branch_id, ... } }
     const currentUser = meData?.user ?? null
-    console.log("roles", roles)
     return { employees, branches, roles, currentUser }
   } catch {
     return { employees: [], branches: [], roles: [], currentUser: null }

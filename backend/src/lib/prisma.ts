@@ -5,23 +5,24 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+function resolveDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL ?? '';
+  const u = new URL(url);
+  const isManagedPooler = /neon\.tech|pooler|supabase|render\.com|amazonaws\.com/i.test(u.hostname);
+
+  if (isManagedPooler) {
+    if (!u.searchParams.has('pgbouncer')) u.searchParams.set('pgbouncer', 'true');
+    if (!u.searchParams.has('connection_limit')) u.searchParams.set('connection_limit', '5');
+    if (!u.searchParams.has('pool_timeout')) u.searchParams.set('pool_timeout', '30');
+  }
+
+  return u.toString();
+}
+
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   datasources: {
-    db: {
-      // Append Neon-friendly connection pool parameters if not already present
-      url: (() => {
-        const url = process.env.DATABASE_URL ?? '';
-        const u = new URL(url);
-        // Neon pooler requires pgbouncer=true for prepared statement compatibility
-        if (!u.searchParams.has('pgbouncer')) u.searchParams.set('pgbouncer', 'true');
-        // Limit pool size to avoid exhausting Neon's serverless connection quota
-        if (!u.searchParams.has('connection_limit')) u.searchParams.set('connection_limit', '5');
-        // Extend pool timeout for Neon cold-start delays
-        if (!u.searchParams.has('pool_timeout')) u.searchParams.set('pool_timeout', '30');
-        return u.toString();
-      })(),
-    },
+    db: { url: resolveDatabaseUrl() },
   },
 });
 

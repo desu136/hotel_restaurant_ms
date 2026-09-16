@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
 import { Loader2, QrCode, AlertCircle } from "lucide-react"
+import Link from "next/link"
 import { QRCodesGrid } from "./components/QRCodesGrid"
 
 interface Restaurant { id: string; name: string }
@@ -119,7 +120,7 @@ function QRPageContent() {
         <p className="text-[var(--background)]/70 text-sm mb-5">Select a table and generate a unique QR code linking to your digital menu.</p>
 
         {tables.length === 0 ? (
-          <p className="text-white/80 text-sm bg-white/10 rounded-xl px-4 py-3">⚠️ No tables registered yet. <a href="/dashboard/manager/tables" className="underline font-semibold">Register tables first →</a></p>
+          <p className="text-white/80 text-sm bg-white/10 rounded-xl px-4 py-3">⚠️ No tables registered yet. <Link href="/dashboard/manager/tables" className="underline font-semibold">Register tables first →</Link></p>
         ) : tablesWithoutQR.length === 0 ? (
           <p className="text-[var(--background)] text-sm bg-[var(--foreground)] rounded-xl px-4 py-3">✅ All tables already have QR codes. Delete an existing one to regenerate.</p>
         ) : (

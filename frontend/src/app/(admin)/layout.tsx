@@ -8,6 +8,8 @@ import {
   Menu, LayoutDashboard, ScrollText, Boxes, ShieldAlert, User,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/ui/profile-dropdown"
+import { clearCurrentUserCache } from "@/lib/current-user"
+import { BrandLogo } from "@/components/brand-logo"
 
 interface NavItem {
   href: string
@@ -31,6 +33,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/")
 
   const handleLogout = async () => {
+    clearCurrentUserCache()
     await fetch("/api/auth/logout", { method: "POST" })
     router.push("/login")
     router.refresh()
@@ -41,13 +44,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       className="flex w-64 flex-col border-r border-[var(--surface-border)] h-full"
       style={{ background: "color-mix(in srgb, var(--surface) 90%, transparent)", backdropFilter: "blur(12px)" }}
     >
-      {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[var(--surface-border)] shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center mr-3 shadow-sm">
-          <ShieldAlert className="w-4 h-4 text-white" />
-        </div>
+        <BrandLogo className="h-11 w-11 object-contain mr-3" />
         <span className="font-bold text-lg tracking-tight">
-          Admin<span className="text-red-500">Hub</span>
+          DFoodie <span className="text-red-500">Admin</span>
         </span>
       </div>
 

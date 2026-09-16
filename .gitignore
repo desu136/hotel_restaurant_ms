@@ -12,6 +12,13 @@
 
 # testing
 /coverage
+backend/coverage
+frontend/coverage
+playwright-report/
+test-results/
+blob-report/
+frontend/playwright-report/
+frontend/test-results/
 
 # next.js
 .next/
@@ -19,6 +26,8 @@ out/
 
 # production
 /build
+backend/dist
+frontend/.next
 
 # misc
 .DS_Store
@@ -32,6 +41,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+/deploy/docker/certs/
 
 # vercel
 .vercel

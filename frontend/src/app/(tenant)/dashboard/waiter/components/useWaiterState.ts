@@ -14,7 +14,7 @@ export function useWaiterState() {
   const [menuItems, setMenuItems] = React.useState<MenuItem[]>([])
   const [categories, setCategories] = React.useState<Category[]>([])
   const [orders, setOrders] = React.useState<Order[]>([])
-  const [prevReadyIds, setPrevReadyIds] = React.useState<string[]>([])
+  const prevReadyIdsRef = React.useRef<string[]>([])
   const [activeTab, setActiveTab] = React.useState<"home" | "tables" | "orders" | "alerts">("home")
   const [showScannerModal, setShowScannerModal] = React.useState(false)
   const [scannerError, setScannerError] = React.useState<string | null>(null)
@@ -94,25 +94,31 @@ export function useWaiterState() {
 
   const fetchActiveOrders = React.useCallback(async () => {
     try {
-      const res = await fetch("/api/orders?limit=100")
+      const res = await fetch("/api/orders?limit=50&active=1")
       if (!res.ok) throw new Error()
       const data: Order[] = await res.json()
-      const active = data.filter(o => !["COMPLETED", "CANCELLED"].includes(o.status))
-      setOrders(active)
+      setOrders(data)
       if (me) {
-        const waiterReadyOrders = active.filter(o => o.status === "READY" && o.waiter_id === me.id)
-        const newReadyOrders = waiterReadyOrders.filter(o => !prevReadyIds.includes(o.id))
+        const waiterReadyOrders = data.filter(o => o.status === "READY" && o.waiter_id === me.id)
+        const newReadyOrders = waiterReadyOrders.filter(o => !prevReadyIdsRef.current.includes(o.id))
         if (newReadyOrders.length > 0) {
           playNotificationSound()
           newReadyOrders.forEach(o => { if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") new Notification(`Order Ready! 🍽️`, { body: `Table ${o.table?.table_number || "Takeaway"} has ready items!` }) })
         }
-        setPrevReadyIds(waiterReadyOrders.map(o => o.id))
+        prevReadyIdsRef.current = waiterReadyOrders.map(o => o.id)
       }
     } catch (e) { console.error("Failed to poll orders", e) }
-  }, [me, prevReadyIds])
+  }, [me])
 
   React.useEffect(() => { loadStationData() }, [loadStationData])
-  React.useEffect(() => { fetchActiveOrders(); const i = setInterval(fetchActiveOrders, 5000); return () => clearInterval(i) }, [fetchActiveOrders])
+  React.useEffect(() => {
+    fetchActiveOrders()
+    const i = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return
+      fetchActiveOrders()
+    }, 8000)
+    return () => clearInterval(i)
+  }, [fetchActiveOrders])
 
   return {
     me, restaurants, selectedRestId, setSelectedRestId, branches, selectedBranchId, setSelectedBranchId,

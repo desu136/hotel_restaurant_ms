@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import HomeClientView from './HomeClientView'
 
 export const metadata: Metadata = {
-  title: 'HospitalityHub | Discover Restaurants & Offers',
+  title: 'DFoodie | Discover restaurants & offers',
   description: 'Browse nearby restaurants, explore exclusive promotions, and order your favourite food.',
 }
 

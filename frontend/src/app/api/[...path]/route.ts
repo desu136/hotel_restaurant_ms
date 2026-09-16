@@ -11,41 +11,36 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
   const { search } = new URL(req.url);
   const targetUrl = `${getBackendUrl()}${pathname}${search}`;
 
-  // Read the HttpOnly token cookie server-side
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
+  const isPublic = pathname.includes("/public/");
+  const isPublicMenuGet = req.method === "GET" && pathname.includes("/restaurant/public/");
 
-  // Build forwarded headers
-  const contentType = req.headers.get("content-type") || "";
   const headers: Record<string, string> = {};
+  const contentType = req.headers.get("content-type");
   if (contentType) {
     headers["Content-Type"] = contentType;
-  } else {
+  } else if (req.method !== "GET" && req.method !== "HEAD") {
     headers["Content-Type"] = "application/json";
   }
 
   const authHeader = req.headers.get("Authorization");
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (!isPublic) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    } else if (authHeader) {
+      headers["Authorization"] = authHeader;
+    }
   } else if (authHeader) {
     headers["Authorization"] = authHeader;
   }
 
-  // Forward the request body for non-GET methods
-  let body: any;
+  let body: BodyInit | undefined;
   if (req.method !== "GET" && req.method !== "HEAD") {
-    if (contentType.includes("multipart/form-data")) {
-      try {
-        body = await req.arrayBuffer();
-      } catch {
-        body = undefined;
-      }
-    } else {
-      try {
-        body = await req.text();
-      } catch {
-        body = undefined;
-      }
+    try {
+      body = await req.arrayBuffer();
+    } catch {
+      body = undefined;
     }
   }
 
@@ -54,27 +49,26 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
       method: req.method,
       headers,
       body,
+      cache: "no-store",
     });
 
-    const data = await backendRes.text();
+    const data = await backendRes.arrayBuffer();
+    const responseHeaders = new Headers();
+    responseHeaders.set(
+      "Content-Type",
+      backendRes.headers.get("Content-Type") || "application/json"
+    );
+    responseHeaders.set(
+      "Cache-Control",
+      isPublicMenuGet
+        ? "public, max-age=15, s-maxage=15, stale-while-revalidate=60"
+        : "private, no-store"
+    );
 
-    // Try to parse as JSON, fall back to raw text
-    try {
-      const json = JSON.parse(data);
-      return NextResponse.json(json, {
-        status: backendRes.status,
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0",
-        }
-      });
-    } catch {
-      return new NextResponse(data, {
-        status: backendRes.status,
-        headers: { "Content-Type": backendRes.headers.get("Content-Type") || "text/plain" },
-      });
-    }
+    return new NextResponse(data, {
+      status: backendRes.status,
+      headers: responseHeaders,
+    });
   } catch (error) {
     console.error("Proxy fetch error to backend:", error);
     return NextResponse.json({ error: "Backend is unreachable" }, { status: 502 });

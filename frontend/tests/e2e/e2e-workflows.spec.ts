@@ -1,6 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 
-test.describe('HospitalityHub Mini-App E2E Workflows', () => {
+test.describe('DFoodie Mini-App E2E Workflows @regression', () => {
   const MOCK_RESTAURANT_ID = '00000000-0000-0000-0000-000000000001';
   const MOCK_BRANCH_ID = '00000000-0000-0000-0000-000000000002';
   const MOCK_TABLE_ID = '00000000-0000-0000-0000-000000000003';
@@ -34,7 +34,7 @@ test.describe('HospitalityHub Mini-App E2E Workflows', () => {
     await page.goto(menuUrl);
 
     // Verify main page elements render
-    await expect(page).toHaveTitle(/HospitalityHub|Menu/i);
+    await expect(page).toHaveTitle(/DFoodie|Menu/i);
   });
 
   test('2. Off-Premise Delivery Flow: Order placement & driver assignment', async ({ page }: { page: Page }) => {
