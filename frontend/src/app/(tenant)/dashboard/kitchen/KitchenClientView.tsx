@@ -67,11 +67,28 @@ export function KitchenClientView() {
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     setUpdatingId(id)
+    // Optimistic UI update: update card status immediately so button responds instantly on click!
+    setOrders(prev => {
+      if (["COMPLETED", "CANCELLED"].includes(newStatus)) {
+        return prev.filter(o => o.id !== id)
+      }
+      return prev.map(o => o.id === id ? { ...o, status: newStatus } : o)
+    })
+
     try {
       const res = await fetch(`/api/orders/${id}/status`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus })
       })
-      if (res.ok) await fetchOrders(true)
+      if (!res.ok) {
+        const errData = await res.json()
+        alert(errData.error || "Failed to update order status")
+        await fetchOrders(true)
+      } else {
+        await fetchOrders(true)
+      }
+    } catch {
+      alert("Network error. Could not update order status.")
+      await fetchOrders(true)
     } finally {
       setUpdatingId(null)
     }

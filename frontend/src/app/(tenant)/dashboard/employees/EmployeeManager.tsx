@@ -25,7 +25,7 @@ export default function EmployeeManager({ initialEmployees, branches, roles, cur
   const [filterBranch, setFilterBranch] = React.useState("")
   const [filterStatus, setFilterStatus] = React.useState("")
   const [search, setSearch] = React.useState("")
-  const [allTables, setAllTables] = React.useState<{ id: string; table_number: string }[]>([])
+  const [allTables, setAllTables] = React.useState<{ id: string; table_number: string; waiter_id?: string | null; branch_id?: string }[]>([])
 
   React.useEffect(() => {
     fetch("/api/restaurant/tables")
