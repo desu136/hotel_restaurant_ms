@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { uploadImage } from "@/lib/upload-image";
 
 export function useProfileSettings() {
   const router = useRouter();
@@ -103,22 +104,15 @@ export function useProfileSettings() {
     if (!file) return;
     setUploading(true);
     setProfileMsg(null);
-    const formData = new FormData();
-    formData.append("image", file);
     try {
-      const res = await fetch("/api/upload/image", {
-        method: "POST",
-        body: formData,
+      const url = await uploadImage(file);
+      setAvatarUrl(url);
+      setProfileMsg({ type: "success", text: "Photo uploaded. Save profile to apply changes." });
+    } catch (err) {
+      setProfileMsg({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to upload photo",
       });
-      const data = await res.json();
-      if (res.ok && data?.data?.url) {
-        setAvatarUrl(data.data.url);
-        setProfileMsg({ type: "success", text: "Photo uploaded. Save profile to apply changes." });
-      } else {
-        setProfileMsg({ type: "error", text: data.error || "Upload failed" });
-      }
-    } catch {
-      setProfileMsg({ type: "error", text: "Failed to upload photo" });
     } finally {
       setUploading(false);
     }

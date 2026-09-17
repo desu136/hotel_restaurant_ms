@@ -5,21 +5,20 @@ import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+function isCloudinaryConfigured(): boolean {
+  return Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+}
 
-// Configure multer for memory storage
-const storage = multer.memoryStorage();
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 5 * 1024 * 1024,
   },
-  fileFilter: (_req: any, file: any, cb: any) => {
+  fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
@@ -28,34 +27,82 @@ const upload = multer({
   },
 });
 
-// POST /api/upload/image - Upload image to Cloudinary
+function handleImageUpload(req: Request, res: Response, next: NextFunction): void {
+  upload.single('image')(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      res.status(413).json({
+        success: false,
+        error: 'Image must be 5MB or smaller',
+      });
+      return;
+    }
+    if (err) {
+      const message = err instanceof Error ? err.message : 'Invalid image';
+      res.status(400).json({ success: false, error: message });
+      return;
+    }
+    next();
+  });
+}
+
 router.post(
   '/image',
   authenticate,
-  upload.single('image'),
-  async (req: any, res: Response, next: NextFunction): Promise<any> => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          error: 'No image file provided',
-        });
-      }
+  handleImageUpload,
+  async (req: Request, res: Response): Promise<void> => {
+    if (!isCloudinaryConfigured()) {
+      res.status(503).json({
+        success: false,
+        error: 'Image upload is not configured',
+      });
+      return;
+    }
 
-      const result = await new Promise<any>((resolve, reject) => {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({
+        success: false,
+        error: 'No image file provided',
+      });
+      return;
+    }
+
+    try {
+      const result = await new Promise<{
+        secure_url: string;
+        public_id: string;
+        width: number;
+        height: number;
+        format: string;
+      }>((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           {
             resource_type: 'image',
-            folder: 'qr-menu-uploads',
+            folder: 'dfoodie/uploads',
           },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
+          (error, uploaded) => {
+            if (error || !uploaded) {
+              reject(error || new Error('Cloudinary returned no result'));
+              return;
+            }
+            resolve(uploaded as {
+              secure_url: string;
+              public_id: string;
+              width: number;
+              height: number;
+              format: string;
+            });
           }
-        ).end(req.file.buffer);
+        ).end(file.buffer);
       });
 
-      return res.json({
+      res.json({
         success: true,
         data: {
           url: result.secure_url,
@@ -66,7 +113,13 @@ router.post(
         },
       });
     } catch (error) {
-      next(error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'object' && error !== null && 'message' in error
+            ? String((error as { message: unknown }).message)
+            : 'Failed to upload image';
+      res.status(502).json({ success: false, error: message || 'Failed to upload image' });
     }
   }
 );

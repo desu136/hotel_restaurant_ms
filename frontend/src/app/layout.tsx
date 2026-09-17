@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { QueryProvider } from "@/lib/query-provider";
 import { BasePathFetch } from "@/components/base-path-fetch";
+import { withBasePath } from "@/lib/base-path";
 import "./globals.css";
 
 const inter = Inter({
@@ -15,8 +16,8 @@ export const metadata: Metadata = {
   title: "DFoodie",
   description: "Cafés, restaurants, and food chains on DFoodie.",
   icons: {
-    icon: "/foodie-logo.jpg",
-    apple: "/foodie-logo.jpg",
+    icon: [{ url: withBasePath("/icon.png"), type: "image/png" }],
+    apple: withBasePath("/apple-icon.png"),
   },
 };
 

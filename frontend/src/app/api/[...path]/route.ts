@@ -15,8 +15,11 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
   const isPublicMenuGet = req.method === "GET" && pathname.includes("/restaurant/public/");
 
   const headers: Record<string, string> = {};
-  const contentType = req.headers.get("content-type");
-  if (contentType) {
+  const contentType = req.headers.get("content-type") || "";
+  const isMultipart = contentType.toLowerCase().includes("multipart/form-data");
+  if (isMultipart) {
+    headers["Content-Type"] = contentType;
+  } else if (contentType) {
     headers["Content-Type"] = contentType;
   } else if (req.method !== "GET" && req.method !== "HEAD") {
     headers["Content-Type"] = "application/json";
@@ -38,7 +41,7 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
   let body: BodyInit | undefined;
   if (req.method !== "GET" && req.method !== "HEAD") {
     try {
-      body = await req.arrayBuffer();
+      body = Buffer.from(await req.arrayBuffer());
     } catch {
       body = undefined;
     }
@@ -50,6 +53,7 @@ async function proxyRequest(req: Request, params: { path: string[] }) {
       headers,
       body,
       cache: "no-store",
+      ...(body ? { duplex: "half" as const } : {}),
     });
 
     const data = await backendRes.arrayBuffer();

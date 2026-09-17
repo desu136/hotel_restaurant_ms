@@ -30,7 +30,13 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use((req, res, next) => {
+  if (req.is('multipart/form-data')) {
+    next();
+    return;
+  }
+  express.json()(req, res, next);
+});
 
 // Health check
 app.get('/health', (_req, res) => {

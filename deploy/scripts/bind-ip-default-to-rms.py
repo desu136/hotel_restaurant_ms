@@ -43,6 +43,35 @@ NEW_DEFAULT = """
     ssl_certificate_key /etc/letsencrypt/rms-ip/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
 
+    location = /favicon.ico {
+      resolver 127.0.0.11 ipv6=off valid=10s;
+      set $rms_icon http://rms-frontend:3000;
+      rewrite ^ /rms/icon.png break;
+      proxy_pass $rms_icon;
+      proxy_set_header Host $http_host;
+    }
+    location = /icon.png {
+      resolver 127.0.0.11 ipv6=off valid=10s;
+      set $rms_icon http://rms-frontend:3000;
+      rewrite ^ /rms/icon.png break;
+      proxy_pass $rms_icon;
+      proxy_set_header Host $http_host;
+    }
+    location = /apple-icon.png {
+      resolver 127.0.0.11 ipv6=off valid=10s;
+      set $rms_icon http://rms-frontend:3000;
+      rewrite ^ /rms/apple-icon.png break;
+      proxy_pass $rms_icon;
+      proxy_set_header Host $http_host;
+    }
+    location = /foodie-logo.jpg {
+      resolver 127.0.0.11 ipv6=off valid=10s;
+      set $rms_icon http://rms-frontend:3000;
+      rewrite ^ /rms/foodie-logo.jpg break;
+      proxy_pass $rms_icon;
+      proxy_set_header Host $http_host;
+    }
+
     location = / {
       return 302 /rms;
     }

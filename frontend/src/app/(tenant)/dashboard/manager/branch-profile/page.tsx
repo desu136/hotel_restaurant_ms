@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Loader2, Check, AlertCircle } from "lucide-react"
 import { BranchProfileHeader, BranchDetailsForm } from "./components/BranchDetailsForm"
+import { uploadImage } from "@/lib/upload-image"
 
 interface Branch {
   id: string; name: string; address?: string | null; phone?: string | null
@@ -50,15 +51,11 @@ export default function BranchProfilePage() {
     if (type === "logo") setLogoUploading(true)
     else setBannerUploading(true)
     setError("")
-    const fd = new FormData()
-    fd.append("image", file)
     try {
-      const res = await fetch("/api/upload/image", { method: "POST", body: fd })
-      const data = await res.json()
-      if (res.ok && data.success) setForm(f => ({ ...f, [`${type}_url`]: data.data.url }))
-      else setError(data.error || `Failed to upload ${type}.`)
-    } catch {
-      setError(`Network error uploading ${type}.`)
+      const url = await uploadImage(file)
+      setForm(f => ({ ...f, [`${type}_url`]: url }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to upload ${type}.`)
     } finally {
       if (type === "logo") setLogoUploading(false)
       else setBannerUploading(false)

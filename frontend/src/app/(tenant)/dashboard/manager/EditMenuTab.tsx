@@ -5,6 +5,7 @@ import { Plus, Loader2, Layers, GitBranch } from "lucide-react"
 import { MenuItemCard } from "./menu/components/MenuItemCard"
 import { MenuFilterBar } from "./menu/components/MenuFilterBar"
 import { MenuItemModal } from "./menu/components/MenuItemModal"
+import { uploadImage } from "@/lib/upload-image"
 
 interface Restaurant { id: string; name: string }
 interface Branch { id: string; name: string }
@@ -121,12 +122,16 @@ export function EditMenuTab() {
     const file = e.target.files?.[0]
     if (!file) return
     setMenuImageUploading(true)
-    const fd = new FormData(); fd.append("image", file)
+    setMenuError("")
     try {
-      const res = await fetch("/api/upload/image", { method: "POST", body: fd })
-      const data = await res.json()
-      if (res.ok && data.success) setMenuForm(f => ({ ...f, imageUrl: data.data.url }))
-    } finally { setMenuImageUploading(false) }
+      const url = await uploadImage(file)
+      setMenuForm(f => ({ ...f, imageUrl: url }))
+    } catch (err) {
+      setMenuError(err instanceof Error ? err.message : "Failed to upload image")
+    } finally {
+      setMenuImageUploading(false)
+      e.target.value = ""
+    }
   }
 
   const filterItem = (item: any) => {

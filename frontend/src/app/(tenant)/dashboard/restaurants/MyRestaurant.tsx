@@ -4,6 +4,7 @@ import * as React from "react"
 import { Loader2 } from "lucide-react"
 import { RestaurantProfileCard, RestaurantEmptyState } from "./components/RestaurantProfileCard"
 import { RestaurantEditModal } from "./components/RestaurantEditModal"
+import { uploadImage } from "@/lib/upload-image"
 
 interface Restaurant {
   id: string; name: string; logo_url?: string | null; banner_url?: string | null; created_at: string
@@ -31,27 +32,27 @@ export default function MyRestaurant() {
 
   React.useEffect(() => { loadData() }, [loadData])
 
-  const uploadImage = async (file: File, field: "logo_url" | "banner_url", setUploading: (v: boolean) => void) => {
+  const uploadRestaurantImage = async (file: File, field: "logo_url" | "banner_url", setUploading: (v: boolean) => void) => {
     setUploading(true)
-    const formData = new FormData()
-    formData.append("image", file)
+    setRestError("")
     try {
-      const res = await fetch("/api/upload/image", { method: "POST", body: formData })
-      const data = await res.json()
-      if (res.ok && data.success) setRestForm(f => ({ ...f, [field]: data.data.url }))
-      else setRestError(data.error || "Failed to upload image")
-    } catch { setRestError("Network error uploading image") }
-    finally { setUploading(false) }
+      const url = await uploadImage(file)
+      setRestForm(f => ({ ...f, [field]: url }))
+    } catch (err) {
+      setRestError(err instanceof Error ? err.message : "Failed to upload image")
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
-    await uploadImage(file, "logo_url", setLogoUploading)
+    await uploadRestaurantImage(file, "logo_url", setLogoUploading)
   }
 
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
-    await uploadImage(file, "banner_url", setBannerUploading)
+    await uploadRestaurantImage(file, "banner_url", setBannerUploading)
   }
 
   const openRestEdit = () => {
