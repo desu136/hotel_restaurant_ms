@@ -11,7 +11,7 @@ export default async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // Define public paths that don't require authentication
-  const isPublicPath = path === '/' || path === '/login' || path === '/register' || path === '/home' || path === '/orders' || path.startsWith('/menu');
+  const isPublicPath = path === '/' || path === '/login' || path === '/register' || path === '/forgot-password' || path === '/home' || path === '/orders' || path.startsWith('/menu');
   
   // Define Super Admin specific paths
   const isSuperAdminPath = path.startsWith('/tenants') || path.startsWith('/subscriptions');
@@ -35,7 +35,7 @@ export default async function proxy(request: NextRequest) {
     }
 
     // Prevent authenticated users from accessing login/register page again
-    if (path === '/login' || path === '/register') {
+    if (path === '/login' || path === '/register' || path === '/forgot-password') {
       let redirectPath = '/dashboard';
       if (payload.roles.includes('SUPER_ADMIN')) {
         redirectPath = '/tenants';

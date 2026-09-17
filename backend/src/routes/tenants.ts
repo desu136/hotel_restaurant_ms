@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, requireRole } from '../middleware/auth';
 import bcrypt from 'bcrypt';
 import { BusinessType, TenantStatus } from '@prisma/client';
+import { coerceEthiopianPhone } from '../lib/ethiopian-phone';
 
 const router = Router();
 
@@ -67,6 +68,13 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const parsedPhone = coerceEthiopianPhone(phone, true);
+    if (!parsedPhone.ok) {
+      res.status(400).json({ error: parsedPhone.error });
+      return;
+    }
+    const storedPhone = parsedPhone.phone!;
+
     const DEFAULT_PASSWORD = password || 'Welcome@1234';
     const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
 
@@ -78,7 +86,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         business_name,
         owner_name,
         email: cleanEmail,
-        phone,
+        phone: storedPhone,
         business_type: business_type as BusinessType,
         address,
         license_info,
@@ -108,7 +116,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         tenant_id: tenant.id,
         full_name: owner_name,
         email: cleanEmail,
-        phone,
+        phone: storedPhone,
         status: 'ACTIVE',
       };
       if (password || !existingUser.password_hash) {
@@ -132,7 +140,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
           tenant_id: tenant.id,
           full_name: owner_name,
           email: cleanEmail,
-          phone,
+          phone: storedPhone,
           password_hash: passwordHash,
           status: 'ACTIVE',
           roles: { create: { role_id: ownerRole.id } },
@@ -221,13 +229,22 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     }
 
     const { business_name, owner_name, email, phone, business_type, address, license_info, tax_info, status } = req.body;
+    let storedPhone: string | undefined;
+    if (phone !== undefined) {
+      const parsedPhone = coerceEthiopianPhone(phone, false);
+      if (!parsedPhone.ok) {
+        res.status(400).json({ error: parsedPhone.error });
+        return;
+      }
+      storedPhone = parsedPhone.phone ?? undefined;
+    }
     const updated = await prisma.tenant.update({
       where: { id: req.params.id as string },
       data: {
         ...(business_name !== undefined && { business_name }),
         ...(owner_name !== undefined && { owner_name }),
         ...(email !== undefined && { email }),
-        ...(phone !== undefined && { phone }),
+        ...(storedPhone !== undefined && { phone: storedPhone }),
         ...(address !== undefined && { address }),
         ...(license_info !== undefined && { license_info }),
         ...(tax_info !== undefined && { tax_info }),

@@ -6,6 +6,7 @@ import {
   useTenants, useCreateTenant, useApproveTenant, useUpdateTenantStatus, useDeleteTenant,
 } from "@/features/admin/tenants/hooks/useTenants";
 import type { CreateTenantInput } from "@/features/admin/types";
+import { ETHIOPIAN_PHONE_ERROR, normalizeEthiopianPhone } from "@/lib/ethiopian-phone";
 import { EMPTY_FORM, STATUS_META, TYPE_LABELS, fmt } from "./types";
 import TenantTable from "./TenantTable";
 import CreateTenantModal, { CreatedCredentialsModal } from "./CreateTenantModal";
@@ -49,8 +50,13 @@ export default function TenantsClientView() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError("");
+    const phone = normalizeEthiopianPhone(createForm.phone);
+    if (!phone) {
+      setCreateError(ETHIOPIAN_PHONE_ERROR);
+      return;
+    }
     try {
-      const result = await createTenant.mutateAsync(createForm);
+      const result = await createTenant.mutateAsync({ ...createForm, phone });
       setIsCreateOpen(false);
       setCreateForm(EMPTY_FORM);
       if (result?.owner_credentials) setCreatedCredentials(result.owner_credentials);

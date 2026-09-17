@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { hash } from 'bcrypt';
 import { prisma } from '../lib/prisma';
+import { coerceEthiopianPhone } from '../lib/ethiopian-phone';
 
 const router = Router();
 
@@ -19,6 +20,13 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const parsedPhone = coerceEthiopianPhone(phone, true);
+    if (!parsedPhone.ok) {
+      res.status(400).json({ error: parsedPhone.error });
+      return;
+    }
+    const storedPhone = parsedPhone.phone!;
+
     const passwordHash = await hash(password, 10);
 
     // ── Step 1: Create tenant ────────────────────────────────────────────────
@@ -28,7 +36,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
         business_type: businessType,
         owner_name: ownerName,
         email: cleanEmail,
-        phone,
+        phone: storedPhone,
         status: 'PENDING',
       },
     });
@@ -43,7 +51,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
         tenant_id: tenant.id,
         full_name: ownerName,
         email: cleanEmail,
-        phone,
+        phone: storedPhone,
         password_hash: passwordHash,
         status: 'ACTIVE',
         roles: ownerRole ? { create: { role_id: ownerRole.id } } : undefined,

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { uploadImage } from "@/lib/upload-image";
+import { ETHIOPIAN_PHONE_ERROR, isValidEthiopianPhone, normalizeEthiopianPhone } from "@/lib/ethiopian-phone";
 
 export function useProfileSettings() {
   const router = useRouter();
@@ -49,11 +50,20 @@ export function useProfileSettings() {
     e.preventDefault();
     setSavingProfile(true);
     setProfileMsg(null);
+    if (phone.trim() && !isValidEthiopianPhone(phone)) {
+      setProfileMsg({ type: "error", text: ETHIOPIAN_PHONE_ERROR });
+      setSavingProfile(false);
+      return;
+    }
     try {
       const res = await fetch("/api/auth/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, avatar_url: avatarUrl || null }),
+        body: JSON.stringify({
+          name,
+          phone: phone.trim() ? normalizeEthiopianPhone(phone) : "",
+          avatar_url: avatarUrl || null,
+        }),
       });
       const data = await res.json();
       if (res.ok) {

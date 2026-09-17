@@ -35,7 +35,7 @@ export function TenantInfoCard({ tenant }: { tenant: any }) {
             <span className="flex-1">{tenant.address || "Address not provided"}</span>
           </div>
           <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
-            <FileText className="w-4 h-4 mr-3 text-gray-400" />License: {tenant.license_info || "N/A"}
+            <FileText className="w-4 h-4 mr-3 text-gray-400" />TIN Number: {tenant.license_info || "N/A"}
           </div>
           <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
             <Landmark className="w-4 h-4 mr-3 text-gray-400" />Tax ID: {tenant.tax_info || "N/A"}

@@ -10,6 +10,8 @@ function resolveDatabaseUrl(): string {
   const u = new URL(url);
   const isManagedPooler = /neon\.tech|pooler|supabase|render\.com|amazonaws\.com/i.test(u.hostname);
 
+  // Neon/serverless poolers need these flags. Local Postgres does not —
+  // applying pgbouncer=true locally caused 30s timeouts and failed logins.
   if (isManagedPooler) {
     if (!u.searchParams.has('pgbouncer')) u.searchParams.set('pgbouncer', 'true');
     if (!u.searchParams.has('connection_limit')) u.searchParams.set('connection_limit', '5');

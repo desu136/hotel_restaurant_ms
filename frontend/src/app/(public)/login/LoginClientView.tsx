@@ -2,33 +2,47 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowRight, AlertCircle } from "lucide-react"
 import { BrandLogo } from "@/components/brand-logo"
 import { PasswordInput } from "@/components/ui/password-input"
-import { ForgotPasswordModal } from "./components/ForgotPasswordModal"
-import Link from "next/link"
+import { isEmailIdentifier, normalizeEthiopianPhone } from "@/lib/ethiopian-phone"
 
 export default function LoginClientView() {
   const router = useRouter()
-  const [email, setEmail] = React.useState("")
+  const [identifier, setIdentifier] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState("")
-  const [isForgotModalOpen, setIsForgotModalOpen] = React.useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
+    const loginId = identifier.trim()
+    const isEmail = isEmailIdentifier(loginId)
+    const phone = isEmail ? null : normalizeEthiopianPhone(loginId)
+
+    if (!isEmail && !phone) {
+      setError("Enter a valid email or Ethiopian phone number (+2519..., 09..., or 9...)")
+      setIsLoading(false)
+      return
+    }
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({
+          identifier: isEmail ? loginId.toLowerCase() : phone,
+          email: isEmail ? loginId.toLowerCase() : undefined,
+          phone: phone || undefined,
+          password,
+        })
       })
 
       const data = await res.json()
@@ -39,7 +53,7 @@ export default function LoginClientView() {
       } else {
         setError(data.error || "Login failed")
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred. Please try again.")
     } finally {
       setIsLoading(false)
@@ -75,27 +89,29 @@ export default function LoginClientView() {
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email address</label>
+                <label className="text-sm font-medium">Email or phone number</label>
                 <Input
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  inputMode="email"
+                  autoComplete="username"
+                  placeholder="name@example.com or 09XXXXXXXX"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   data-testid="login-email"
                   required
                 />
+                <p className="text-xs text-[var(--muted)]">Use your email or Ethiopian phone (+2519..., 09..., or 9...)</p>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <label className="text-sm font-medium">Password</label>
-                  <button
-                    type="button"
-                    onClick={() => setIsForgotModalOpen(true)}
+                  <Link
+                    href="/forgot-password"
                     className="text-xs text-[var(--color-primary-600)] hover:underline"
                     data-testid="login-forgot"
                   >
                     Forgot password?
-                  </button>
+                  </Link>
                 </div>
                 <PasswordInput
                   placeholder="••••••••"
@@ -117,11 +133,6 @@ export default function LoginClientView() {
           </CardFooter>
         </Card>
       </div>
-
-      <ForgotPasswordModal
-        isOpen={isForgotModalOpen}
-        onClose={() => setIsForgotModalOpen(false)}
-      />
     </div>
   )
 }

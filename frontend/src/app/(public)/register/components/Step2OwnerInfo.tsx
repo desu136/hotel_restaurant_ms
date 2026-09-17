@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EthiopianPhoneInput } from "@/components/ui/ethiopian-phone-input";
+import { isValidEthiopianPhone } from "@/lib/ethiopian-phone";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { RegisterFormData, SlideVariants } from "./types";
 
@@ -16,7 +18,8 @@ interface Props {
 }
 
 export default function Step2OwnerInfo({ formData, onChange, onPrev, variants }: Props) {
-  const isValid = !!formData.ownerName && !!formData.email && !!formData.phone;
+  const isValid =
+    !!formData.ownerName && !!formData.email && isValidEthiopianPhone(formData.phone);
 
   return (
     <motion.div
@@ -54,11 +57,10 @@ export default function Step2OwnerInfo({ formData, onChange, onPrev, variants }:
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Phone Number</label>
-          <Input
+          <EthiopianPhoneInput
             required
-            placeholder="+1 (555) 000-0000"
             value={formData.phone}
-            onChange={(e) => onChange({ ...formData, phone: e.target.value })}
+            onChange={(phone) => onChange({ ...formData, phone })}
           />
         </div>
       </CardContent>

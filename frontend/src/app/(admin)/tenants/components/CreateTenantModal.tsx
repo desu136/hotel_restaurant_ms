@@ -2,6 +2,7 @@
 
 import React from "react";
 import { X, CheckCircle2 } from "lucide-react";
+import { EthiopianPhoneInput } from "@/components/ui/ethiopian-phone-input";
 import type { CreateTenantInput } from "@/features/admin/types";
 
 interface Props {
@@ -35,7 +36,6 @@ export default function CreateTenantModal({ form, onChange, onSubmit, onClose, i
               { label: "Business Name *", key: "business_name", type: "text", ph: "e.g. Grand Cafe" },
               { label: "Owner Name *", key: "owner_name", type: "text", ph: "Full name" },
               { label: "Email *", key: "email", type: "email", ph: "owner@business.com" },
-              { label: "Phone *", key: "phone", type: "tel", ph: "+251..." },
             ].map(({ label, key, type, ph }) => (
               <div key={key} className="space-y-1.5">
                 <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">{label}</label>
@@ -45,6 +45,14 @@ export default function CreateTenantModal({ form, onChange, onSubmit, onClose, i
                   className="w-full px-3 py-2 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]" />
               </div>
             ))}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Phone *</label>
+              <EthiopianPhoneInput
+                required
+                value={form.phone}
+                onChange={(phone) => onChange({ ...form, phone })}
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -76,7 +84,7 @@ export default function CreateTenantModal({ form, onChange, onSubmit, onClose, i
           </div>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { label: "License No.", key: "license_info", ph: "License number" },
+              { label: "TIN NUMBER", key: "license_info", ph: "TIN number" },
               { label: "Tax ID", key: "tax_info", ph: "Tax ID / TIN" },
             ].map(({ label, key, ph }) => (
               <div key={key} className="space-y-1.5">

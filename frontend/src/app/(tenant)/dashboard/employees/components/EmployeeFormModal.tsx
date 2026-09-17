@@ -2,6 +2,7 @@
 import * as React from "react"
 import { Users2, X, Loader2, Check } from "lucide-react"
 import { PasswordInput } from "@/components/ui/password-input"
+import { EthiopianPhoneInput } from "@/components/ui/ethiopian-phone-input"
 
 export interface EmployeeFormData {
   fullName: string; email: string; phone: string; password: string
@@ -48,8 +49,10 @@ export function EmployeeFormModal({ show, editTarget, form, setForm, branches, r
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Phone</label>
-              <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+251 900 000 000"
-                className="w-full px-4 py-2.5 bg-[var(--surface-hover)] border border-[var(--surface-border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]" />
+              <EthiopianPhoneInput
+                value={form.phone}
+                onChange={(phone) => setForm(f => ({ ...f, phone }))}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">

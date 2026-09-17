@@ -4,6 +4,7 @@ import * as React from "react";
 import { User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EthiopianPhoneInput } from "@/components/ui/ethiopian-phone-input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ProfileInfoFormProps {
@@ -56,7 +57,7 @@ export function ProfileInfoForm({
             </div>
             <div className="space-y-1">
               <label className="text-xs font-bold uppercase text-[var(--muted)]">Phone Number</label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" />
+              <EthiopianPhoneInput value={phone} onChange={setPhone} />
             </div>
           </div>
 

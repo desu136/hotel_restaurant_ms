@@ -7,6 +7,14 @@ test.describe('Smoke @smoke', () => {
     await expect(page.getByTestId('login-email')).toBeVisible();
     await expect(page.getByTestId('login-password')).toBeVisible();
     await expect(page.getByTestId('login-submit')).toBeVisible();
+    await expect(page.getByText('Email or phone number')).toBeVisible();
+    await expect(page.getByTestId('login-forgot')).toBeVisible();
+  });
+
+  test('forgot-password page is reachable', async ({ page }) => {
+    await page.goto('/forgot-password');
+    await expect(page.getByTestId('forgot-password-form')).toBeVisible();
+    await expect(page).not.toHaveURL(/\/login$/);
   });
 
   test('register page is reachable', async ({ page }) => {

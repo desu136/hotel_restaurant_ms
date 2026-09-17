@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { hash } from 'bcrypt';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
+import { coerceEthiopianPhone } from '../lib/ethiopian-phone';
 
 const router = Router();
 router.use(authenticate);
@@ -105,13 +106,19 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       dbRoles = await prisma.role.findMany({ where: { code: { in: roles } } });
     }
 
+    const parsedPhone = coerceEthiopianPhone(phone, false);
+    if (!parsedPhone.ok) {
+      res.status(400).json({ error: parsedPhone.error });
+      return;
+    }
+
     const employee = await prisma.user.create({
       data: {
         tenant_id: tenantId,
         branch_id: branchId || null,
         full_name: fullName,
         email,
-        phone: phone || null,
+        phone: parsedPhone.phone,
         password_hash: passwordHash,
         status: 'ACTIVE',
         roles: dbRoles.length > 0 ? { create: dbRoles.map(r => ({ role_id: r.id })) } : undefined,
@@ -245,7 +252,14 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
 
     const updateData: any = {};
     if (fullName !== undefined) updateData.full_name = fullName;
-    if (phone !== undefined) updateData.phone = phone;
+    if (phone !== undefined) {
+      const parsedPhone = coerceEthiopianPhone(phone, false);
+      if (!parsedPhone.ok) {
+        res.status(400).json({ error: parsedPhone.error });
+        return;
+      }
+      updateData.phone = parsedPhone.phone;
+    }
     if (status !== undefined) updateData.status = status;
 
     if (email !== undefined && email !== employee.email) {

@@ -40,7 +40,7 @@ describe('Auth suite', () => {
     test('rejects missing email or password', async () => {
       const res = await request(app).post('/api/auth/login').send({ email: 'a@test.com' });
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/email and password/i);
+      expect(res.body.error).toMatch(/email or phone number and password/i);
     });
 
     test('rejects unknown user', async () => {
@@ -84,6 +84,40 @@ describe('Auth suite', () => {
         .send({ email: 'waiter@test.com', password: PASSWORD });
       expect(res.status).toBe(403);
       expect(res.body.error).toMatch(/tenant account is not active/i);
+    });
+
+    test.each(['0912345678', '912345678', '+251912345678', '251912345678'])(
+      'logs in with phone %s',
+      async (phone) => {
+        (prisma.user.findFirst as jest.Mock).mockResolvedValueOnce(
+          mockUser({ password_hash: passwordHash, phone: '+251912345678' })
+        );
+        const res = await request(app).post('/api/auth/login').send({ phone, password: PASSWORD });
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(prisma.user.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { phone: { in: expect.arrayContaining(['+251912345678', '0912345678']) } },
+          })
+        );
+      }
+    );
+
+    test('logs in with identifier set to a phone number', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValueOnce(
+        mockUser({ password_hash: passwordHash, phone: '+251912345678' })
+      );
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ identifier: '0912345678', password: PASSWORD });
+      expect(res.status).toBe(200);
+      expect(res.body.user.phone).toBe('+251912345678');
+    });
+
+    test('rejects an invalid phone identifier without hitting the database', async () => {
+      const res = await request(app).post('/api/auth/login').send({ phone: '555-0100', password: PASSWORD });
+      expect(res.status).toBe(401);
+      expect(prisma.user.findFirst).not.toHaveBeenCalled();
     });
 
     test.each([
@@ -179,10 +213,26 @@ describe('Auth suite', () => {
       const res = await request(app)
         .patch('/api/auth/me')
         .set(bearer(token))
-        .send({ name: 'Updated Waiter', phone: '555-0100' });
+        .send({ name: 'Updated Waiter', phone: '0912345678' });
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.user.name).toBe('Updated Waiter');
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ phone: '+251912345678' }),
+        })
+      );
+    });
+
+    test('rejects a non-Ethiopian phone on profile update', async () => {
+      const token = await authToken(['WAITER']);
+      const res = await request(app)
+        .patch('/api/auth/me')
+        .set(bearer(token))
+        .send({ phone: '555-0100' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/ethiopian number/i);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
@@ -272,6 +322,43 @@ describe('Auth suite', () => {
       });
       expect(reset.status).toBe(200);
       expect(reset.body.success).toBe(true);
+      expect(prisma.user.update).toHaveBeenCalled();
+    });
+
+    test('direct reset requires email, phone, and new password', async () => {
+      const res = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'reset@test.com', newPassword: 'brandnew1' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email, phone number, and a new password/i);
+    });
+
+    test('direct reset rejects a phone that does not match the account', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValueOnce(
+        mockUser({ email: 'reset@test.com', phone: '+251912345678', status: 'ACTIVE' })
+      );
+      const res = await request(app).post('/api/auth/forgot-password').send({
+        email: 'reset@test.com',
+        phone: '0911111111',
+        newPassword: 'brandnew1',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email and phone match/i);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    test('direct reset updates the password when email and phone match', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValueOnce(
+        mockUser({ email: 'reset@test.com', phone: '+251912345678', status: 'ACTIVE' })
+      );
+      const res = await request(app).post('/api/auth/forgot-password').send({
+        email: 'reset@test.com',
+        phone: '0912345678',
+        newPassword: 'brandnew1',
+        confirmPassword: 'brandnew1',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
       expect(prisma.user.update).toHaveBeenCalled();
     });
   });

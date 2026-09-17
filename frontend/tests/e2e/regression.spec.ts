@@ -21,11 +21,12 @@ test.describe('Regression @regression', () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test('forgot-password modal opens from the login screen', async ({ page }) => {
+  test('forgot-password page opens from the login screen', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('login-forgot').click();
-    await expect(page.getByTestId('forgot-password-modal')).toBeVisible();
-    await expect(page.getByText('Reset Password')).toBeVisible();
+    await expect(page).toHaveURL(/\/forgot-password/);
+    await expect(page.getByTestId('forgot-password-form')).toBeVisible();
+    await expect(page.getByText('Reset password')).toBeVisible();
   });
 
   test('staff kitchen, waiter, and cashier routes require auth', async ({ page }) => {

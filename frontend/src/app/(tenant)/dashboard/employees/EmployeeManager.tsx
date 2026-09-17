@@ -3,6 +3,7 @@ import * as React from "react"
 import { Plus } from "lucide-react"
 import { EmployeeTable, type Employee, type EmployeeRole } from "./components/EmployeeTable"
 import { EmployeeFormModal, type EmployeeFormData } from "./components/EmployeeFormModal"
+import { ETHIOPIAN_PHONE_ERROR, isValidEthiopianPhone, normalizeEthiopianPhone } from "@/lib/ethiopian-phone"
 
 interface Props { initialEmployees: Employee[]; branches: { id: string; name: string }[]; roles: EmployeeRole[]; currentUser?: any }
 
@@ -47,10 +48,11 @@ export default function EmployeeManager({ initialEmployees, branches, roles, cur
     if (!form.fullName.trim() || !form.email.trim()) { setError("Name and email are required."); return }
     if (!editTarget && !form.password) { setError("Password is required for new employees."); return }
     if (!form.role) { setError("Select at least one role."); return }
+    if (form.phone.trim() && !isValidEthiopianPhone(form.phone)) { setError(ETHIOPIAN_PHONE_ERROR); return }
     setLoading(true); setError("")
     try {
       const isEdit = !!editTarget
-      const payload: any = { fullName: form.fullName, email: form.email, phone: form.phone || null, branchId: form.branchId || null, roles: form.role ? [form.role] : [], status: form.status, tableIds: form.role === "WAITER" ? form.tableIds : [] }
+      const payload: any = { fullName: form.fullName, email: form.email, phone: form.phone.trim() ? normalizeEthiopianPhone(form.phone) : null, branchId: form.branchId || null, roles: form.role ? [form.role] : [], status: form.status, tableIds: form.role === "WAITER" ? form.tableIds : [] }
       if (form.password) payload.password = form.password
       const res = await fetch(isEdit ? `/api/employees/${editTarget!.id}` : "/api/employees", { method: isEdit ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
       const data = await res.json()

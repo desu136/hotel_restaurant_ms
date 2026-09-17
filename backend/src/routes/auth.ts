@@ -3,27 +3,44 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma';
 import { signToken } from '../lib/auth';
 import { authenticate } from '../middleware/auth';
+import { ethiopianPhoneLookupValues, isEmailIdentifier, coerceEthiopianPhone, phonesMatch } from '../lib/ethiopian-phone';
 
 const router = Router();
+
+const userLoginInclude = {
+  tenant: true,
+  roles: { include: { role: true } },
+} as const;
 
 // POST /api/auth/login
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    const { email, phone, identifier, password } = req.body;
+    const loginId = String(identifier || email || phone || '').trim();
 
-    if (!email || !password) {
-      res.status(400).json({ error: 'Email and password are required' });
+    if (!loginId || !password) {
+      res.status(400).json({ error: 'Email or phone number and password are required' });
       return;
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const user = await prisma.user.findFirst({
-      where: { email: { equals: cleanEmail, mode: 'insensitive' } },
-      include: {
-        tenant: true,
-        roles: { include: { role: true } },
-      },
-    });
+    let user;
+
+    if (isEmailIdentifier(loginId)) {
+      user = await prisma.user.findFirst({
+        where: { email: { equals: loginId.toLowerCase(), mode: 'insensitive' } },
+        include: userLoginInclude,
+      });
+    } else {
+      const phoneValues = ethiopianPhoneLookupValues(loginId);
+      if (phoneValues.length === 0) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+      user = await prisma.user.findFirst({
+        where: { phone: { in: phoneValues } },
+        include: userLoginInclude,
+      });
+    }
 
     if (!user) {
       res.status(401).json({ error: 'Invalid credentials' });
@@ -90,6 +107,124 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+const resetAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function allowPasswordResetAttempt(key: string, limit = 5, windowMs = 15 * 60 * 1000): boolean {
+  const now = Date.now();
+  const entry = resetAttempts.get(key);
+  if (!entry || now > entry.resetAt) {
+    resetAttempts.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= limit) return false;
+  entry.count += 1;
+  return true;
+}
+
+interface ResetCodeRecord {
+  email: string;
+  codeHash: string;
+  expiresAt: number;
+}
+const resetCodeStore = new Map<string, ResetCodeRecord>();
+const GENERIC_RESET_MESSAGE = 'If an account exists for that email, a reset code has been generated.';
+
+// POST /api/auth/forgot-password
+// - email + phone + newPassword: reset by matching both identifiers
+// - email only: issue a 6-digit code for /api/auth/reset-password
+router.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, phone, newPassword, confirmPassword } = req.body;
+    const loginEmail = String(email || '').trim().toLowerCase();
+    const loginPhone = String(phone || '').trim();
+    const wantsDirectReset = Boolean(loginPhone || newPassword);
+
+    if (wantsDirectReset) {
+      if (!loginEmail || !loginPhone || !newPassword) {
+        res.status(400).json({ error: 'Email, phone number, and a new password are required' });
+        return;
+      }
+      if (!isEmailIdentifier(loginEmail)) {
+        res.status(400).json({ error: 'Enter a valid email address' });
+        return;
+      }
+      const parsedPhone = coerceEthiopianPhone(loginPhone, true);
+      if (!parsedPhone.ok) {
+        res.status(400).json({ error: parsedPhone.error });
+        return;
+      }
+      if (confirmPassword !== undefined && String(confirmPassword) !== String(newPassword)) {
+        res.status(400).json({ error: 'Passwords do not match' });
+        return;
+      }
+      if (String(newPassword).length < 6) {
+        res.status(400).json({ error: 'New password must be at least 6 characters' });
+        return;
+      }
+
+      const clientKey = `${req.ip || 'unknown'}:${loginEmail}`;
+      if (!allowPasswordResetAttempt(clientKey)) {
+        res.status(429).json({ error: 'Too many reset attempts. Try again later.' });
+        return;
+      }
+
+      const genericError = 'Could not reset password. Check that the email and phone match your account.';
+      const user = await prisma.user.findFirst({
+        where: { email: { equals: loginEmail, mode: 'insensitive' } },
+      });
+
+      if (!user || user.status !== 'ACTIVE' || !phonesMatch(user.phone, parsedPhone.phone || loginPhone)) {
+        res.status(400).json({ error: genericError });
+        return;
+      }
+
+      const passwordHash = await bcrypt.hash(String(newPassword), 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { password_hash: passwordHash },
+      });
+
+      res.json({ success: true, message: 'Password updated. You can sign in with your new password.' });
+      return;
+    }
+
+    if (!loginEmail || !isEmailIdentifier(loginEmail)) {
+      res.status(400).json({ error: 'Valid email address is required' });
+      return;
+    }
+
+    const attemptKey = `${req.ip || 'unknown'}:${loginEmail}`;
+    if (!allowPasswordResetAttempt(attemptKey)) {
+      res.status(429).json({ error: 'Too many reset attempts. Try again later.' });
+      return;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: loginEmail, mode: 'insensitive' } },
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      res.json({ success: true, message: GENERIC_RESET_MESSAGE });
+      return;
+    }
+
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+    const codeHash = await bcrypt.hash(resetCode, 8);
+    resetCodeStore.set(loginEmail, { email: loginEmail, codeHash, expiresAt });
+
+    res.json({
+      success: true,
+      message: GENERIC_RESET_MESSAGE,
+      userName: user.full_name,
+      resetCode,
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -144,12 +279,21 @@ router.post('/logout', (_req: Request, res: Response): void => {
 router.patch('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, avatar_url, phone } = req.body;
+    let nextPhone: string | null | undefined;
+    if (phone !== undefined) {
+      const parsed = coerceEthiopianPhone(phone, false);
+      if (!parsed.ok) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+      nextPhone = parsed.phone;
+    }
     const updated = await prisma.user.update({
       where: { id: req.user!.userId },
       data: {
         ...(name && { full_name: name }),
         ...(avatar_url !== undefined && { avatar_url }),
-        ...(phone !== undefined && { phone }),
+        ...(nextPhone !== undefined && { phone: nextPhone }),
       },
       select: { id: true, email: true, full_name: true, phone: true, avatar_url: true },
     });
@@ -203,72 +347,6 @@ router.delete('/me', authenticate, async (req: Request, res: Response): Promise<
     res.json({ success: true });
   } catch (error) {
     console.error('DELETE /me error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Memory store for active password reset codes (15-minute expiration)
-interface ResetCodeRecord {
-  email: string;
-  codeHash: string;
-  expiresAt: number;
-}
-const resetCodeStore = new Map<string, ResetCodeRecord>();
-const resetAttempts = new Map<string, { count: number; resetAt: number }>();
-
-function allowResetAttempt(key: string, limit = 5, windowMs = 15 * 60 * 1000): boolean {
-  const now = Date.now();
-  const entry = resetAttempts.get(key);
-  if (!entry || now > entry.resetAt) {
-    resetAttempts.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (entry.count >= limit) return false;
-  entry.count += 1;
-  return true;
-}
-
-const GENERIC_RESET_MESSAGE = 'If an account exists for that email, a reset code has been generated.';
-
-// POST /api/auth/forgot-password
-router.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email } = req.body;
-    if (!email || typeof email !== 'string') {
-      res.status(400).json({ error: 'Valid email address is required' });
-      return;
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const attemptKey = `${req.ip || 'unknown'}:${cleanEmail}`;
-    if (!allowResetAttempt(attemptKey)) {
-      res.status(429).json({ error: 'Too many reset attempts. Try again later.' });
-      return;
-    }
-
-    const user = await prisma.user.findFirst({
-      where: { email: { equals: cleanEmail, mode: 'insensitive' } },
-    });
-
-    if (!user || user.status !== 'ACTIVE') {
-      res.json({ success: true, message: GENERIC_RESET_MESSAGE });
-      return;
-    }
-
-    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 15 * 60 * 1000;
-    const codeHash = await bcrypt.hash(resetCode, 8);
-    resetCodeStore.set(cleanEmail, { email: cleanEmail, codeHash, expiresAt });
-
-    res.json({
-      success: true,
-      message: GENERIC_RESET_MESSAGE,
-      userName: user.full_name,
-      // Returned so the client can dispatch EmailJS. Do not display this in the UI.
-      resetCode,
-    });
-  } catch (error) {
-    console.error('POST /forgot-password error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -332,3 +410,4 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
 });
 
 export default router;
+

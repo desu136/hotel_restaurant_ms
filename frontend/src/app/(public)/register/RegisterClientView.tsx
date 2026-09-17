@@ -4,6 +4,7 @@ import * as React from "react";
 import { AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { BrandLogo } from "@/components/brand-logo";
+import { ETHIOPIAN_PHONE_ERROR, normalizeEthiopianPhone } from "@/lib/ethiopian-phone";
 import type { RegisterFormData, SlideVariants } from "./components/types";
 import StepIndicator from "./components/StepIndicator";
 import Step1BusinessDetails from "./components/Step1BusinessDetails";
@@ -33,12 +34,17 @@ export default function RegisterClientView() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const phone = normalizeEthiopianPhone(formData.phone);
+    if (!phone) {
+      alert(ETHIOPIAN_PHONE_ERROR);
+      return;
+    }
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/tenant/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, phone }),
       });
       const data = await res.json();
       if (res.ok) { setIsSuccess(true); }
