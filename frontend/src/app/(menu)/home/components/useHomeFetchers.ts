@@ -4,7 +4,7 @@ import { AppConfig, Promotion } from "./types"
 
 export function useHomeFetchers(hostIp: string, showToast: (msg: string, icon?: string) => void) {
   const [appConfig, setAppConfig] = React.useState<AppConfig>({
-    business_name: "Hospitality Hub",
+    business_name: "DFoodie",
     restaurants: [],
   })
   const [orderHistory, setOrderHistory] = React.useState<any[]>([])

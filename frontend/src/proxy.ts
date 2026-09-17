@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyToken } from './lib/auth';
+import { cookiePath, withBasePath } from './lib/base-path';
+
+function redirectTo(path: string, request: NextRequest) {
+  return NextResponse.redirect(new URL(withBasePath(path), request.url));
+}
 
 export default async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -15,7 +20,7 @@ export default async function proxy(request: NextRequest) {
 
   // If there's no token and it's not a public path, redirect to login
   if (!isPublicPath && !token) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return redirectTo('/login', request);
   }
 
   // If there is a token, verify it
@@ -24,8 +29,8 @@ export default async function proxy(request: NextRequest) {
     
     // If token is invalid/expired, clear it and redirect to login
     if (!payload) {
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      response.cookies.delete('token');
+      const response = redirectTo('/login', request);
+      response.cookies.set('token', '', { path: cookiePath(), maxAge: 0 });
       return response;
     }
 
@@ -41,12 +46,12 @@ export default async function proxy(request: NextRequest) {
       } else if (payload.roles.includes('CASHIER')) {
         redirectPath = '/dashboard/cashier';
       }
-      return NextResponse.redirect(new URL(redirectPath, request.url));
+      return redirectTo(redirectPath, request);
     }
 
     // Role-based access control for Super Admin routes
     if (isSuperAdminPath && !payload.roles.includes('SUPER_ADMIN')) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      return redirectTo('/dashboard', request);
     }
 
     // Role-based access control for Tenant routes
@@ -58,11 +63,11 @@ export default async function proxy(request: NextRequest) {
 
     if (path === '/dashboard') {
       if (!isOwner) {
-        if (isManager) return NextResponse.redirect(new URL('/dashboard/manager/category', request.url));
-        if (isChef) return NextResponse.redirect(new URL('/dashboard/kitchen', request.url));
-        if (isWaiter) return NextResponse.redirect(new URL('/dashboard/waiter', request.url));
-        if (isCashier) return NextResponse.redirect(new URL('/dashboard/cashier', request.url));
-        return NextResponse.redirect(new URL('/dashboard/waiter', request.url));
+        if (isManager) return redirectTo('/dashboard/manager/category', request);
+        if (isChef) return redirectTo('/dashboard/kitchen', request);
+        if (isWaiter) return redirectTo('/dashboard/waiter', request);
+        if (isCashier) return redirectTo('/dashboard/cashier', request);
+        return redirectTo('/dashboard/waiter', request);
       }
     }
 
@@ -77,7 +82,7 @@ export default async function proxy(request: NextRequest) {
       if (isManager) redirectPath = '/dashboard/manager/category';
       else if (isChef) redirectPath = '/dashboard/kitchen';
       else if (isCashier) redirectPath = '/dashboard/cashier';
-      return NextResponse.redirect(new URL(redirectPath, request.url));
+      return redirectTo(redirectPath, request);
     }
 
     // Add useful headers for downstream requests
@@ -97,6 +102,6 @@ export default async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)).*)',
   ],
 };

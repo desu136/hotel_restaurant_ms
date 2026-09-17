@@ -6,6 +6,7 @@ import { Menu } from "lucide-react"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { ProfileDropdown } from "@/components/ui/profile-dropdown"
 import { DashboardSidebar } from "./components/DashboardSidebar"
+import { fetchCurrentUser } from "@/lib/current-user"
 
 export default function TenantDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -14,8 +15,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => { if (!res.ok) throw new Error("Unauthorized"); return res.json() })
+    fetchCurrentUser()
       .then((data) => { if (data.success && data.user) setUser(data.user); else router.push("/login") })
       .catch(() => router.push("/login"))
       .finally(() => setLoading(false))
@@ -57,7 +57,7 @@ export default function TenantDashboardLayout({ children }: { children: React.Re
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <ProfileDropdown settingsHref="/dashboard/settings" avatarGradient="from-[var(--color-primary-600)] to-[var(--color-primary-500)]" />
+            <ProfileDropdown settingsHref="/dashboard/settings" avatarGradient="from-[var(--color-primary-600)] to-[var(--color-primary-500)]" user={user} />
           </div>
         </header>
 

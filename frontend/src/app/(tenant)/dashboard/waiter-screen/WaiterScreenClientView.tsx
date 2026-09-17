@@ -54,7 +54,10 @@ export function WaiterScreenClientView() {
 
   React.useEffect(() => {
     fetchReadyOrders()
-    const timer = setInterval(() => fetchReadyOrders(true), 5000)
+    const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return
+      fetchReadyOrders(true)
+    }, 8000)
     return () => clearInterval(timer)
   }, [fetchReadyOrders])
 

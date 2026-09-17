@@ -185,7 +185,7 @@ async function main() {
         owner_name: 'System',
         phone: '0000000000',
         email: 'system@hospitalityhub.com',
-        business_type: 'HOTEL_RESTAURANT',
+        business_type: 'RESTAURANT',
         status: 'ACTIVE',
       }
     })

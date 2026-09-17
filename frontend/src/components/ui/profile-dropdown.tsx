@@ -1,26 +1,31 @@
 "use client"
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { LogOut, Settings, User, ChevronDown } from "lucide-react"
+import { LogOut, Settings, ChevronDown } from "lucide-react"
 import Link from "next/link"
+import { fetchCurrentUser, clearCurrentUserCache } from "@/lib/current-user"
 
 interface ProfileDropdownProps {
-  settingsHref: string // e.g. "/dashboard/settings" or "/admin/settings"
-  avatarGradient?: string // tailwind gradient classes
+  settingsHref: string
+  avatarGradient?: string
+  user?: { name: string; email: string; roles: string[] } | null
 }
 
-export function ProfileDropdown({ settingsHref }: ProfileDropdownProps) {
+export function ProfileDropdown({ settingsHref, user: userProp }: ProfileDropdownProps) {
   const router = useRouter()
   const [open, setOpen] = React.useState(false)
-  const [user, setUser] = React.useState<{ name: string; email: string; roles: string[] } | null>(null)
+  const [user, setUser] = React.useState<{ name: string; email: string; roles: string[] } | null>(userProp ?? null)
   const ref = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
+    if (userProp) {
+      setUser(userProp)
+      return
+    }
+    fetchCurrentUser()
       .then(d => d?.user && setUser(d.user))
       .catch(() => null)
-  }, [])
+  }, [userProp])
 
   // Close on outside click
   React.useEffect(() => {
@@ -32,6 +37,7 @@ export function ProfileDropdown({ settingsHref }: ProfileDropdownProps) {
   }, [])
 
   const handleLogout = async () => {
+    clearCurrentUserCache()
     await fetch("/api/auth/logout", { method: "POST" })
     router.push("/login")
     router.refresh()

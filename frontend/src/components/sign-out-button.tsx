@@ -1,12 +1,11 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { clearCurrentUserCache } from "@/lib/current-user";
 
 export function SignOutButton() {
-  const router = useRouter();
-
   const handleSignOut = () => {
+    clearCurrentUserCache();
     window.location.href = "/api/auth/logout";
   };
 

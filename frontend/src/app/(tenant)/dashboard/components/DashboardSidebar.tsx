@@ -7,6 +7,8 @@ import {
   LayoutDashboard, GitBranchIcon, Users2, LogOut, UtensilsCrossed, Tag,
   Table2, QrCode, Megaphone, BarChart3, Utensils, Bell, ChefHat, Receipt, Store
 } from "lucide-react"
+import { clearCurrentUserCache } from "@/lib/current-user"
+import { BrandLogo } from "@/components/brand-logo"
 
 interface NavItem { href: string; label: string; icon: React.ComponentType<{ className?: string }>; exact?: boolean }
 
@@ -17,6 +19,7 @@ export function DashboardSidebar({ user, loading, onCloseMobile }: { user: any; 
   const isActive = (item: NavItem) => item.exact ? pathname === item.href : pathname.startsWith(item.href)
 
   const handleLogout = async () => {
+    clearCurrentUserCache()
     await fetch("/api/auth/logout", { method: "POST" })
     router.push("/login")
     router.refresh()
@@ -64,8 +67,8 @@ export function DashboardSidebar({ user, loading, onCloseMobile }: { user: any; 
     <aside className="w-64 flex flex-col border-r border-[var(--surface-border)] h-full"
       style={{ background: "color-mix(in srgb, var(--surface) 90%, transparent)", backdropFilter: "blur(12px)" }}>
       <div className="h-16 flex items-center px-6 border-b border-[var(--surface-border)] shrink-0">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center mr-3"><UtensilsCrossed className="w-5 h-5" /></div>
-        <span className="font-bold text-lg tracking-tight">RMS</span>
+        <BrandLogo className="h-11 w-11 object-contain mr-3" />
+        <span className="font-bold text-lg tracking-tight">DFoodie</span>
       </div>
 
       <nav className="flex-1 py-6 px-4 space-y-6 overflow-y-auto">

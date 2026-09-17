@@ -14,7 +14,11 @@
     "build:backend": "npm run build --workspace=backend",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "test": "npm run test --workspace=backend",
+    "test": "npm run test:suite",
+    "test:suite": "npm run test:suite --workspace=backend && npm run test --workspace=frontend",
+    "test:smoke": "npm run test:smoke --workspace=frontend",
+    "test:regression": "npm run test:regression --workspace=frontend",
+    "test:predeploy": "npm run test:suite && npm run test:smoke && npm run test:regression",
     "seed": "npm run seed --workspace=backend",
     "seed:admin": "npx tsx backend/scripts/seed_admin.ts"
   },

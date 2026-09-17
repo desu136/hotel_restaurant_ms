@@ -95,12 +95,27 @@ jest.mock('../src/lib/prisma', () => {
               id: where.id,
               tenant_id: '00000000-0000-0000-0000-00000000000b',
               name: 'Tenant B Branch',
+              restaurant_id: RESTAURANT_ID,
             });
           }
           return Promise.resolve({
             id: where?.id || BRANCH_A_ID,
             tenant_id: TENANT_A_ID,
             name: 'Tenant A Branch',
+            restaurant_id: RESTAURANT_ID,
+            logo_url: null,
+            banner_url: null,
+          });
+        }),
+        findFirst: jest.fn().mockImplementation(({ where }: any) => {
+          if (where?.restaurant_id === '00000000-0000-0000-0000-000000000099') {
+            return Promise.resolve(null);
+          }
+          return Promise.resolve({
+            id: BRANCH_A_ID,
+            tenant_id: TENANT_A_ID,
+            name: 'Tenant A Branch',
+            restaurant_id: RESTAURANT_ID,
           });
         }),
         findMany: jest.fn().mockResolvedValue([]),
@@ -108,12 +123,35 @@ jest.mock('../src/lib/prisma', () => {
       },
       restaurant: {
         findUnique: jest.fn().mockImplementation(({ where }: any) => {
+          if (where?.id === '00000000-0000-0000-0000-000000000099') {
+            return Promise.resolve(null);
+          }
           return Promise.resolve({
             id: where?.id || RESTAURANT_ID,
             tenant_id: TENANT_A_ID,
-            branches: [{ id: BRANCH_A_ID }],
+            name: 'Tenant A Restaurant',
+            logo_url: null,
+            banner_url: null,
+            parent_id: null,
+            deleted_at: null,
+            branches: [{ id: BRANCH_A_ID, name: 'Tenant A Branch', address: null, phone: null, logo_url: null, banner_url: null }],
           });
         }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: RESTAURANT_ID,
+            name: 'Tenant A Restaurant',
+            logo_url: null,
+            banner_url: null,
+            parent_id: null,
+            tenant_id: TENANT_A_ID,
+            branches: [{ id: BRANCH_A_ID, name: 'Tenant A Branch' }],
+          },
+        ]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockImplementation(({ data }: any) =>
+          Promise.resolve({ id: RESTAURANT_ID, created_at: new Date().toISOString(), ...data })
+        ),
       },
       menuItem: {
         findUnique: jest.fn().mockImplementation(({ where }: any) => {
@@ -127,6 +165,60 @@ jest.mock('../src/lib/prisma', () => {
           }
           return Promise.resolve(null); // Items not found
         }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: MENU_ITEM_ID,
+            display_name: 'Truffle Pasta',
+            price: 18.5,
+            prep_time: 15,
+            availability: true,
+            branch_id: BRANCH_A_ID,
+            category: { id: '00000000-0000-0000-0000-000000000020', name: 'Pasta', parent_id: null },
+          },
+        ]),
+        count: jest.fn().mockResolvedValue(1),
+        create: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'menu-created', ...data })),
+        update: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: MENU_ITEM_ID, ...data })),
+      },
+      user: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn().mockImplementation(({ where, data }: any) =>
+          Promise.resolve({
+            id: where?.id,
+            email: 'user@test.com',
+            full_name: data?.full_name || 'Test User',
+            phone: data?.phone ?? null,
+            avatar_url: data?.avatar_url ?? null,
+            password_hash: data?.password_hash || 'hashed',
+          })
+        ),
+        delete: jest.fn().mockResolvedValue({ id: 'deleted' }),
+      },
+      tenant: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      tenantModule: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      category: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: '00000000-0000-0000-0000-000000000020', name: 'Pasta', parent_id: null, branch_id: BRANCH_A_ID },
+        ]),
+        count: jest.fn().mockResolvedValue(1),
+        create: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'cat-created', ...data })),
+        update: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'cat-1', ...data })),
+      },
+      masterCategory: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      masterMenuItem: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      promotion: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
       customer: {
         findFirst: jest.fn().mockResolvedValue({ id: '00000000-0000-0000-0000-000000000301' }),
@@ -140,7 +232,19 @@ jest.mock('../src/lib/prisma', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       restaurantTable: {
-        findUnique: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockImplementation(({ where }: any) => {
+          if (where?.id === '00000000-0000-0000-0000-000000000003') {
+            return Promise.resolve({
+              id: where.id,
+              table_number: '1',
+              branch_id: BRANCH_A_ID,
+              tenant_id: TENANT_A_ID,
+              waiter_id: '00000000-0000-0000-0000-000000000201',
+              status: 'AVAILABLE',
+            });
+          }
+          return Promise.resolve(null);
+        }),
         findFirst: jest.fn().mockResolvedValue(null),
       },
       kitchenTicket: {

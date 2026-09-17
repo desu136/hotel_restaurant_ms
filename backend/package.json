@@ -7,7 +7,10 @@
     "build": "npx prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "seed": "npx tsx scripts/seed.ts",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "test:unit": "jest --runInBand --testPathPattern=tests/unit",
+    "test:integration": "jest --runInBand --testPathPattern=tests/integration",
+    "test:suite": "jest --runInBand"
   },
   "prisma": {
     "seed": "npx tsx scripts/seed.ts"

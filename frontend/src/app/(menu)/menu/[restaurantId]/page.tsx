@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import MenuClientView from './MenuClientView'
 
 export const metadata: Metadata = {
-  title: 'Menu | HospitalityHub',
+  title: 'Menu | DFoodie',
   description: 'Browse the full menu, customise your order, and checkout.',
 }
 

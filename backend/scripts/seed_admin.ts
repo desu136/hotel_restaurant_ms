@@ -159,7 +159,7 @@ const ADMIN_NAME     = 'Super Admin'
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('\n🔧 HospitalityHub — System Admin Seed')
+  console.log('\n🔧 Foodie — System Admin Seed')
   console.log('══════════════════════════════════════\n')
 
   // 1. Roles
@@ -214,7 +214,7 @@ async function main() {
         owner_name:    'System',
         phone:         '0000000000',
         email:         'system@hospitalityhub.com',
-        business_type: 'HOTEL_RESTAURANT',
+        business_type: 'RESTAURANT',
         status:        'ACTIVE',
       },
     })

@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "") || undefined;
+
 const nextConfig: NextConfig = {
+  basePath,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "@mui/material", "framer-motion"],
+  },
   turbopack: {
     // Point to the monorepo workspace root so turbopack finds node_modules correctly
     root: path.resolve(__dirname, '..'),

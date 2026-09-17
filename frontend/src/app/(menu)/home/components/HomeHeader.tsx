@@ -1,7 +1,8 @@
 "use client"
-import { MapPin, Settings, Sun, Moon, Search, X } from "lucide-react"
+import { Settings, Sun, Moon, Search, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import type { MiniAppUser, MiniAppLocation } from "@/lib/miniapp-bridge"
+import { BrandLogo } from "@/components/brand-logo"
 
 interface Props {
   theme: "light" | "dark"
@@ -23,9 +24,7 @@ export function HomeHeader({ theme, userProfile, userCoords, showSearch, searchQ
     <div className={`sticky top-0 z-40 border-b backdrop-blur-md transition-colors ${theme === "dark" ? "bg-[#0c0c0c]/80 border-white/[0.08]" : "bg-white/80 border-gray-100 shadow-sm"}`}>
       <div className="flex items-center justify-between px-5 py-3.5">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-            <MapPin className="w-4.5 h-4.5 text-amber-500" />
-          </div>
+          <BrandLogo className="w-10 h-10 object-contain shrink-0" />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className={`font-black text-xs uppercase tracking-wider truncate ${themeTitle}`}>

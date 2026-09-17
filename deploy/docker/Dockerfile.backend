@@ -1,0 +1,15 @@
+FROM node:20-bookworm-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+RUN npm ci
+COPY backend ./backend
+COPY deploy/docker/entrypoint-backend.sh /entrypoint.sh
+WORKDIR /app/backend
+RUN npx prisma generate && npx tsc -p tsconfig.build.json && chmod +x /entrypoint.sh
+ENV NODE_ENV=production
+EXPOSE 4000
+CMD ["/entrypoint.sh"]

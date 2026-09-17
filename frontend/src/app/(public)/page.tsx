@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import LandingClientView from './LandingClientView'
 
 export const metadata: Metadata = {
-  title: 'HospitalityHub | Hotel & Restaurant Management System',
+  title: 'DFoodie',
   description: 'Streamlined operational management and digital ordering system.',
 }
 

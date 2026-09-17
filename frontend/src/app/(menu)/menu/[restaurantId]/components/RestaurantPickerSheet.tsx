@@ -3,6 +3,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Store, Navigation, Check, ChevronRight } from "lucide-react"
 import { Restaurant } from "./types"
+import { BrandLogo } from "@/components/brand-logo"
 
 interface Props {
   popupVisible: boolean
@@ -58,10 +59,10 @@ export default function RestaurantPickerSheet({
               theme === "dark" ? "bg-[#1c1c1e] text-white" : "bg-white text-gray-900"
             }`}
           >
-            <div className={`absolute -top-7 right-6 w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 border-2 overflow-hidden ${
+            <div className={`absolute -top-7 right-6 w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center z-50 border-2 overflow-hidden ${
               theme === "dark" ? "bg-[#1c1c1e] border-white/[0.08]" : "bg-white border-gray-100"
             }`}>
-              <img src="/dexel_logo.png" className="w-11 h-11 object-contain" alt="Dexel Logo" />
+              <BrandLogo className="w-12 h-12 object-contain" alt="DFoodie" />
             </div>
 
             <div className="flex justify-center pb-1">

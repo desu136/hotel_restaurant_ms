@@ -94,10 +94,47 @@ async function resolveBranchId(restaurantId: string, req: Request): Promise<stri
   return firstBranch?.id ?? null;
 }
 
-async function ensureMasterSyncedToBranch(branchId: string, restaurantId?: string | null, tenantId?: string | null) {
-  try {
-    if (!branchId) return;
+const MASTER_SYNC_TTL_MS = 90_000;
+const lastMasterSyncAt = new Map<string, number>();
+const inflightMasterSync = new Map<string, Promise<void>>();
 
+function invalidateMasterSyncCache() {
+  lastMasterSyncAt.clear();
+}
+
+async function ensureMasterSyncedToBranch(
+  branchId: string,
+  _restaurantId?: string | null,
+  tenantId?: string | null,
+  options?: { force?: boolean }
+) {
+  if (!branchId) return;
+
+  if (!options?.force) {
+    const last = lastMasterSyncAt.get(branchId);
+    if (last && Date.now() - last < MASTER_SYNC_TTL_MS) return;
+  }
+
+  const existing = inflightMasterSync.get(branchId);
+  if (existing) {
+    await existing;
+    return;
+  }
+
+  const work = runMasterSync(branchId, tenantId)
+    .then(() => {
+      lastMasterSyncAt.set(branchId, Date.now());
+    })
+    .finally(() => {
+      inflightMasterSync.delete(branchId);
+    });
+
+  inflightMasterSync.set(branchId, work);
+  await work;
+}
+
+async function runMasterSync(branchId: string, tenantId?: string | null) {
+  try {
     const branch = await prisma.branch.findUnique({
       where: { id: branchId },
       select: { id: true, tenant_id: true, restaurant_id: true }
@@ -105,19 +142,26 @@ async function ensureMasterSyncedToBranch(branchId: string, restaurantId?: strin
     if (!branch) return;
 
     const effectiveTenantId = tenantId || branch.tenant_id;
-    const effectiveRestaurantId = restaurantId || branch.restaurant_id;
 
-    // Fetch all active master categories for this tenant
-    const masterCategories = await prisma.masterCategory.findMany({
-      where: {
-        tenant_id: effectiveTenantId,
-        deleted_at: null,
-      }
-    });
+    const [masterCatCount, linkedCatCount, masterItemCount, linkedItemCount] = await Promise.all([
+      prisma.masterCategory.count({ where: { tenant_id: effectiveTenantId, deleted_at: null } }),
+      prisma.category.count({ where: { branch_id: branchId, deleted_at: null, master_category_id: { not: null } } }),
+      prisma.masterMenuItem.count({ where: { tenant_id: effectiveTenantId, deleted_at: null } }),
+      prisma.menuItem.count({ where: { branch_id: branchId, master_menu_item_id: { not: null } } }),
+    ]);
 
-    const existingBranchCats = await prisma.category.findMany({
-      where: { branch_id: branchId, deleted_at: null }
-    });
+    if (masterCatCount === linkedCatCount && masterItemCount === linkedItemCount) {
+      return;
+    }
+
+    const [masterCategories, existingBranchCats] = await Promise.all([
+      prisma.masterCategory.findMany({
+        where: { tenant_id: effectiveTenantId, deleted_at: null }
+      }),
+      prisma.category.findMany({
+        where: { branch_id: branchId, deleted_at: null }
+      }),
+    ]);
 
     const categoryMap = new Map<string, string>();
     for (const bc of existingBranchCats) {
@@ -143,7 +187,6 @@ async function ensureMasterSyncedToBranch(branchId: string, restaurantId?: strin
       }
     }
 
-    // Sync category hierarchy
     for (const mc of masterCategories) {
       if (mc.parent_id) {
         const branchCatId = categoryMap.get(mc.id);
@@ -160,47 +203,48 @@ async function ensureMasterSyncedToBranch(branchId: string, restaurantId?: strin
       }
     }
 
-    // Fetch all active master menu items for this tenant
     const masterMenuItems = await prisma.masterMenuItem.findMany({
-      where: {
-        tenant_id: effectiveTenantId,
-        deleted_at: null,
-      }
+      where: { tenant_id: effectiveTenantId, deleted_at: null }
     });
 
-    if (masterMenuItems.length > 0) {
-      const existingBranchMenuItems = await prisma.menuItem.findMany({
-        where: { branch_id: branchId }
+    if (masterMenuItems.length === 0) return;
+
+    const existingBranchMenuItems = await prisma.menuItem.findMany({
+      where: { branch_id: branchId },
+      select: { id: true, master_menu_item_id: true, category_id: true }
+    });
+    const existingMasterMenuIds = new Set(existingBranchMenuItems.map(m => m.master_menu_item_id).filter(Boolean));
+    const missingMasterMenuItems = masterMenuItems.filter(mmi => !existingMasterMenuIds.has(mmi.id));
+
+    for (const mmi of missingMasterMenuItems) {
+      const localCatId = mmi.master_category_id ? categoryMap.get(mmi.master_category_id) : null;
+      await prisma.menuItem.create({
+        data: {
+          tenant_id: effectiveTenantId,
+          branch_id: branchId,
+          master_menu_item_id: mmi.id,
+          category_id: localCatId || null,
+          display_name: mmi.display_name,
+          description: mmi.description,
+          price: mmi.price,
+          availability: mmi.availability,
+          customizations: mmi.customizations || undefined,
+          image_url: mmi.image_url,
+          image_urls: mmi.image_urls || undefined,
+          prep_time: mmi.prep_time || 0,
+        }
       });
-      const existingMasterMenuIds = new Set(existingBranchMenuItems.map(m => m.master_menu_item_id).filter(Boolean));
-      const missingMasterMenuItems = masterMenuItems.filter(mmi => !existingMasterMenuIds.has(mmi.id));
+    }
 
-      for (const mmi of missingMasterMenuItems) {
-        const localCatId = mmi.master_category_id ? categoryMap.get(mmi.master_category_id) : null;
-        await prisma.menuItem.create({
-          data: {
-            tenant_id: effectiveTenantId,
-            branch_id: branchId,
-            master_menu_item_id: mmi.id,
-            category_id: localCatId || null,
-            display_name: mmi.display_name,
-            description: mmi.description,
-            price: mmi.price,
-            availability: mmi.availability,
-            customizations: mmi.customizations || undefined,
-            image_url: mmi.image_url,
-            image_urls: mmi.image_urls || undefined,
-            prep_time: mmi.prep_time || 0,
-          }
-        });
-      }
-
-      // Link any local branch items whose master category was created later
-      for (const mmi of masterMenuItems) {
-        const targetLocalCatId = mmi.master_category_id ? categoryMap.get(mmi.master_category_id) : null;
+    const unlinked = existingBranchMenuItems.filter(m => m.master_menu_item_id && !m.category_id);
+    if (unlinked.length > 0) {
+      const masterById = new Map(masterMenuItems.map(m => [m.id, m]));
+      for (const item of unlinked) {
+        const mmi = masterById.get(item.master_menu_item_id!);
+        const targetLocalCatId = mmi?.master_category_id ? categoryMap.get(mmi.master_category_id) : null;
         if (targetLocalCatId) {
-          await prisma.menuItem.updateMany({
-            where: { branch_id: branchId, master_menu_item_id: mmi.id, category_id: null },
+          await prisma.menuItem.update({
+            where: { id: item.id },
             data: { category_id: targetLocalCatId }
           });
         }
@@ -219,11 +263,6 @@ router.get('/public/categories/:restaurantId', async (req: Request, res: Respons
       res.json([]);
       return;
     }
-
-    const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { tenant_id: true, restaurant_id: true } });
-    if (!branch) { res.json([]); return; }
-
-    await ensureMasterSyncedToBranch(branchId, branch.restaurant_id, branch.tenant_id);
 
     const categories = await prisma.category.findMany({
       where: { branch_id: branchId, deleted_at: null },
@@ -740,6 +779,7 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+    invalidateMasterSyncCache();
     const { name, restaurant_id, branch_id, parent_id, is_master } = req.body;
     if (!name) {
       res.status(400).json({ error: 'name is required' });
@@ -823,6 +863,7 @@ router.post('/categories', requireRole(...MANAGER_ROLES), async (req: Request, r
 // PATCH & PUT /api/restaurant/categories/:id
 const updateCategoryHandler = async (req: Request, res: Response): Promise<void> => {
   try {
+    invalidateMasterSyncCache();
     const { name, parent_id } = req.body;
     const categoryId = req.params.id as string;
 
@@ -899,6 +940,7 @@ router.put('/categories/:id', requireRole(...MANAGER_ROLES), updateCategoryHandl
 // DELETE /api/restaurant/categories/:id  — soft delete (recursive for subcategories)
 router.delete('/categories/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
+    invalidateMasterSyncCache();
     const categoryId = req.params.id as string;
     const isOwner = isOwnerUser(req);
     const userBranchId = req.user!.branchId;
@@ -1101,6 +1143,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
   try {
     const tenantId = req.user!.tenantId;
     if (!tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+    invalidateMasterSyncCache();
     const { restaurant_id, branch_id, display_name, description, price, category_id, master_category_id, availability, customizations, image_url, image_urls, is_master, prep_time } = req.body;
     if (!display_name) {
       res.status(400).json({ error: 'display_name is required' });
@@ -1221,6 +1264,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
 // PATCH & PUT /api/restaurant/menu/:id
 const updateMenuItemHandler = async (req: Request, res: Response): Promise<void> => {
   try {
+    invalidateMasterSyncCache();
     const { display_name, description, price, category_id, master_category_id, availability, customizations, image_url, image_urls, prep_time } = req.body;
     const menuItemId = req.params.id as string;
 
@@ -1315,6 +1359,7 @@ router.put('/menu/:id', requireRole(...MANAGER_ROLES), updateMenuItemHandler);
 // DELETE /api/restaurant/menu/:id
 router.delete('/menu/:id', requireRole(...MANAGER_ROLES), async (req: Request, res: Response): Promise<void> => {
   try {
+    invalidateMasterSyncCache();
     const menuItemId = req.params.id as string;
 
     const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });

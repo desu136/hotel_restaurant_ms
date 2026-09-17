@@ -54,6 +54,23 @@ describe('On-Premise & Off-Premise Ordering Workflows Integration Tests', () => 
       expect(res.body.error).toMatch(/At least one item is required/i);
     });
 
+    test('places a valid dine-in public order', async () => {
+      const res = await request(app)
+        .post('/api/orders/public')
+        .send({
+          restaurant_id: '00000000-0000-0000-0000-000000000001',
+          branch_id: '00000000-0000-0000-0000-0000000000a1',
+          table_id: '00000000-0000-0000-0000-000000000003',
+          order_type: 'DINE_IN',
+          items: [{ menu_item_id: '00000000-0000-0000-0000-000000000010', quantity: 1 }],
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.id).toBeTruthy();
+      expect(res.body.status).toBe('PENDING');
+      expect(res.body.order_type).toBe('DINE_IN');
+    });
+
     test('supports multi-user guest identity binding (ECHAT / Mini-App user identity)', async () => {
       const guestPayload = {
         restaurant_id: '00000000-0000-0000-0000-000000000001',

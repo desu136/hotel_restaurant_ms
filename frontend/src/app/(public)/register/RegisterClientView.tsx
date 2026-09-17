@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
-import { Utensils } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 import type { RegisterFormData, SlideVariants } from "./components/types";
 import StepIndicator from "./components/StepIndicator";
 import Step1BusinessDetails from "./components/Step1BusinessDetails";
@@ -57,11 +57,11 @@ export default function RegisterClientView() {
     <div className="flex-1 flex items-center justify-center p-4">
       <div className="max-w-xl w-full">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl flex justify-center gap-4 font-bold tracking-tight mb-2">
-            <Utensils className="w-8 h-8" /> RMS
+          <h1 className="flex justify-center mb-2">
+            <BrandLogo className="h-24 w-24 object-contain" />
           </h1>
           <h4 className="text-3xl font-bold tracking-tight mb-2">Create your account</h4>
-          <p className="text-[var(--muted)]">Join RMS and manage your Food business efficiently.</p>
+          <p className="text-[var(--muted)]">Cafés, restaurants, and food chains — all on DFoodie.</p>
         </div>
 
         <StepIndicator step={step} />

@@ -6,6 +6,7 @@ import { CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UtensilsCrossed, Coffee, Hamburger, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import type { RegisterFormData, SlideVariants } from "./types";
 
 interface Props {
@@ -73,9 +74,9 @@ export default function Step1BusinessDetails({ formData, onChange, onNext, varia
       <CardFooter className="justify-between">
         <p className="text-sm text-[var(--muted)]">
           Already have an account?{" "}
-          <a href="/login" className="text-[var(--color-primary-600)] font-medium hover:underline">
+          <Link href="/login" className="text-[var(--color-primary-600)] font-medium hover:underline">
             Login now
-          </a>
+          </Link>
         </p>
         <Button type="submit" disabled={!formData.businessName}>
           Next <ArrowRight className="ml-2 w-4 h-4" />

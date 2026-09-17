@@ -2,16 +2,22 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { QueryProvider } from "@/lib/query-provider";
+import { BasePathFetch } from "@/components/base-path-fetch";
 import "./globals.css";
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "RMS – Restaurant Management System",
-  description: "Next-generation management for Restaurants, Coffee Shops, and Fast Food Centers",
+  title: "DFoodie",
+  description: "Cafés, restaurants, and food chains on DFoodie.",
+  icons: {
+    icon: "/foodie-logo.jpg",
+    apple: "/foodie-logo.jpg",
+  },
 };
 
 export default function RootLayout({
@@ -29,6 +35,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
+            <BasePathFetch />
             {children}
           </QueryProvider>
         </ThemeProvider>

@@ -48,7 +48,9 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/modules', modulesRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/audit-logs', auditLogsRoutes);
-app.use('/api/setup', setupRoutes);
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/setup', setupRoutes);
+}
 app.use('/api/restaurant', restaurantRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/billing', billingRoutes);
