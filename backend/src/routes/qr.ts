@@ -3,16 +3,12 @@ import { prisma } from '../lib/prisma';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import { authenticate, requireRole } from '../middleware/auth';
+import { getFrontendBase } from '../lib/frontend-url';
 
 const router = Router();
 router.use(authenticate);
 
 const MANAGER_ROLES = ['RESTAURANT_MANAGER', 'HOTEL_OWNER', 'HOTEL_MANAGER'];
-
-// Reads FRONTEND_URL from environment, no IP substitution — set it explicitly in .env
-function getFrontendBase(): string {
-  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-}
 
 // POST /api/qr/generate
 router.post(

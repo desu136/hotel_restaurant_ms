@@ -143,14 +143,21 @@ async function runMasterSync(branchId: string, tenantId?: string | null) {
 
     const effectiveTenantId = tenantId || branch.tenant_id;
 
-    const [masterCatCount, linkedCatCount, masterItemCount, linkedItemCount] = await Promise.all([
+    const [masterCatCount, linkedCatCount, masterItemCount, linkedItemCount, uncategorizedLinkedCount] = await Promise.all([
       prisma.masterCategory.count({ where: { tenant_id: effectiveTenantId, deleted_at: null } }),
       prisma.category.count({ where: { branch_id: branchId, deleted_at: null, master_category_id: { not: null } } }),
       prisma.masterMenuItem.count({ where: { tenant_id: effectiveTenantId, deleted_at: null } }),
       prisma.menuItem.count({ where: { branch_id: branchId, master_menu_item_id: { not: null } } }),
+      prisma.menuItem.count({
+        where: { branch_id: branchId, master_menu_item_id: { not: null }, category_id: null },
+      }),
     ]);
 
-    if (masterCatCount === linkedCatCount && masterItemCount === linkedItemCount) {
+    if (
+      masterCatCount === linkedCatCount &&
+      masterItemCount === linkedItemCount &&
+      uncategorizedLinkedCount === 0
+    ) {
       return;
     }
 
@@ -1185,13 +1192,7 @@ router.post('/menu', requireRole(...MANAGER_ROLES), async (req: Request, res: Re
         where: { restaurant_id, deleted_at: null }
       });
       for (const branch of branches) {
-        let localCategoryId = null;
-        if (category_id) {
-          const localCategory = await prisma.category.findFirst({
-            where: { branch_id: branch.id, master_category_id: category_id, deleted_at: null }
-          });
-          localCategoryId = localCategory?.id || null;
-        }
+        const localCategoryId = await resolveLocalCategoryId(tenantId, branch.id, resolvedMasterCatId);
         await prisma.menuItem.create({
           data: {
             tenant_id: tenantId,
@@ -1342,6 +1343,20 @@ const updateMenuItemHandler = async (req: Request, res: Response): Promise<void>
           ...(prepTimeParsed !== undefined && { prep_time: prepTimeParsed }),
         }
       });
+
+      if (targetCatId !== undefined && resolvedMasterCatId !== undefined) {
+        const clones = await prisma.menuItem.findMany({
+          where: { master_menu_item_id: menuItemId },
+          select: { id: true, branch_id: true, tenant_id: true },
+        });
+        for (const clone of clones) {
+          const localCatId = await resolveLocalCategoryId(clone.tenant_id, clone.branch_id, resolvedMasterCatId);
+          await prisma.menuItem.update({
+            where: { id: clone.id },
+            data: { category_id: localCatId },
+          });
+        }
+      }
       res.json(updatedMaster);
       return;
     }

@@ -49,6 +49,7 @@ export default function MenuList({
   }
 
   const parentDirectItems = filteredMenuItems.filter(item => item.category_id === activeParentId)
+  const uncategorizedItems = filteredMenuItems.filter(item => !item.category_id)
   const subGroups = filteredSubCategories
     .map(sc => ({ sc, items: filteredMenuItems.filter(item => item.category_id === sc.id) }))
     .filter(g => g.items.length > 0)
@@ -160,14 +161,15 @@ export default function MenuList({
   return (
     <div ref={menuListRef} className="flex-1 overflow-y-auto px-3 pt-3 pb-32">
       <div className="space-y-1">
-        {parentDirectItems.length > 0 && (
+        {(parentDirectItems.length > 0 || uncategorizedItems.length > 0) && (
           <div id="subcat-all" className="space-y-2.5 pb-3">
-            {subGroups.length > 0 && (
+            {(subGroups.length > 0 || uncategorizedItems.length > 0) && (
               <p className={`text-[10px] ${themeTextMuted} font-black uppercase tracking-wider px-1 pt-1 pb-0.5`}>
                 {categories.find(c => c.id === activeParentId)?.name || "General"}
               </p>
             )}
             {parentDirectItems.map(renderCard)}
+            {uncategorizedItems.map(renderCard)}
           </div>
         )}
 

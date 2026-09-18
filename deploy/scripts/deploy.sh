@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE="$ROOT/deploy/docker/docker-compose.yml"
 ENV_FILE="$ROOT/.env"
 CERT_DIR="$ROOT/deploy/docker/certs"
-HTTPS_URL="https://134.122.73.65/rms"
+HTTPS_URL="https://134.122.73.65:8443/rms"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "▶ creating $ENV_FILE"

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, QrCode, Trash2, Download, Table2 } from "lucide-react"
+import { Loader2, QrCode, Trash2, Download, Table2, Copy, ExternalLink, Check } from "lucide-react"
 
 interface TableItem { id: string; table_number: string; capacity: number; branch_id: string; branch?: { id: string; name: string } }
 interface QRItem { id: string; table_id: string; token: string; status: string; created_at: string; qrCodeUrl?: string; codeString?: string; table?: TableItem }
@@ -12,6 +12,45 @@ interface QRCodesGridProps {
   onDelete: (id: string) => void
   onDownload: (qr: QRItem) => void
   onRefresh: () => void
+}
+
+function MenuUrlActions({ url }: { url: string }) {
+  const [copied, setCopied] = React.useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      window.prompt("Copy menu URL", url)
+    }
+  }
+
+  return (
+    <div className="w-full space-y-2">
+      <p className="text-[10px] font-mono text-[var(--muted)] break-all px-1 leading-relaxed">{url}</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={copy}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-[var(--surface-border)] text-xs font-bold rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
+        >
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? "Copied" : "Copy URL"}
+        </button>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-[var(--surface-border)] text-xs font-bold rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Open menu
+        </a>
+      </div>
+    </div>
+  )
 }
 
 export function QRCodesGrid({ qrCodes, deletingId, onDelete, onDownload, onRefresh }: QRCodesGridProps) {
@@ -50,9 +89,7 @@ export function QRCodesGrid({ qrCodes, deletingId, onDelete, onDownload, onRefre
                   Table {qr.table?.table_number}
                   {qr.table?.capacity && <span className="text-[var(--muted)] font-normal">({qr.table.capacity} seats)</span>}
                 </p>
-                {qr.codeString && (
-                  <p className="text-[10px] font-mono text-[var(--muted)] truncate px-2">{qr.codeString.slice(0, 50)}…</p>
-                )}
+                {qr.codeString && <MenuUrlActions url={qr.codeString} />}
                 <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-[var(--foreground)] text-[var(--background)]">
                   {qr.status}
                 </span>

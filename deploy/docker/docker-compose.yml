@@ -39,7 +39,7 @@ services:
       NODE_ENV: production
       PORT: "4000"
       DATABASE_URL: postgresql://${POSTGRES_USER:-rms}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-rms}?schema=public
-      FRONTEND_URL: ${FRONTEND_URL:-https://134.122.73.65/rms}
+      FRONTEND_URL: ${FRONTEND_URL:-https://134.122.73.65:8443/rms}
       SEED_DEMO: ${SEED_DEMO:-true}
     depends_on:
       db:

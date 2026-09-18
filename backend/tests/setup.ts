@@ -179,6 +179,7 @@ jest.mock('../src/lib/prisma', () => {
         count: jest.fn().mockResolvedValue(1),
         create: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'menu-created', ...data })),
         update: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: MENU_ITEM_ID, ...data })),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       user: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -205,6 +206,8 @@ jest.mock('../src/lib/prisma', () => {
         findMany: jest.fn().mockResolvedValue([
           { id: '00000000-0000-0000-0000-000000000020', name: 'Pasta', parent_id: null, branch_id: BRANCH_A_ID },
         ]),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
         count: jest.fn().mockResolvedValue(1),
         create: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'cat-created', ...data })),
         update: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'cat-1', ...data })),
@@ -212,10 +215,14 @@ jest.mock('../src/lib/prisma', () => {
       masterCategory: {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       masterMenuItem: {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'master-menu-created', ...data })),
+        update: jest.fn().mockImplementation(({ where, data }: any) => Promise.resolve({ id: where?.id, ...data })),
       },
       promotion: {
         findMany: jest.fn().mockResolvedValue([]),

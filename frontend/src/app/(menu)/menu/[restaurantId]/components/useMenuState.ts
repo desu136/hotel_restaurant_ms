@@ -12,7 +12,7 @@ export function useMenuState() {
   const restaurantId = params.restaurantId as string
   const tableId = searchParams.get("tableId") || ""
 
-  const [theme, setTheme] = React.useState<"dark" | "light">("dark")
+  const [theme, setTheme] = React.useState<"dark" | "light">("light")
   const [activeTab, setActiveTab] = React.useState<"home" | "cart" | "history">("home")
   const [activeParentId, setActiveParentId] = React.useState<string>("")
   const [activeSubCategory, setActiveSubCategory] = React.useState<string>("all")
@@ -106,7 +106,9 @@ export function useMenuState() {
   React.useEffect(() => { setActiveSubCategory("all") }, [activeParentId])
 
   const filteredMenuItems = fetchers.menuItems.filter(item =>
-    item.category_id === activeParentId || filteredSubCategories.some(sc => sc.id === item.category_id)
+    !item.category_id ||
+    item.category_id === activeParentId ||
+    filteredSubCategories.some(sc => sc.id === item.category_id)
   )
 
   const scrollToSubCategory = (subCatId: string) => {
